@@ -1,0 +1,135 @@
+2022-10-13 09:51:44,524 - isca - INFO - SOCRATES compilation disabled.
+2022-10-13 09:51:44,530 - isca - INFO - Writing path_names to '/gpfs1/scratch/other/jamd1/isca_work/codebase/_gpfs1_home_jamd1_Isca/build/isca/path_names'
+2022-10-13 09:51:44,537 - isca - INFO - Running compiler
+2022-10-13 09:51:44,542 - isca - INFO - Loading basic ubuntu-conda environment
+2022-10-13 09:51:44,571 - isca - INFO - /gpfs1/scratch/other/jamd1/isca_work/codebase/_gpfs1_home_jamd1_Isca/build/isca/path_names
+2022-10-13 09:51:45,303 - isca - INFO - .................................................................................................................................................................................................... Makefile is ready.
+2022-10-13 09:51:45,781 - isca - INFO - make: Nothing to be done for `all'.
+2022-10-13 09:51:45,942 - isca - INFO - make: `isca.x' is up to date.
+2022-10-13 09:51:45,946 - isca - INFO - Compilation complete.
+2022-10-13 09:51:45,949 - isca - DEBUG - Making directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case'
+2022-10-13 09:51:45,971 - isca - WARNING - Tried to remove run directory but it doesnt exist
+2022-10-13 09:51:45,976 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run'
+2022-10-13 09:51:45,986 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run'
+2022-10-13 09:51:45,988 - isca - WARNING - Data for run 1 already exists and overwrite_data is True. Overwriting.
+2022-10-13 09:51:46,039 - isca - INFO - Writing namelist to '/gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run/input.nml'
+2022-10-13 09:51:46,041 - isca - INFO - Writing field_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run/field_table'
+2022-10-13 09:51:46,048 - isca - INFO - Writing diag_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run/diag_table'
+2022-10-13 09:51:46,049 - isca - INFO - Running without restart file
+2022-10-13 09:51:46,052 - isca - INFO - Beginning run 1
+2022-10-13 09:51:46,057 - isca - INFO - process running as 17844
+2022-10-13 09:51:46,057 - isca - DEBUG - Loading basic ubuntu-conda environment
+2022-10-13 09:51:46,375 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to    32768.
+2022-10-13 09:51:46,375 - isca - DEBUG - &MPP_IO_NML
+2022-10-13 09:51:46,375 - isca - DEBUG - HEADER_BUFFER_VAL=16384      ,
+2022-10-13 09:51:46,375 - isca - DEBUG - GLOBAL_FIELD_ON_ROOT_PE=T,
+2022-10-13 09:51:46,375 - isca - DEBUG - IO_CLOCKS_ON=F,
+2022-10-13 09:51:46,375 - isca - DEBUG - SHUFFLE=0          ,
+2022-10-13 09:51:46,375 - isca - DEBUG - DEFLATE_LEVEL=-1         ,
+2022-10-13 09:51:46,375 - isca - DEBUG - /
+2022-10-13 09:51:46,375 - isca - DEBUG - NOTE from PE    0: MPP_IO_SET_STACK_SIZE: stack size set to     131072.
+2022-10-13 09:51:46,382 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to   600000.
+2022-10-13 09:51:46,420 - isca - DEBUG - 
+2022-10-13 09:51:46,420 - isca - DEBUG - FATAL from PE   11: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,420 - isca - DEBUG - 
+2022-10-13 09:51:46,420 - isca - DEBUG - 
+2022-10-13 09:51:46,420 - isca - DEBUG - FATAL from PE    8: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,420 - isca - DEBUG - 
+2022-10-13 09:51:46,420 - isca - DEBUG - 
+2022-10-13 09:51:46,420 - isca - DEBUG - FATAL from PE   17: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,421 - isca - DEBUG - 
+2022-10-13 09:51:46,421 - isca - DEBUG - 
+2022-10-13 09:51:46,421 - isca - DEBUG - FATAL from PE   13: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,421 - isca - DEBUG - 
+2022-10-13 09:51:46,421 - isca - DEBUG - 
+2022-10-13 09:51:46,421 - isca - DEBUG - FATAL from PE    2: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,421 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - FATAL from PE   26: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - --------------------------------------------------------------------------
+2022-10-13 09:51:46,422 - isca - DEBUG - MPI_ABORT was invoked on rank 13 in communicator MPI_COMM_WORLD
+2022-10-13 09:51:46,422 - isca - DEBUG - with errorcode 1.
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+2022-10-13 09:51:46,422 - isca - DEBUG - You may or may not see output from other processes, depending on
+2022-10-13 09:51:46,422 - isca - DEBUG - exactly when Open MPI kills them.
+2022-10-13 09:51:46,422 - isca - DEBUG - --------------------------------------------------------------------------
+2022-10-13 09:51:46,422 - isca - DEBUG - starting            1  OpenMP threads per MPI-task
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - FATAL from PE   15: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - FATAL from PE   20: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - FATAL from PE   21: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,422 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - FATAL from PE    3: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - FATAL from PE    7: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - FATAL from PE    4: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:46,423 - isca - DEBUG - FATAL from PE   29: MPP_DEFINE_DOMAINS(mpp_compute_extent): domain extents must be positive definite.
+2022-10-13 09:51:46,423 - isca - DEBUG - 
+2022-10-13 09:51:48,424 - isca - DEBUG - [kennedy20:17844] 10 more processes have sent help message help-mpi-api.txt / mpi-abort
+2022-10-13 09:51:48,424 - isca - DEBUG - [kennedy20:17844] Set MCA parameter "orte_base_help_aggregate" to 0 to see all help / error messages
+Exception in thread background thread for pid 17844:
+Traceback (most recent call last):
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/threading.py", line 980, in _bootstrap_inner
+    self.run()
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/threading.py", line 917, in run
+    self._target(*self._args, **self._kwargs)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 1683, in wrap
+    fn(*rgs, **kwargs)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 2662, in background_thread
+    handle_exit_code(exit_code)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 2349, in fn
+    return self.command.handle_command_exit_code(exit_code)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 905, in handle_command_exit_code
+    raise exc
+sh.ErrorReturnCode_1: 
+
+  RAN: /usr/bin/bash /gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run/run.sh
+
+  STDOUT:
+
+
+  STDERR:
+
+2022-10-13 09:51:48,461 - isca - ERROR - Run 1 failed. See log for details.
+2022-10-13 09:51:48,462 - isca - ERROR - Error: ErrorReturnCode_1('\n\n  RAN: /usr/bin/bash /gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run/run.sh\n\n  STDOUT:\n\n\n  STDERR:\n')
+Traceback (most recent call last):
+  File "/gpfs1/home/jamd1/Isca/src/extra/python/isca/experiment.py", line 285, in run
+    proc.wait()
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 879, in wait
+    self.handle_command_exit_code(exit_code)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 905, in handle_command_exit_code
+    raise exc
+sh.ErrorReturnCode_1: 
+
+  RAN: /usr/bin/bash /gpfs1/scratch/other/jamd1/isca_work/experiment/frierson_test_case/run/run.sh
+
+  STDOUT:
+
+
+  STDERR:
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/gpfs1/home/jamd1/isca_jobs/benchmarking/experiments/frierson_test_case.py", line 180, in <module>
+    exp.run(1, use_restart=False, num_cores=NCORES, overwrite_data=True)
+  File "/gpfs1/home/jamd1/Isca/src/extra/python/isca/helpers.py", line 22, in _destructive
+    return fn(*args, **kwargs)
+  File "/gpfs1/home/jamd1/Isca/src/extra/python/isca/helpers.py", line 38, in _useworkdir
+    return fn(*args, **kwargs)
+  File "/gpfs1/home/jamd1/Isca/src/extra/python/isca/experiment.py", line 299, in run
+    raise FailedRunError()
+isca.experiment.FailedRunError

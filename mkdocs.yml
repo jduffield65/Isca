@@ -1,0 +1,72 @@
+site_name: Isca
+repo_url: https://github.com/jduffield65/Isca  # provides link to github website
+repo_name: jduffield65/Isca
+
+theme:
+  name: material
+  # 404 page
+  static_templates:
+      - 404.html
+  palette:
+    primary: black   # specify colour of website
+  # Necessary for search to work properly
+  include_search_page: false
+  search_index_only: true
+
+  # Default values, taken from mkdocs_theme.yml
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.indexes
+    - navigation.expand
+    - content.tabs.link
+    - navigation.sections
+    # - toc.integrate  # This puts table of contents in right sidebar into left sidebar but makes left sidebar quite big
+    - navigation.top
+  font:
+      text: Roboto
+      code: Roboto Mono
+  icon:
+      logo: logo
+
+plugins:
+  - search
+  - mkdocstrings:
+        default_handler: python
+        handlers:
+            python:
+                rendering:
+                    show_root_toc_entry: false # stops extra heading in contents of Code pages
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/jduffield65/Isca
+      name: Github Repository
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - attr_list
+  - md_in_html
+  - def_list
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js   # allows you to put use latex maths equations.
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+    - Home: index.md
+    - Getting Started:
+        - kennedy: getting_started/kennedy.md
+        - Shell Scripting: getting_started/shell_scripting.md
+        - Slurm: getting_started/slurm.md
