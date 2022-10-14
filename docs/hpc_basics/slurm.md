@@ -153,10 +153,11 @@ itself though e.g. `echo $SLURM_SLURM_JOB_NAME` would not print anything if it w
 `example.sh`.
 
 ## Debugging
-It can be annoying if you are running a small job to submit it to a `SLURM` queue and then wait for 
+It can be annoying if you are running a small job, to submit it to a `SLURM` queue and then wait for 
 it to get to the front.
 
-As an alternative, you can just [login](kennedy.md#login) to kennedy and run the `example_print.py` script.
+As an alternative, you can just [login](kennedy.md#login) to kennedy and run the `example_print.py` script
+(after activating the relavent *CONDA* environment).
 To do this, you first need to set the environmental variables that the script uses by running
 `source example_params.sh` where the `example_params.sh` script is given below:
 
