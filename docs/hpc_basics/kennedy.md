@@ -74,9 +74,9 @@ I find it easiest to exchange files using [FileZilla](https://filezilla-project.
     - In FileZilla, in the top bar, click *Edit* and then *Settings*.
     - Then click *Connection/SFTP* and then *Add key file*.
     - Select the private key [created earlier](#getting-an-account) i.e. it should be called *id_rsa*. <br>
-    ![image.png](../images/getting_started/kennedy/private_key.png){width="300"}
+    ![image.png](../images/hpc_basics/kennedy/private_key.png){width="300"}
     - Then press *OK* <br>
-    ![image.png](../images/getting_started/kennedy/private_key_confirm.png){width="300"}
+    ![image.png](../images/hpc_basics/kennedy/private_key_confirm.png){width="300"}
     - This comes from the *On a Mac* section on the [wiki](https://wiki.filezilla-project.org/Howto#On_a_Mac). 
 
 - Now, in the top bar, click *File* and then *Site Manager*
@@ -84,9 +84,9 @@ I find it easiest to exchange files using [FileZilla](https://filezilla-project.
     - Protocol: *SFTP*
     - Host: *kennedy.st-andrews.ac.uk*
     - Username and password is the same as used to [login](#login). <br>
-    ![image.png](../images/getting_started/kennedy/site_manager.png){width="300"}
+    ![image.png](../images/hpc_basics/kennedy/site_manager.png){width="300"}
     - Then click *Connect* and it should hopefully work with a screen like the following appearing. <br>
-    ![image.png](../images/getting_started/kennedy/connect.png){width="300"}
+    ![image.png](../images/hpc_basics/kennedy/connect.png){width="300"}
 - You should now be able to drag and drop files from the local computer (left) to kennedy (right) and create new 
 directories etc.
 
@@ -94,7 +94,7 @@ directories etc.
 ### Installation
 To install *CONDA*, [login](#login) and then run `install-conda` in terminal.
 This should then produce some files in the location */gpfs1/apps/conda/jamd1/conda*: <br>
- ![image.png](../images/getting_started/kennedy/conda.png){width="300"}
+ ![image.png](../images/hpc_basics/kennedy/conda.png){width="300"}
 
 ### Create Environment
 To create a `python 3.9` conda environment called `test_env` run:
