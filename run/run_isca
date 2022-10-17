@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+
+"""A simple run script.
+
+This script takes files from the input directory and uses these to configure and
+run the experiment.
+
+Without specifying any command line options, the following files are essential to running:
+* `settings_default.nml`   - the namelist
+* `diag_table_default`  - the diagnostic output required
+
+MODIFIED from original (https://github.com/ExeClim/Isca/blob/master/exp/run_isca/isca)
+So that horizontal resolution can be changed and
+"""
+
+import os
+import sys
+import glob
+import argparse
+
+from isca import Experiment, IscaCodeBase, log, GFDL_BASE
+from isca.diagtable import DiagTable
+import f90nml
+
+parser = argparse.ArgumentParser(description='Run an Isca experiment')
+parser.add_argument('-l', '--namelist', metavar='nml', type=str, help='The input namelist.  default: input/input.nml', default='input/input.nml')
+parser.add_argument('-d', '--diag', metavar='diag', type=str, help='The diagnostics table. default: input/diag_table', default='input/diag_table')
+parser.add_argument('-r', '--restart', metavar='restart', type=str, help='A restart zip file for setting initial state.  If no restart is provided, experiment starts from the intial state prescribed in the namelist.', default='false')
+parser.add_argument('-n', '--num_cores', metavar='N', type=int, help='Number of cores to distribute the MPI process over. default: 16', default=16)
+parser.add_argument('-res', '--res', metavar='res', type=str, help='Horizontal resolution of simulation: T21, T42 or T85. default: T42', default='T42')
+parser.add_argument('-c', '--compile', action='store_true', help='Recompile the codebase before running the experiment.')
+args = parser.parse_args()
+
+wdir = sys.path[0]  # get the directory of the script as per https://docs.python.org/3/library/sys.html#sys.path
+
+namelist = f90nml.read(args.namelist)
+exp_name = namelist['experiment_details']['name']
+del namelist['experiment_details']  # MODIFIED - namelist file contains number of nodes etc not allowed to parse to exp
+diag_table = DiagTable.from_file(args.diag)
+
+cb = IscaCodeBase.from_directory(GFDL_BASE)
+if args.compile:
+    cb.compile()
+
+exp = Experiment(exp_name, codebase=cb)
+
+exp.namelist = namelist
+exp.diag_table = diag_table
+# exp.inputfiles = [os.path.join('input', f)
+#                     for f in os.listdir('input')]
+#                     #if f not in essential_files]
+
+restart = args.restart
+exp.set_resolution(args.res)   # set resolution
+if restart.lower() == 'false':
+    exp.run(1, use_restart=False, num_cores=args.num_cores)
+else:
+    # Restart file should always be called res0001 as we rename the file at end of each iteration.
+    exp.run(1, restart_file=os.path.join(os.environ['GFDL_DATA'], exp_name, 'restarts/res0001.tar.gz'),
+            num_cores=args.num_cores)
+    # exp.run(1, use_restart=True, num_cores=args.num_cores)
+for i in range(2, 3):
+    exp.run(i, num_cores=args.num_cores)
