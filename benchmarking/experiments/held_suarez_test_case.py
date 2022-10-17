@@ -2,7 +2,10 @@ import numpy as np
 import os
 from isca import DryCodeBase, DiagTable, Experiment, Namelist, GFDL_BASE
 
-# Things that were set in benchmark.sh script - MODIFIED FROM ORIGINAL FILE
+# MODIFIED version of held_suarez_test_case.py script to allow for variables to be inherited
+# from the environment and to run for specified length of time.
+
+# Things that were set in benchmark.sh script - MODIFIED
 NCORES = int(os.environ["SLURM_NTASKS_PER_NODE"])
 NMONTHS = int(os.environ['NMONTHS']) + 1  # +1 because does first month automatically
 RESOLUTION = os.environ['RES'], 25  # horizontal resolution, 25 levels in pressure
@@ -25,7 +28,7 @@ cb.compile()  # compile the source code to working directory $GFDL_WORK/codebase
 # create an Experiment object to handle the configuration of model parameters
 # and output diagnostics
 
-exp_name = os.environ['SLURM_JOB_NAME']
+exp_name = os.environ['SLURM_JOB_NAME']  # MODIFIED - this always used to be held_suarez_default
 exp = Experiment(exp_name, codebase=cb)
 
 #Tell model how to write diagnostics
@@ -106,6 +109,8 @@ exp.set_resolution(*RESOLUTION)
 
 #Lets do a run!
 if __name__ == '__main__':
+    # MODIFIED - used to be for 1 year with overwrite_data=False
+    # But we are running same experiment multiple times so need to overwrite.
     exp.run(1, num_cores=NCORES, use_restart=False, overwrite_data=True)
     for i in range(2, NMONTHS):
         exp.run(i, num_cores=NCORES, overwrite_data=True)  # use the restart i-1 by default

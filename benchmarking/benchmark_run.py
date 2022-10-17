@@ -1,16 +1,18 @@
 import os
 from os import system
-import sys
 import numpy as np
 import re
 from typing import Tuple
 
+# This script runs a single experiment with different resolution and number of cores. It then records the time
+# taken for each.
+
 # Things to change
-experiment = 'frierson_test_case.py'  # python script to call is this in the benchmarking/experiment folder
+experiment = 'held_suarez_test_case.py'  # python script to call is this in the benchmarking/experiment folder
 n_months = 1  # duration of simulation
 n_nodes = 1  # how many nodes to run on
-n_cores_list = [32]  # cores per node to iterate over, all would be [8, 16, 32]
-res_list = ['T21']  # horizontal resolution to iterate over, all would be ['T21', 'T42', 'T85']
+n_cores_list = [8, 16, 32]  # cores per node to iterate over, all would be [8, 16, 32]
+res_list = ['T21', 'T42', 'T85']  # horizontal resolution to iterate over, all would be ['T21', 'T42', 'T85']
 csv_file = 'task_times.csv'  # where to save how long each task took.
 
 
@@ -35,6 +37,7 @@ def get_max_folder_number(dir: str) -> int:
 shell_script = 'benchmark.sh'  # bash script to call experiment
 experiment = experiment.replace('.py', '')  # make sure experiment name does not have .py suffix.
 python_script = os.path.join('experiments', experiment+'.py')
+# error .txt files saved as output/experiment/error{ind}.txt and similar for the output file
 starting_ind = int(np.clip(get_max_folder_number(f'output/{experiment}') + 1, 1, np.inf))
 
 if n_nodes == 1 and n_months <= 3:

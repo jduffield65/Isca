@@ -72,3 +72,4 @@ nav:
         - Slurm: hpc_basics/slurm.md
     - Isca:
         - Getting Started: Isca/getting_started.md
+        - Benchmarking: Isca/benchmarking.md

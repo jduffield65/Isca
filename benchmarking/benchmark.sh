@@ -34,11 +34,5 @@ python record_time.py $8 START
 python $1
 python record_time.py $8 END
 
-# Change output folder name so don't get overwrite issues
-# mv $GFDL_DATA/$(basename "$1" .py)/run0001 $GFDL_DATA/$(basename "$1" .py)/run$2
-
-# Move output and error text files to same place as data
-#mv $9 $GFDL_DATA/$(basename "$1" .py)/run$2
-#mv ${10} $GFDL_DATA/$(basename "$1" .py)/run$2
 exit 0
 EOT

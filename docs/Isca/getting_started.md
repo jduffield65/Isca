@@ -57,3 +57,39 @@ needs to be changed, with the following: </br>
 added to the existing FFlags.
 - The final file should look like this: </br>
 ![image.png](../images/Isca/ubuntu_conda.png){width="500"}
+
+##Held Suarez
+A simple experiment to run to check that the installation has worked is the 
+[*Held Suarez*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/held_suarez/held_suarez_test_case.py) 
+experiment.
+
+To run this, you can do the following:
+
+- [Login](kennedy.md#login) to kennedy.
+- Run `conda activate isca_env` to activate the Isca *CONDA* environment.
+- Create the following script, titled `held_suarez_run.sh`, and transfer it to a suitable location
+on kennedy.
+```bash
+#!/bin/bash
+#SBATCH --job-name=held_suarez_test
+#SBATCH --output="held_suarez_test_output.txt"
+#SBATCH --error="held_suarez_test_error.txt"
+#SBATCH --time=02:00:00 # maximum walltime for the job
+#SBATCH --nodes=1 # specify number of nodes
+#SBATCH --ntasks-per-node=16 # specify number of processors per node
+#SBATCH --mail-type=END # send email at job completion
+#SBATCH --mail-user=$USER@st-andrews.ac.uk # email address
+#SBATCH --partition=debug # queue to run on
+
+python $GFDL_BASE/exp/test_cases/held_suarez/held_suarez_test_case.py
+```
+    - This will save the things printed to the console in `held_suarez_test_error.txt`, which
+    will just be added to the same directory that the script is in. 
+    You may want to change this to put it in another location.
+    - This will use the debug queue as it should only take around 20 minutes to run.
+- Submit the script: `sbatch held_suarez_run.sh` (make sure you are in the same directory as the file first).
+
+As well as the `held_suarez_test_output.txt` and `held_suarez_test_error.txt` files, this should also generate
+some output data in the folder </br> `/gpfs1/scratch/jamd1/isca_output/held_suarez_default/run0001`:
+
+![image.png](../images/Isca/held_suarez_output.png){width="500"}
