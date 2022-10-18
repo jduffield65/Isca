@@ -73,3 +73,6 @@ nav:
     - Isca:
         - Getting Started: Isca/getting_started.md
         - Benchmarking: Isca/benchmarking.md
+    - Code:
+        - Run:
+            - Base: code/run/base.md

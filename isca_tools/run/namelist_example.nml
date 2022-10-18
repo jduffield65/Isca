@@ -1,11 +1,14 @@
 // This section gives info to give to SLURM when running experiment
 &experiment_details
    name = test
-   n_months = 2
+   n_months_total = 5
+   n_months_job = 2
    n_nodes = 1
    n_cores = 16
    resolution = T21
    partition = debug
+   overwrite_data = .false.
+   compile = .false.
 /
 
 &atmosphere_nml
@@ -64,7 +67,7 @@
 &main_nml
     calendar = 'thirty_day'
     current_date = 1, 1, 1, 0, 0, 0
-    days = 30
+    days = 10
     dt_atmos = 600
     hours = 0
     minutes = 0
