@@ -27,6 +27,7 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             - `overwrite_data`: If this is `True` and data already exists in `$GFDL_DATA/{name}`,
                 then it will be overwritten. If it is `False` and the data exists, an error will occur.
             - `compile`: If `True`, it will recompile the codebase before running the experiment.
+            - `max_walltime`: Maximum time that job can run on *Slurm*. E.g. 1 hour would be "01:00:00".
         diag_table_file: File path to the diagnostic table file for the experiment.
             This specifies the outputs of the experiment.
         slurm: If `True`, will split each job to a *Slurm* queue. Otherwise, it will just loop over each
@@ -72,6 +73,7 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
             - `overwrite_data`: If this is `True` and data already exists in `$GFDL_DATA/{name}`,
                 then it will be overwritten. If it is `False` and the data exists, an error will occur.
             - `compile`: If `True`, it will recompile the codebase before running the experiment.
+            - `max_walltime`: Maximum time that job can run on *Slurm*. E.g. 1 hour would be "01:00:00".
         diag_table_file: File path to the diagnostic table file for the experiment.
             This specifies the outputs of the experiment.
         month_start: Index of month at which this job starts the simulation (starting with 1).

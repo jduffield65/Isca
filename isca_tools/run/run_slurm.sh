@@ -4,7 +4,7 @@ sbatch <<EOT
 #SBATCH --job-name=$1  # make job name be the same as the python script without prefix and suffix.
 #SBATCH --output=$GFDL_DATA/$1/console_output$2.txt  # output to console saved as text file in data directory for this experiment
 #SBATCH --error=$GFDL_DATA/$1/console_error$2.txt    # errors to console saved as text file in data directory for this experiment
-#SBATCH --time=02:00:00 # maximum walltime for the job
+#SBATCH --time=$9 # maximum walltime for the job
 #SBATCH --nodes=$5 # specify number of nodes
 #SBATCH --ntasks-per-node=$6 # specify number of processors per node
 #SBATCH --mail-type=END # send email at job completion
@@ -20,9 +20,12 @@ sbatch <<EOT
 # $6 - n_cores indicating the number of cores to use per node.
 # $7 - namelist file
 # $8 - diagnostic output file indicating what to save
+# $9 - maximum allowed walltime to run job
 
 # Run python script for experiment and record how long it takes
-python $(dirname "$BASH_SOURCE")/base.py $7 $8 $2 $3
+echo $(date)   # record start time
+python $(dirname "$BASH_SOURCE")/base.py $7 $8 $2 $3   # run job
+echo $(date)   # record end time
 
 exit 0
 EOT

@@ -9,6 +9,7 @@
    partition = debug
    overwrite_data = .false.
    compile = .false.
+   max_walltime = "01:00:00"
 /
 
 &atmosphere_nml
