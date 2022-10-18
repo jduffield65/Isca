@@ -40,12 +40,13 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # month_jobs[i] are the months to simulate in job i.
     month_jobs = np.array_split(np.arange(1, exp_details['n_months_total'] + 1), n_jobs)
 
+    slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm.sh')
     # Iterate over all jobs
     for month_job in month_jobs:
         if slurm:
-            os.system(f"bash run_slurm.sh {exp_details['name']} {month_job[0]} {len(month_job)} "
+            os.system(f"bash {slurm_script} {exp_details['name']} {month_job[0]} {len(month_job)} "
                       f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                      f"{namelist_file} {diag_table_file}")
+                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']}")
         else:
             run_job(namelist_file, diag_table_file, month_job[0], len(month_job))
 
