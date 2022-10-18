@@ -68,7 +68,7 @@
 &main_nml
     calendar = 'thirty_day'
     current_date = 1, 1, 1, 0, 0, 0
-    days = 10
+    days = 30
     dt_atmos = 600
     hours = 0
     minutes = 0
