@@ -4,6 +4,7 @@ from isca import Experiment, IscaCodeBase, log, GFDL_BASE
 from isca.diagtable import DiagTable
 import f90nml
 import numpy as np
+from datetime import datetime
 
 
 def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False):
@@ -121,6 +122,14 @@ if __name__ == "__main__":
               'month_start - Index of month at which this job starts the simulation (starting with 1).\n'
               'month_duration - How many months to run simulation for in this job.')
     if len(sys.argv) == 5:
+        start_time = datetime.utcnow()
         run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+        end_time = datetime.utcnow()
+        # Print out how long it took so saves when running with slurm to output txt file
+        print(f"Simulation Start Month: {int(sys.argv[3])}")
+        print(f"Simulation Length/Months: {int(sys.argv[4])}")
+        print(f"Start Time: {start_time.strftime('%B %d %Y - %H:%M:%S')}")
+        print(f"End Time: {end_time.strftime('%B %d %Y - %H:%M:%S')}")
+        print(f"Duration/Seconds: {int(np.round((end_time-start_time).total_seconds()))}")
     else:
         raise ValueError(f"Only {len(sys.argv)} parameters provided but 5 expected.")
