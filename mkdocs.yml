@@ -73,6 +73,14 @@ nav:
     - Isca:
         - Getting Started: Isca/getting_started.md
         - Benchmarking: Isca/benchmarking.md
+    - Namelists:
+        - Atmosphere: namelists/atmosphere.md
+        - Held Suarez: namelists/held_suarez.md
+        - Idealized Moist Physics: namelists/idealized_moist_physics.md
+        - Quasi Equilibrium Moist Convection: namelists/qe_moist_convection.md
+        - Betts-Miller Convection: namelists/betts_miller.md
+        - Relaxed Arakawa Schubert Convection: namelists/ras.md
+        - Large Scale Condensation: namelists/lscale_cond.md
     - Code:
         - Run:
             - Base: code/run/base.md

@@ -21,8 +21,8 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             - `name`: Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
             - `n_months_total`: Total duration of simulation in months.
             - `n_months_job`: Approximate duration of each job of the simulation in months.
-            - `n_nodes`: Number of nodes job was run on (*Slurm* info).
-            - `n_cores`: Number of cores for each node that job was run on (*Slurm* info).
+            - `n_nodes`: Number of nodes to run job on (*Slurm* info).
+            - `n_cores`: Number of cores for each node to run job on (*Slurm* info).
             - `resolution`: Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
             - `partition`: *Slurm* queue that the job was submitted to.
             - `overwrite_data`: If this is `True` and data already exists in `$GFDL_DATA/{name}`,
@@ -68,8 +68,8 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
             - `name`: Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
             - `n_months_total`: Total duration of simulation in months.
             - `n_months_job`: Approximate duration of each job of the simulation in months.
-            - `n_nodes`: Number of nodes job was run on (*Slurm* info).
-            - `n_cores`: Number of cores for each node that job was run on (*Slurm* info).
+            - `n_nodes`: Number of nodes to run job on (*Slurm* info).
+            - `n_cores`: Number of cores for each node to run job on (*Slurm* info).
             - `resolution`: Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
             - `partition`: *Slurm* queue that the job was submitted to.
             - `overwrite_data`: If this is `True` and data already exists in `$GFDL_DATA/{name}`,
@@ -125,7 +125,7 @@ if __name__ == "__main__":
         start_time = datetime.utcnow()
         run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
         end_time = datetime.utcnow()
-        # Print out how long it took so saves when running with slurm to output txt file
+        # Print out how long it takes, so saves when running with slurm, to output txt file
         print(f"Simulation Start Month: {int(sys.argv[3])}")
         print(f"Simulation Length/Months: {int(sys.argv[4])}")
         print(f"Start Time: {start_time.strftime('%B %d %Y - %H:%M:%S')}")
