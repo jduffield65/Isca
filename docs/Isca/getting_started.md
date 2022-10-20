@@ -259,9 +259,8 @@ indicated in the `experiment_details` section of the [`namelist.nml`](#required-
 
 There will be a folder for each month e.g. `run0003` will contain the data for the third month.
 
-There will also be a folder titled `console_output`. This which will contain a file titled `error1.txt` 
+If *Slurm* is used, there will also be a folder titled `console_output`. This which will contain a file titled `error1.txt` 
 containing all the stuff *Isca* printed to the console for the job starting on month 1, as well as a file
 titled `time1.txt`, which contains the time taken for that job to run. If the experiment was split over
 multiple jobs, there will be multiple `error.txt` and `time.txt` files, each indexed with the month 
 that they started on.
-

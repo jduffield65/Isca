@@ -75,13 +75,22 @@ nav:
         - Benchmarking: Isca/benchmarking.md
     - Namelists:
         - namelists/index.md
-        - Atmosphere: namelists/atmosphere.md
-        - Held Suarez: namelists/held_suarez.md
-        - Idealized Moist Physics: namelists/idealized_moist_physics.md
-        - Quasi Equilibrium Moist Convection: namelists/qe_moist_convection.md
-        - Betts-Miller Convection: namelists/betts_miller.md
-        - Relaxed Arakawa Schubert Convection: namelists/ras.md
-        - Large Scale Condensation: namelists/lscale_cond.md
+        - Main:
+          - Atmosphere: namelists/main/atmosphere.md
+          - Held Suarez: namelists/main/held_suarez.md
+          - Idealized Moist Physics: namelists/main/idealized_moist_physics.md
+        - Convection:
+          - Quasi Equilibrium Moist: namelists/convection/qe_moist_convection.md
+          - Betts-Miller: namelists/convection/betts_miller.md
+          - Relaxed Arakawa Schubert: namelists/convection/ras.md
+        - Large Scale Condensation:
+          - namelists/lscale_cond/index.md
+        - Radiation:
+          - Gray: namelists/radiation/two_stream_gray.md
+          - RRTM: namelists/radiation/rrtm.md
+          - SOCRATES: namelists/radiation/socrates.md
+        - Damping:
+            - namelists/damping/index.md
     - Code:
         - Run:
             - Base: code/run/base.md
