@@ -84,21 +84,17 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
     namelist = f90nml.read(namelist_file)
     diag_table = DiagTable.from_file(diag_table_file)
     exp_details = namelist['experiment_details']
-    # When passing to experiment, Isca expects no namelist called experiment_details hence delete it
-    del namelist['experiment_details']
 
     cb = IscaCodeBase.from_directory(GFDL_BASE)
     if exp_details['compile']:
         cb.compile()
 
     exp = Experiment(exp_details['name'], codebase=cb)
+    # When passing to experiment, will have additional namelist called 'experiment_details' but does not
+    # seem to be an issue.
     exp.namelist = namelist
     exp.diag_table = diag_table
-
-    # # Isca gives option to specify input files for experiment, not really sure how it works though.
-    # exp.inputfiles = [os.path.join('input', f)
-    #                     for f in os.listdir('input')]
-    #                     #if f not in essential_files]
+    exp.inputfiles = [namelist_file, diag_table_file]
 
     exp.set_resolution(exp_details['resolution'])  # set resolution
     if month_start == 1:

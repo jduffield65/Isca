@@ -8,11 +8,11 @@ from typing import Tuple
 # taken for each.
 
 # Things to change
-experiment = 'held_suarez_test_case.py'  # python script to call is this in the benchmarking/experiment folder
-n_months = 1  # duration of simulation
-n_nodes = 1  # how many nodes to run on
-n_cores_list = [8, 16, 32]  # cores per node to iterate over, all would be [8, 16, 32]
-res_list = ['T21', 'T42', 'T85']  # horizontal resolution to iterate over, all would be ['T21', 'T42', 'T85']
+experiment = 'frierson_test_case.py'  # python script to call is this in the benchmarking/experiment folder
+n_months = 6  # duration of simulation
+n_nodes = 2  # how many nodes to run on
+n_cores_list = [32]  # cores per node to iterate over, all would be [8, 16, 32]
+res_list = ['T85']  # horizontal resolution to iterate over, all would be ['T21', 'T42', 'T85']
 csv_file = 'task_times.csv'  # where to save how long each task took.
 
 

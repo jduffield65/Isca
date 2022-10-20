@@ -314,6 +314,8 @@ The time taken for the simulations are shown below:
 
 ![image.png](../images/Isca/benchmarking.png){width="500"}
 
+The 64 cores result is made up of two nodes, each of 32 cores and was run on the *parallel* partition. 
+All other results were run on one node, using the *debug* partition.
 
 ??? error "*T21* resolution with 32 cores per node"
     The combination of 32 cores per node with *T21* resolution does not appear in the plots because it 

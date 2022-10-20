@@ -1,0 +1,67 @@
+// This section gives info to give to SLURM when running experiment
+&experiment_details
+   name = held_suarez
+   n_months_total = 5
+   n_months_job = 2
+   n_nodes = 1
+   n_cores = 32
+   resolution = T85
+   partition = debug
+   overwrite_data = .false.
+   compile = .false.
+   max_walltime = "01:00:00"
+/
+
+&atmosphere_nml
+    idealized_moist_model = .false.
+/
+
+&diag_manager_nml
+    mix_snapshot_average_fields = .false.
+/
+
+&fms_io_nml
+    fileset_write = 'single'
+    threading_write = 'single'
+/
+
+&fms_nml
+    domains_stack_size = 600000
+/
+
+&hs_forcing_nml
+    delh = 60.0
+    delv = 10.0
+    do_conserve_energy = .true.
+    eps = 0.0
+    ka = -40.0
+    kf = -1.0
+    ks = -4.0
+    sigma_b = 0.7
+    t_strat = 200.0
+    t_zero = 315.0
+/
+
+&main_nml
+    calendar = 'thirty_day'
+    current_date = 2000, 1, 1, 0, 0, 0
+    days = 30
+    dt_atmos = 600
+/
+
+&spectral_dynamics_nml
+    damping_order = 4
+    exponent = 7.5
+    initial_sphum = 0.0
+    reference_sea_level_press = 100000.0
+    scale_heights = 6.0
+    surf_res = 0.5
+    valid_range_t = 100.0, 800.0
+    vert_coord_option = 'uneven_sigma'
+    water_correction_limit = 20000.0
+    lon_max = 256
+    lat_max = 128
+    num_fourier = 85
+    num_spherical = 86
+    num_levels = 25
+/
