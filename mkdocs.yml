@@ -74,6 +74,7 @@ nav:
         - Getting Started: Isca/getting_started.md
         - Benchmarking: Isca/benchmarking.md
     - Namelists:
+        - namelists/index.md
         - Atmosphere: namelists/atmosphere.md
         - Held Suarez: namelists/held_suarez.md
         - Idealized Moist Physics: namelists/idealized_moist_physics.md

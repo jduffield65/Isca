@@ -157,7 +157,7 @@ It can be annoying if you are running a small job, to submit it to a `SLURM` que
 it to get to the front.
 
 As an alternative, you can just [login](kennedy.md#login) to kennedy and run the `example_print.py` script
-(after activating the relavent *CONDA* environment).
+(after activating the relevant *CONDA* environment).
 To do this, you first need to set the environmental variables that the script uses by running
 `source example_params.sh` where the `example_params.sh` script is given below:
 

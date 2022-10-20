@@ -1,15 +1,15 @@
 // This section gives info to give to SLURM when running experiment
 &experiment_details
-   name = test
+   name = 'test'
    n_months_total = 5
    n_months_job = 2
    n_nodes = 1
    n_cores = 16
-   resolution = T21
-   partition = debug
+   resolution = 'T21'
+   partition = 'debug'
    overwrite_data = .false.
    compile = .false.
-   max_walltime = "01:00:00"
+   max_walltime = '01:00:00'
 /
 
 &atmosphere_nml

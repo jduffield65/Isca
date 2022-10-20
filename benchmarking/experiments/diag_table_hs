@@ -17,4 +17,3 @@
 "dynamics", "temp", "temp", "atmos_monthly", "all", .true., "none", 2,
 "dynamics", "vor", "vor", "atmos_monthly", "all", .true., "none", 2,
 "dynamics", "div", "div", "atmos_monthly", "all", .true., "none", 2,
-

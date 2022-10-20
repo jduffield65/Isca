@@ -58,7 +58,7 @@ added to the existing FFlags.
 - The final file should look like this: </br>
 ![image.png](../images/Isca/ubuntu_conda.png){width="500"}
 
-##Held Suarez
+## Held Suarez
 A simple experiment to run to check that the installation has worked is the 
 [*Held Suarez*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/held_suarez/held_suarez_test_case.py) 
 experiment.
@@ -93,3 +93,175 @@ As well as the `held_suarez_test_output.txt` and `held_suarez_test_error.txt` fi
 some output data in the folder </br> `/gpfs1/scratch/jamd1/isca_output/held_suarez_default/run0001`:
 
 ![image.png](../images/Isca/held_suarez_output.png){width="500"}
+
+
+## Running a General Experiment
+
+### Required Files
+To run a general experiment, you need to create two files, a [namelist](../namelists/index.md) *nml* file specifying the 
+configuration options for the experiment and a diagnostic table file, specifying what diagnostics to save for the experiment.
+
+The corresponding files for the [*Held Suarez*](#held-suarez) experiment are given below:
+
+=== "namelist_hs.nml"
+    ```nml
+    // This section gives info to give to SLURM when running experiment
+    &experiment_details
+       name = 'held_suarez'
+       n_months_total = 12
+       n_months_job = 12
+       n_nodes = 1
+       n_cores = 16
+       resolution = 'T42'
+       partition = 'debug'
+       overwrite_data = .false.
+       compile = .false.
+       max_walltime = '01:00:00'
+    /
+    
+    &atmosphere_nml
+        idealized_moist_model = .false.
+    /
+    
+    &diag_manager_nml
+        mix_snapshot_average_fields = .false.
+    /
+    
+    &fms_io_nml
+        fileset_write = 'single'
+        threading_write = 'single'
+    /
+    
+    &fms_nml
+        domains_stack_size = 600000
+    /
+    
+    &hs_forcing_nml
+        delh = 60.0
+        delv = 10.0
+        do_conserve_energy = .true.
+        eps = 0.0
+        ka = -40.0
+        kf = -1.0
+        ks = -4.0
+        sigma_b = 0.7
+        t_strat = 200.0
+        t_zero = 315.0
+    /
+    
+    &main_nml
+        calendar = 'thirty_day'
+        current_date = 2000, 1, 1, 0, 0, 0
+        days = 30
+        dt_atmos = 600
+    /
+    
+    &spectral_dynamics_nml
+        damping_order = 4
+        exponent = 7.5
+        initial_sphum = 0.0
+        reference_sea_level_press = 100000.0
+        scale_heights = 6.0
+        surf_res = 0.5
+        valid_range_t = 100.0, 800.0
+        vert_coord_option = 'uneven_sigma'
+        water_correction_limit = 20000.0
+        lon_max = 256
+        lat_max = 128
+        num_fourier = 85
+        num_spherical = 86
+        num_levels = 25
+    /
+
+    ```
+=== "diag_table_hs"
+    ```txt
+    "FMS Model results"
+    0001 1 1 0 0 0
+    # = output files =
+    # file_name, output_freq, output_units, format, time_units, long_name
+    
+    "atmos_monthly", 30, "days", 1, "days", "time",
+    
+    # = diagnostic field entries =
+    # module_name, field_name, output_name, file_name, time_sampling, time_avg, other_opts, precision
+    
+    
+    "dynamics", "ps", "ps", "atmos_monthly", "all", .true., "none", 2,
+    "dynamics", "bk", "bk", "atmos_monthly", "all", .false., "none", 2,
+    "dynamics", "pk", "pk", "atmos_monthly", "all", .false., "none", 2,
+    "dynamics", "ucomp", "ucomp", "atmos_monthly", "all", .true., "none", 2,
+    "dynamics", "vcomp", "vcomp", "atmos_monthly", "all", .true., "none", 2,
+    "dynamics", "temp", "temp", "atmos_monthly", "all", .true., "none", 2,
+    "dynamics", "vor", "vor", "atmos_monthly", "all", .true., "none", 2,
+    "dynamics", "div", "div", "atmos_monthly", "all", .true., "none", 2,
+
+    ```
+
+The `namelist_hs.nml` file specifies all the 
+[namelist options](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/exp/test_cases/held_suarez/held_suarez_test_case.py#L47-L100) 
+for the experiment. It also contains an additional `experiment_details` section which indicates information 
+on how to run the simulation, most of which is relevant for submitting jobs to [*Slurm*](../hpc_basics/slurm.md):
+
+- `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
+- `n_months_total`: *int*. Total duration of simulation in months.
+- `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
+E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
+of length 6 months.
+- `n_nodes`: *int*. Number of nodes to run job on (*Slurm* info).
+- `n_cores`: *int*. Number of cores for each node to run job on (*Slurm* info).
+- `resolution`: *string*. Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
+- `partition`: *string*. *Slurm* queue to submit job to.
+- `overwrite_data`: *bool*. If this is `True` and data already exists in `$GFDL_DATA/{name}`,
+    then it will be overwritten. If it is `False` and the data exists, an error will occur.
+- `compile`: *bool*. If `True`, it will recompile the codebase before running the experiment.
+- `max_walltime`: *string*. Maximum time that job can run on *Slurm*. E.g. 1 hour would be '01:00:00'.
+
+??? note "*nml* files"
+    If a parameter is a boolean e.g. `overwrite_data` or `compile`, the format must be `.false.` or `.true.`.</br>
+    If a parameter is a string e.g. `max_walltime`, `resolution` or `name` then quotation marks (`''`) must be used
+    i.e. `name = 'held_suarez'`.
+
+    If a line starts `//`, it indicates a comment but a comment cannot be added to a particular parameter e.g. </br>
+    `name = 'held_suarez'  // Name of job submitted to Slurm` </br>
+    is not allowed.
+
+The `diag_table_hs` file specifies all the 
+[diagnostics](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/exp/test_cases/held_suarez/held_suarez_test_case.py#L30-L41) 
+to save to the output directory.
+
+### Running
+To run a general experiment, download the `isca_tools` folder from the 
+[Github repository](https://github.com/jduffield65/Isca) and [transfer](../hpc_basics/kennedy.md#file-transfer) it 
+to your home directory on [*kennedy*](../hpc_basics/kennedy.md).
+
+Once you have done this, and have [created](#required-files) a namelist file with path 
+`isca_jobs/experiment/namelist.nml` and diagnostic table file with path `isca_jobs/experiment/diag_table`, you can
+do the following:
+
+- [Login](kennedy.md#login) to kennedy.
+- Run `conda activate isca_env` to activate the Isca *CONDA* environment.
+- Run: 
+```bash
+python isca_tools isca_jobs/experiment/namelist.nml isca_jobs/experiment/diag_table True
+```
+
+The `True` in the above line of code indicates that the jobs should be submitted to *Slurm*. If this third parameter 
+is `False` or not given, then it won't use *Slurm* but just [run on *kennedy*](../hpc_basics/slurm.md#debugging).
+This may be useful for debugging small jobs.
+
+What this last line of code does is call the function 
+[`run_experiment`](../code/run/base.md#isca_tools.run.base.run_experiment).
+
+### Output Data
+This will save data to the folder `/gpfs1/scratch/jamd1/isca_output/name/` where `name` is the value of `name`
+indicated in the `experiment_details` section of the [`namelist.nml`](#required-files) file.
+
+There will be a folder for each month e.g. `run0003` will contain the data for the third month.
+
+There will also be a folder titled `console_output`. This which will contain a file titled `error1.txt` 
+containing all the stuff *Isca* printed to the console for the job starting on month 1, as well as a file
+titled `time1.txt`, which contains the time taken for that job to run. If the experiment was split over
+multiple jobs, there will be multiple `error.txt` and `time.txt` files, each indexed with the month 
+that they started on.
+

@@ -18,17 +18,19 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             This specifies the physical parameters used for the simulation.
             Also contains `experiment_details` section which contains the following:
 
-            - `name`: Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
-            - `n_months_total`: Total duration of simulation in months.
-            - `n_months_job`: Approximate duration of each job of the simulation in months.
-            - `n_nodes`: Number of nodes to run job on (*Slurm* info).
-            - `n_cores`: Number of cores for each node to run job on (*Slurm* info).
-            - `resolution`: Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
-            - `partition`: *Slurm* queue that the job was submitted to.
-            - `overwrite_data`: If this is `True` and data already exists in `$GFDL_DATA/{name}`,
+            - `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
+            - `n_months_total`: *int*. Total duration of simulation in months.
+            - `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
+            E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
+            of length 6 months.
+            - `n_nodes`: *int*. Number of nodes to run job on (*Slurm* info).
+            - `n_cores`: *int*. Number of cores for each node to run job on (*Slurm* info).
+            - `resolution`: *string*. Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
+            - `partition`: *string*. *Slurm* queue to submit job to.
+            - `overwrite_data`: *bool*. If this is `True` and data already exists in `$GFDL_DATA/{name}`,
                 then it will be overwritten. If it is `False` and the data exists, an error will occur.
-            - `compile`: If `True`, it will recompile the codebase before running the experiment.
-            - `max_walltime`: Maximum time that job can run on *Slurm*. E.g. 1 hour would be "01:00:00".
+            - `compile`: *bool*. If `True`, it will recompile the codebase before running the experiment.
+            - `max_walltime`: *string*. Maximum time that job can run on *Slurm*. E.g. 1 hour would be '01:00:00'.
         diag_table_file: File path to the diagnostic table file for the experiment.
             This specifies the outputs of the experiment.
         slurm: If `True`, will split each job to a *Slurm* queue. Otherwise, it will just loop over each
@@ -65,17 +67,19 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
             This specifies the physical parameters used for the simulation.
             Also contains `experiment_details` section which contains the following:
 
-            - `name`: Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
-            - `n_months_total`: Total duration of simulation in months.
-            - `n_months_job`: Approximate duration of each job of the simulation in months.
-            - `n_nodes`: Number of nodes to run job on (*Slurm* info).
-            - `n_cores`: Number of cores for each node to run job on (*Slurm* info).
-            - `resolution`: Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
-            - `partition`: *Slurm* queue that the job was submitted to.
-            - `overwrite_data`: If this is `True` and data already exists in `$GFDL_DATA/{name}`,
+            - `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
+            - `n_months_total`: *int*. Total duration of simulation in months.
+            - `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
+            E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
+            of length 6 months.
+            - `n_nodes`: *int*. Number of nodes to run job on (*Slurm* info).
+            - `n_cores`: *int*. Number of cores for each node to run job on (*Slurm* info).
+            - `resolution`: *string*. Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
+            - `partition`: *string*. *Slurm* queue to submit job to.
+            - `overwrite_data`: *bool*. If this is `True` and data already exists in `$GFDL_DATA/{name}`,
                 then it will be overwritten. If it is `False` and the data exists, an error will occur.
-            - `compile`: If `True`, it will recompile the codebase before running the experiment.
-            - `max_walltime`: Maximum time that job can run on *Slurm*. E.g. 1 hour would be "01:00:00".
+            - `compile`: *bool*. If `True`, it will recompile the codebase before running the experiment.
+            - `max_walltime`: *string*. Maximum time that job can run on *Slurm*. E.g. 1 hour would be '01:00:00'.
         diag_table_file: File path to the diagnostic table file for the experiment.
             This specifies the outputs of the experiment.
         month_start: Index of month at which this job starts the simulation (starting with 1).
