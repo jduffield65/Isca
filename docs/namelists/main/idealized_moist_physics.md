@@ -98,17 +98,21 @@ Roughness length for use in surface momentum exchange.</br>
 *float*</br>
 Roughness length for use in surface heat exchange.</br>
 **Default:** `0.05`
+</br>
+</br>
 
-#### `land_roughness_prefactor`
-*float*</br>
-Multiplier on the above roughness lengths to allow land-ocean contrast.</br>
-**Default:** `1.0`
-</br>
-</br>
 ### **Land and Hydrology**
 Land and hydrology processes are predominantly dealt with in the [`surface_flux_nml`](../surface/surface_flux.md) and 
 the [`mixed_layer_nml`](../surface/mixed_layer.md) namelists, but land and bucket hydrology options are initialised 
 with the following namelist parameters.
+
+Land is [implemented in Isca](https://execlim.github.io/Isca/modules/surface_flux.html#land) 
+via adjustment of the [roughness length](#land_roughness_prefactor) (larger over land), 
+[evaporative flux](../surface/surface_flux.md#land) (smaller over land), 
+[albedo](../surface/mixed_layer.md#land_albedo_prefactor) (larger over land) and 
+[mixed layer depth](../surface/mixed_layer.md#land_depth)/
+[heat capacity](../surface/mixed_layer.md#land_h_capacity_prefactor) (smaller over land).
+
 
 #### `mixed_layer_bc`
 *bool*</br>
@@ -121,7 +125,7 @@ namelist needs to be specified. </br>
 There are 3 choices of the land mask in *Isca*:
 
 * `input` - Read land mask from input file.
-* `zsurf` - Define land where surface geopotential height at model initialisation exceeds a threshold.
+* `zsurf` - Define land where surface geopotential height at model initialisation exceeds a threshold of 10.
 * `none` - Do not apply land mask.
 
 **Default:** `none`
@@ -135,6 +139,13 @@ Filename for the input land-mask.</br>Only ever required if [`land_option = 'inp
 *string*</br>
 Field name in the input land-mask *netcdf*.</br>Only ever required if [`land_option = 'input'`](#land_option).</br>
 **Default:** `land_mask`
+
+#### `land_roughness_prefactor`
+*float*</br>
+Multiplier on the [roughness lengths](#turbulence) to allow land-ocean contrast.</br>
+Expect this to be greater than `1` because land is rougher than ocean. </br>
+Only ever required if [`land_option`](#land_option) is not `none`.</br>
+**Default:** `1.0`
 
 #### `bucket`
 *bool*</br>

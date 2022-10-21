@@ -3,8 +3,9 @@ The [`mixed_layer_nml`](https://github.com/ExeClim/Isca/blob/master/src/atmos_sp
 only ever needs to be specified if 
 [`mixed_layer_bc = .true.`](../main/idealized_moist_physics.md#mixed_layer_bc) in 
 `idealized_moist_phys_nml`.
-It contains options which deal with the mixed layer boundary condition and is described on 
-[Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html).</br>
+It contains options which deal with the mixed layer boundary condition, including the difference 
+between ocean and land. 
+It is described on [Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html).</br>
 Some of the most common options are described below:
 
 ## Options
@@ -195,4 +196,104 @@ Only ever required if [`albedo_choice`](#do_read_sst) is `5`.</br>
 **Default:** `10.`
 </br>
 </br>
+
+### **Ice**
+
+#### `update_albedo_from_ice`
+*bool*</br>
+Flag to set the surface albedo to [`ice_albedo_value`](#ice_albedo_value) 
+where there is ice as specified by [`ice_file_name`](#ice_file_name).</br>
+**Default:** `False`
+
+#### `ice_albedo_value`
+*float*</br>
+Value for the ice albedo.</br>
+Expect this to be much larger than [`albedo_value`](#albedo_value) because ice is more reflective than ocean.
+Only ever required if [`update_albedo_from_ice=.true.`](#land_option).</br>
+**Default:** `0.7`
+
+#### `ice_file_name`
+*string*</br>
+Name of file containing sea ice concentration.</br>
+Only ever required if [`update_albedo_from_ice=.true.`](#land_option).</br>
+**Default:** `siconc_clim_amip`
+
+#### `ice_concentration_threshold`
+*float*</br>
+Value of sea ice concentration above which albedo should be set to [`ice_albedo_value`](#ice_albedo_value).</br>
+**Default:** `0.5`
+</br>
+</br>
+
 ### **Land**
+There are [4 ways that land is implemented in Isca](../main/idealized_moist_physics.md#land-and-hydrology).
+
+#### `land_option`
+*string*</br>
+There are 4 choices of the land mask in *Isca* given below. I think this parameter should be set to the same value
+as [`land_option`](../main/idealized_moist_physics.md#land_option) in the 
+[`idealized_moist_phys_nml`](../main/idealized_moist_physics.md) namelist. The `lonlat` option is not valid
+in that namelist though, so I am not sure what to do in that case.
+
+??? note "Heat capacity calculation"
+    The heat capacity calculation is different over land for the different options of `land_option`.
+    If it is `input`, the heat capacity at a particular location is 
+    [set](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/atmos_spectral/driver/solo/mixed_layer.F90#L542) 
+    to [`land_h_capacity_prefactor`](#land_h_capacity_prefactor) multiplied
+    by the ocean heat capacity at that location.</br>
+    If it is either `zsurf` or `lonlat`, it is 
+    [computed](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/atmos_spectral/driver/solo/mixed_layer.F90#L521-L540) 
+    as for ocean but with a [different depth](#land_depth).
+
+* `input` - Read land mask from input file indicated by the 
+[`land_file_name`](../main/idealized_moist_physics.md#land_field_name) parameter in the 
+[`idealized_moist_phys_nml`](../main/idealized_moist_physics.md) namelist.
+* `zsurf` - Define land where surface geopotential height at model initialisation exceeds a threshold of 10.
+* `lonlat` - Define land to be in the longitude/latitude box set by [`slandlon[k]`](#slandlon), [`elandlon[k]`](#elandlon),
+[`slandlat[k]`](#slandlat), [`elandlat[k]`](#elandlat) for all $k$.
+* `none` - Do not apply land mask.
+
+**Default:** `none`
+
+#### `land_h_capacity_prefactor`
+*float*</br>
+Factor by which to multiply ocean heat capacity to get land heat capacity. </br>
+Would expect this to be less than `1` as land has a smaller heat capacity than ocean. </br>
+Only ever required if [`land_option='input'`](#land_option).</br>
+**Default:** `1.0`
+
+#### `land_albedo_prefactor`
+*float*</br>
+Factor by which to multiply ocean albedo to get land albedo. </br>
+Would expect this to be more than `1` as land is more reflective than ocean. </br>
+Only ever required if [`land_option='input'`](#land_option).</br>
+**Default:** `1.0`
+
+#### `land_depth`
+*float*</br>
+Depth of land mixed layer ($m$).</br>
+Only ever required if [`land_option`](#land_option) is `'zsurf'` or `'lonlat'`.</br>
+If it is 
+[negative](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/atmos_spectral/driver/solo/mixed_layer.F90#L305),
+it just uses the ocean [`depth`](#depth).</br>
+**Default:** `-1`
+
+#### `slandlon`
+*list - float*</br>
+`slandlon[k]` is the start longitude of land box $k$.</br>
+**Default:** `0`
+
+#### `slandlat`
+*list - float*</br>
+`slandlat[k]` is the start latitude of land box $k$.</br>
+**Default:** `0`
+
+#### `elandlon`
+*list - float*</br>
+`elandlon[k]` is the end longitude of land box $k$.</br>
+**Default:** `-1`
+
+#### `elandlat`
+*list - float*</br>
+`elandlat[k]` is the end latitude of land box $k$.</br>
+**Default:** `-1`
