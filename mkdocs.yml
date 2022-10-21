@@ -92,6 +92,7 @@ nav:
         - Surface:
             - Mixed Layer: namelists/surface/mixed_layer.md
             - Surface Flux: namelists/surface/surface_flux.md
+            - Topography: namelists/surface/topography.md
         - Damping:
             - namelists/damping/index.md
         - Turbulence:
