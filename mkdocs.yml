@@ -89,8 +89,14 @@ nav:
           - Gray: namelists/radiation/two_stream_gray.md
           - RRTM: namelists/radiation/rrtm.md
           - SOCRATES: namelists/radiation/socrates.md
+        - Surface:
+            - Mixed Layer: namelists/surface/mixed_layer.md
+            - Surface Flux: namelists/surface/surface_flux.md
         - Damping:
             - namelists/damping/index.md
+        - Turbulence:
+            - Vertical Turbulence Driver: namelists/turbulence/vert_turb_driver.md
+            - Diffusivity: namelists/turbulence/diffusivity.md
     - Code:
         - Run:
             - Base: code/run/base.md

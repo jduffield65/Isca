@@ -4,7 +4,7 @@ only ever needs to be specified if
 [`idealized_moist_model = True` in `atmosphere_nml`](atmosphere.md#idealized_moist_model).
 It contains options which specify the various modules associated with Isca’s moist physics configurations and is
 described on [Isca's website](https://execlim.github.io/Isca/modules/idealised_moist_phys.html).
-Some of the most common ones are described below:
+Some of the most common options are described below:
 
 ## Options
 ### `convection_scheme`
@@ -30,28 +30,9 @@ need any additional namelist specified.
 
 **Default:** `UNSET`
 
-### `two_stream_gray`
+### `do_simple`
 *bool*</br>
-This is one of three choices for radiation, the others being [`do_rrtm_radiation`](#do_rrtm_radiation) and 
-[`do_socrates_radiation`](#do_socrates_radiation). If `True`, the 
-[`two_stream_gray_nml`](../radiation/two_stream_gray.md) namelist needs
-to be specified. </br>
-**Default:** `True`
-
-### `do_rrtm_radiation`
-*bool*</br>
-This is one of three choices for radiation, the others being [`two_stream_gray`](#two_stream_gray) and 
-[`do_socrates_radiation`](#do_socrates_radiation). If `True`, the 
-[`rrtm_radiation_nml`](../radiation/rrtm.md) namelist needs
-to be specified. </br>
-**Default:** `False`
-
-### `do_socrates_radiation`
-*bool*</br>
-This is one of three choices for radiation, the others being [`two_stream_gray`](#two_stream_gray) and 
-[`do_rrtm_radiation`](#do_rrtm_radiation). If `True`, the 
-[`socrates_rad_nml`](../radiation/socrates.md) namelist needs
-to be specified. </br>
+If `True`, use a simplification when calculating relative humidity. </br>
 **Default:** `False`
 
 ### `do_damping`
@@ -60,3 +41,134 @@ If `True`, the
 [`damping_driver_nml`](../damping/index.md) namelist needs
 to be specified. </br>
 **Default:** `False`
+</br>
+</br>
+### **Radiation**
+#### `two_stream_gray`
+*bool*</br>
+This is one of three choices for radiation, the others being [`do_rrtm_radiation`](#do_rrtm_radiation) and 
+[`do_socrates_radiation`](#do_socrates_radiation). If `True`, the 
+[`two_stream_gray_nml`](../radiation/two_stream_gray.md) namelist needs
+to be specified. </br>
+**Default:** `True`
+
+#### `do_rrtm_radiation`
+*bool*</br>
+This is one of three choices for radiation, the others being [`two_stream_gray`](#two_stream_gray) and 
+[`do_socrates_radiation`](#do_socrates_radiation). If `True`, the 
+[`rrtm_radiation_nml`](../radiation/rrtm.md) namelist needs
+to be specified. </br>
+**Default:** `False`
+
+#### `do_socrates_radiation`
+*bool*</br>
+This is one of three choices for radiation, the others being [`two_stream_gray`](#two_stream_gray) and 
+[`do_rrtm_radiation`](#do_rrtm_radiation). If `True`, the 
+[`socrates_rad_nml`](../radiation/socrates.md) namelist needs
+to be specified. </br>
+**Default:** `False`
+</br>
+</br>
+### **Turbulence**
+These options are all related to how Isca computes surface exchange of heat, momentum and humidity.
+
+#### `turb`
+*bool*</br>
+If `True`, vertical diffusion is enabled and the [`vert_turb_driver_nml`](../turbulence/vert_turb_driver.md) 
+namelist needs to be specified. </br>
+**Default:** `False`
+
+#### `do_virtual`
+*bool*</br>
+If `True`, the virtual temperature is used in the 
+[vertical diffusion module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/vert_diff/vert_diff.F90). </br>
+**Default:** `False`
+
+#### `roughness_moist`
+*float*</br>
+Roughness length for use in surface moisture exchange.</br>
+**Default:** `0.05`
+
+#### `roughness_mom`
+*float*</br>
+Roughness length for use in surface momentum exchange.</br>
+**Default:** `0.05`
+
+#### `roughness_heat`
+*float*</br>
+Roughness length for use in surface heat exchange.</br>
+**Default:** `0.05`
+
+#### `land_roughness_prefactor`
+*float*</br>
+Multiplier on the above roughness lengths to allow land-ocean contrast.</br>
+**Default:** `1.0`
+</br>
+</br>
+### **Land and Hydrology**
+Land and hydrology processes are predominantly dealt with in the [`surface_flux_nml`](../surface/surface_flux.md) and 
+the [`mixed_layer_nml`](../surface/mixed_layer.md) namelists, but land and bucket hydrology options are initialised 
+with the following namelist parameters.
+
+#### `mixed_layer_bc`
+*bool*</br>
+If `True`, the `mixed_layer` module is called and the [`mixed_layer_nml`](../surface/mixed_layer.md)
+namelist needs to be specified. </br>
+**Default:** `False`
+
+#### `land_option`
+*string*</br>
+There are 3 choices of the land mask in *Isca*:
+
+* `input` - Read land mask from input file.
+* `zsurf` - Define land where surface geopotential height at model initialisation exceeds a threshold.
+* `none` - Do not apply land mask.
+
+**Default:** `none`
+
+#### `land_file_name`
+*string*</br>
+Filename for the input land-mask.</br>Only ever required if [`land_option = 'input'`](#land_option).</br>
+**Default:** `'INPUT/land.nc'`
+
+#### `land_field_name`
+*string*</br>
+Field name in the input land-mask *netcdf*.</br>Only ever required if [`land_option = 'input'`](#land_option).</br>
+**Default:** `land_mask`
+
+#### `bucket`
+*bool*</br>
+If `True`, use bucket hydrology. </br>
+**Default:** `False`
+
+#### `init_bucket_depth`
+*float*</br>
+Value at which to initialise bucket water depth over ocean (in $m$). Should be large. </br>
+Only ever required if [`bucket = .true.`](#bucket).</br>
+**Default:** `1000`
+
+#### `init_bucket_depth_land`
+*float*</br>
+Value at which to initialise bucket water depth over land (in $m$). </br>
+Only ever required if [`bucket = .true.`](#bucket).</br>
+**Default:** `20`
+
+#### `max_bucket_depth_land`
+*float*</br>
+Maximum depth of water in bucket over land following initialisation.. </br>
+Only ever required if [`bucket = .true.`](#bucket).</br>
+**Default:** `0.15`
+
+#### `robert_bucket`
+*float*</br>
+Robert coefficient for [Roberts-Asselin-Williams filter](https://execlim.github.io/Isca/references.html#williams2011) 
+on bucket leapfrog timestepping. </br>
+Only ever required if [`bucket = .true.`](#bucket).</br>
+**Default:** `0.04`
+
+#### `raw_bucket`
+*float*</br>
+RAW coefficient for [Roberts-Asselin-Williams filter](https://execlim.github.io/Isca/references.html#williams2011) 
+on bucket leapfrog timestepping. </br>
+Only ever required if [`bucket = .true.`](#bucket).</br>
+**Default:** `0.53`

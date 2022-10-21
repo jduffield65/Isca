@@ -105,15 +105,15 @@ The corresponding files for the [*Held Suarez*](#held-suarez) experiment are giv
 
 === "namelist_hs.nml"
     ```nml
-    // This section gives info to give to SLURM when running experiment
+    ! This section gives info to give to SLURM when running experiment
     &experiment_details
-       name = 'held_suarez'
+       name = 'held_suarez'         ! Name of experiment
        n_months_total = 12
        n_months_job = 12
        n_nodes = 1
        n_cores = 16
        resolution = 'T42'
-       partition = 'debug'
+       partition = 'debug'          ! Queue to submit job to (Slurm info).
        overwrite_data = .false.
        compile = .false.
        max_walltime = '01:00:00'
@@ -222,9 +222,7 @@ of length 6 months.
     If a parameter is a string e.g. `max_walltime`, `resolution` or `name` then quotation marks (`''`) must be used
     i.e. `name = 'held_suarez'`.
 
-    If a line starts `//`, it indicates a comment but a comment cannot be added to a particular parameter e.g. </br>
-    `name = 'held_suarez'  // Name of job submitted to Slurm` </br>
-    is not allowed.
+    `!` indicates a comment and will not be read in.
 
 The `diag_table_hs` file specifies all the 
 [diagnostics](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/exp/test_cases/held_suarez/held_suarez_test_case.py#L30-L41) 
