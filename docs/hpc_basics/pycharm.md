@@ -8,8 +8,7 @@ computer.
 
 ## Syncing a Pycharm Project
 * First, [login to kennedy](kennedy.md#login) and [create a *CONDA* environment](kennedy.md#create-environment). I will
-be using an environment called `test_env`, to coincide with the
-[Isca](../Isca/getting_started.md#create-conda-environment-step-3) usage.
+be using an environment called `test_env`.
 
 * Next, create a *Pycharm* project. I wouldn't worry too much about the python interpreter as we will later 
 change this to use the *CONDA* environment we just set up on the high performance computer. I would probably just use 
@@ -86,3 +85,54 @@ the code should stop at that point, so you can see the value of all the variable
 
 ![image.png](../images/hpc_basics/pycharm/debugging.png){width="700"}
 
+## Jupyter Notebook
+The following comes from this [website](https://medium.com/analytics-vidhya/connecting-remote-server-via-pycharm-53414d0da93f).
+
+* On the remote computer, install `jupyterlab` in your *CONDA* environment: </br>
+`conda install -c conda-forge jupyterlab`.
+* Next, start a [*screen*](https://www.tecmint.com/screen-command-examples-to-manage-linux-terminals/) session, so you 
+can drop in and out of it and leave it running for ages:</br>
+`screen -S jupyter_test`
+* Then, run the following to enable a jupyter connection:
+
+    ```bash
+    conda activate test_env
+    chmod u+x /gpfs1/apps/conda/$USER/conda/envs/*/bin/*
+    jupyter lab --no-browser --port=1111
+    ```
+
+    The [second line](kennedy.md#error---wrong-python-version) is just to ensure you have permission to use jupyter. 
+    I get a *Permission Denied* error without doing this.
+    The *port* in the last line can be any 4 digit number.
+    
+* You should then get a list of links:</br>
+    ![image.png](../images/hpc_basics/pycharm/jupyter.png){width="700"}
+* Next, open a local terminal window and type:
+
+    ```bash
+    ssh -N -f -L localhost:1111:localhost:1111 jamd1@kennedy.st-andrews.ac.uk
+    ```
+    You will have to enter your *kennedy* password.
+
+*  Next, create a jupyter notebook in *Pycharm* as indicated by the first image below:
+
+    === "Create Notebook"
+        ![image.png](../images/hpc_basics/pycharm/notebook1.png){width="400"}
+    === "Configure Notebook"
+        ![image.png](../images/hpc_basics/pycharm/notebook2.png){width="700"}
+    === "Example Notebook"
+        ![image.png](../images/hpc_basics/pycharm/notebook3.png){width="700"}
+    Then configure the notebook (button in top right of notebook), by specifying the *Configured Server* to be 
+    the last link that was printed out when creating the jupyter connection (second image.</br>
+    You should now be able to create a notebook, with access to the environmental variables on the remote computer
+    as indicated by the third image.
+
+* If you prefer the normal browser interface for the jupyter notebook, you can click the globe in the rop right corner.
+* If you keep the *screen* session going, you should only have to re-run the line </br>
+`ssh -N -f -L localhost:1111:localhost:1111 jamd1@kennedy.st-andrews.ac.uk`</br> 
+everytime you want to use the notebook again.
+
+??? warning "Changes to jupyter notebook files do not sync to remote computer"
+    To upload the changes you made to the jupyter notebook file locally, you can use:</br>
+    Tools → Deployment → Sync with Deployed to jamd1@kennedy...</br>
+    Make sure you are using the blue arrow to sync from your local to the remote computer.
