@@ -7,6 +7,9 @@ Then, you basically code as you normally would on your local computer but everyt
 computer.
 
 ## Syncing a Pycharm Project
+Pycharm also provides a useful [video](https://www.youtube.com/watch?v=6RlgQBB1UDU) and
+[instructions](https://www.jetbrains.com/help/pycharm/configuring-remote-interpreters-via-ssh.html).
+
 * First, [login to kennedy](kennedy.md#login) and [create a *CONDA* environment](kennedy.md#create-environment). I will
 be using an environment called `test_env`.
 
