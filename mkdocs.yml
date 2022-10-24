@@ -70,6 +70,7 @@ nav:
         - kennedy: hpc_basics/kennedy.md
         - Shell Scripting: hpc_basics/shell_scripting.md
         - Slurm: hpc_basics/slurm.md
+        - Pycharm: hpc_basics/pycharm.md
     - Isca:
         - Getting Started: Isca/getting_started.md
         - Benchmarking: Isca/benchmarking.md

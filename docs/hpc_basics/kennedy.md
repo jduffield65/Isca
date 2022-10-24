@@ -109,14 +109,14 @@ Terminal should then look something like this:
 ```
 (test_env) [jamd1@kennedy10 ~]$
 ```
-???+ error "Wrong Python Version"
-
+### Error - Wrong Python Version
+???+ error
     If you now run `python -V` to check the python version, it will print `Python 2.7.5` even though the conda 
     environment is `python 3.9`.
     
     This is because it is using the wrong python. If you run `which python`, it will print `/usr/bin/python` which 
     has nothing to do with the `test_env` *CONDA* environment.
-
+    
     The problem is that the python installed using *CONDA* does not have execution permissions, so it reverts to 
     a python version which does. To give execution permissions, you can run the following line (The `$USER` will 
     automatically be your username so you don't need to change it):
@@ -127,6 +127,9 @@ Terminal should then look something like this:
     If you now run `conda deactivate` and then `conda activate test_env` to log out and then back into the *CONDA* 
     environment, `python -V` should now print `Python 3.9.13` and `which python` should print </br>
     `/gpfs1/apps/conda/jamd1/conda/envs/test_env/bin/python`.
+
+    In general, whenever you hit a `Permission Denied` error when using a *CONDA* environment, I would run 
+    `chmod u+x /gpfs1/apps/conda/$USER/conda/envs/*/bin/*` as a first attempt at fixing it.
 
 
 ## Resources
