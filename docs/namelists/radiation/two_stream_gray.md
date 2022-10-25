@@ -148,3 +148,42 @@ Only ever required if [`do_read_co2 = .true.`](#do_read_co2).</br>
 Prescribed concentration (in $ppmv$) of $CO_2$ which remains constant throughout the simulation.</br>
 Only ever required if [`do_read_co2 = .false.`](#do_read_co2).</br>
 **Default:** `360.0`
+
+## Diagnostics
+The diagnostics for this module can be specified using the `module_name` of `two_stream` in the 
+diagnostic table file. The list of available diagnostics is available on 
+[Isca's website](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#diagnostics). Some 
+of the more common ones are also given below.
+
+### `co2`
+Carbon dioxide concentration.</br>
+*Dimensions: time, lat, long, pressure*</br>
+*Units: $ppmv$*
+
+### **Radiation**
+#### `olr`
+Outgoing Longwave radiation. May be useful, along with [`swdn_toa`](#swdn_toa) to investigate how long experiment takes 
+to spin up.</br>
+*Dimensions: time, lat, long*</br>
+*Units: $Wm^{-2}$*
+
+#### `swdn_toa`
+Shortwave flux down at top of atmosphere. May be useful, along with [`olr`](#olr) to investigate how long 
+experiment takes to spin up.</br>
+*Dimensions: time, lat, long*</br>
+*Units: $Wm^{-2}$*
+
+#### `swdn_sfc`
+Absorbed shortwave flux at the surface.</br>
+*Dimensions: time, lat, long*</br>
+*Units: $Wm^{-2}$*
+
+#### `lwdn_sfc`
+Downward longwave flux at the surface.</br>
+*Dimensions: time, lat, long*</br>
+*Units: $Wm^{-2}$*
+
+#### `lwup_sfc`
+Upward longwave flux at the surface.</br>
+*Dimensions: time, lat, long*</br>
+*Units: $Wm^{-2}$*

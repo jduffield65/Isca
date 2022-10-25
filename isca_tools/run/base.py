@@ -1,6 +1,6 @@
 import os
 import sys
-from isca import Experiment, IscaCodeBase, log, GFDL_BASE
+from isca import Experiment, IscaCodeBase, GFDL_BASE
 from isca.diagtable import DiagTable
 import f90nml
 import numpy as np
