@@ -150,7 +150,9 @@ Only ever required if [`do_read_co2 = .false.`](#do_read_co2).</br>
 **Default:** `360.0`
 
 ## Diagnostics
-The diagnostics for this module can be specified using the `module_name` of `two_stream` in the 
+The diagnostics for 
+[this module](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/atmos_param/two_stream_gray_rad/two_stream_gray_rad.F90#L153-L160) 
+can be specified using the `module_name` of `two_stream` in the 
 diagnostic table file. The list of available diagnostics is available on 
 [Isca's website](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#diagnostics). Some 
 of the more common ones are also given below.
