@@ -16,3 +16,14 @@ Some of the most common options for configuring this are described below:
 [`do_diffusivity`](#do_diffusivity) must be `True` for this variable to make any difference. </br>
 **Default:** `False`
 
+## Diagnostics
+The diagnostics for 
+[this module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/vert_turb_driver/vert_turb_driver.F90) 
+can be specified using the `module_name` of `vert_turb` in the 
+diagnostic table file.
+Some available diagnostics are given below:
+
+### `z_full`
+Geopotential height relative to surface at full levels.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $m$*

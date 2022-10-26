@@ -56,3 +56,16 @@ BL momentum frictional timescalee (negative sign is a flag indicating that the u
 *bool*</br>
 Convert dissipated momentum into heat if `True`. </br>
 **Default:** `True`
+
+## Diagnostics
+The diagnostics for 
+[this module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/hs_forcing/hs_forcing.F90) 
+can be specified using the `module_name` of `hs_forcing` in the 
+diagnostic table file.
+Some available diagnostics are given below:
+
+### `h_trop`
+Height of tropopause.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $km$*
+

@@ -297,3 +297,57 @@ it just uses the ocean [`depth`](#depth).</br>
 *list - float*</br>
 `elandlat[k]` is the end latitude of land box $k$.</br>
 **Default:** `-1`
+
+## Diagnostics
+The diagnostics for 
+[this module](https://github.com/ExeClim/Isca/blob/master/src/atmos_spectral/driver/solo/mixed_layer.F90) 
+can be specified using the `module_name` of `mixed_layer` in the 
+diagnostic table file. The list of available diagnostics is available on 
+[Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html#diagnostics). 
+They are also given below:
+
+### `t_surf`
+Surface temperature.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $K$*
+
+### `delta_t_surf`
+Surface temperature change.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $K$*
+
+### `flux_t`
+Surface sensible heat flux (up is positive).</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $Wm^{-2}$*
+
+### `flux_lhe`
+Surface latent heat flux (up is positive).</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $Wm^{-2}$*
+
+### `flux_oceanq`
+Oceanic Q-flux (will be $0$ if [`do_qflux=False`](#do_qflux)).</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $Wm^{-2}$*
+
+### `ml_heat_cap`
+Mixed layer heat capacity.</br>
+On the [website](https://execlim.github.io/Isca/modules/mixedlayer.html#diagnostics), it calls this 
+`land_sea_heat_capacity` but in the 
+[code](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/atmos_spectral/driver/solo/mixed_layer.F90#L355-L356), 
+I think it is `ml_heat_cap` so I am not sure which is correct.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $Jm^{-2}K^{-1}$*
+
+### `albedo`
+Surface albedo.</br>
+I think this will remain constant in time unless [`update_albedo_from_ice=True`](#update_albedo_from_ice).</br>
+*Dimensions: time, lat, lon*</br>
+*Units: N/A*
+
+### `ice_conc`
+Sea ice concentration.</br>
+Can only be returned if [`update_albedo_from_ice=True`](#update_albedo_from_ice).</br>
+*Dimensions: time, lat, lon*</br>
+*Units: N/A*

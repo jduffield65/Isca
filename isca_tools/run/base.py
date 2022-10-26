@@ -37,9 +37,14 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             job locally.
     """
     exp_details = f90nml.read(namelist_file)['experiment_details']
-    # Split simulation equally between jobs so no more than 1.5 multiplied by exp_details['n_months_job'] months
-    # would be in each job.
-    n_jobs = int(np.ceil(exp_details['n_months_total'] / (1.5 * exp_details['n_months_job'])))
+
+    if exp_details['n_months_total'] % exp_details['n_months_job'] == 0:
+        # If you give n_months_job which is exact multiple of n_months_total, do this many jobs
+        n_jobs = int(np.ceil(exp_details['n_months_total'] / exp_details['n_months_job']))
+    else:
+        # Split simulation equally between jobs so no more than 1.5 multiplied by exp_details['n_months_job'] months
+        # would be in each job.
+        n_jobs = int(np.ceil(exp_details['n_months_total'] / (1.5 * exp_details['n_months_job'])))
     # month_jobs[i] are the months to simulate in job i.
     month_jobs = np.array_split(np.arange(1, exp_details['n_months_total'] + 1), n_jobs)
 

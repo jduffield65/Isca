@@ -12,15 +12,15 @@ Some of the most common options are described below:
 
 * `SIMPLE_BETTS_CONV` - Use Frierson Quasi-Equilibrium convection scheme 
 [*[Frierson2007]*](https://execlim.github.io/Isca/references.html#frierson2007).</br>
-If this is selected, the [`lscale_cond_nml`](../lscale_cond/index.md) and [`qe_moist_convection_nml`](../convection/qe_moist_convection.md) 
+If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and [`qe_moist_convection_nml`](../convection/qe_moist_convection.md) 
 namelists needs to be specified.
 * `FULL_BETTS_MILLER_CONV` - Use the Betts-Miller convection scheme 
 [*[Betts1986]*](https://execlim.github.io/Isca/references.html#betts1986),
 [*[BettsMiller1986]*](https://execlim.github.io/Isca/references.html#bettsmiller1986). </br>
-If this is selected, the [`lscale_cond_nml`](../lscale_cond/index.md) and [`betts_miller_nml`](../convection/betts_miller.md) namelists needs to be specified.
+If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and [`betts_miller_nml`](../convection/betts_miller.md) namelists needs to be specified.
 * `RAS_CONV` - Use the relaxed Arakawa Schubert convection scheme 
 [*[Moorthi1992]*](https://execlim.github.io/Isca/references.html#moorthi1992). </br>
-If this is selected, the [`lscale_cond_nml`](../lscale_cond/index.md) and [`ras_nml`](../convection/ras.md) namelists needs to be specified.
+If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and [`ras_nml`](../convection/ras.md) namelists needs to be specified.
 * `DRY_CONV` - Use the dry convection scheme 
 [*[Schneider2006]*](https://execlim.github.io/Isca/references.html#schneider2006). </br>
 This [module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/dry_convection/dry_convection.f90) does not 
@@ -183,3 +183,85 @@ RAW coefficient for [Roberts-Asselin-Williams filter](https://execlim.github.io/
 on bucket leapfrog timestepping. </br>
 Only ever required if [`bucket = .true.`](#bucket).</br>
 **Default:** `0.53`
+
+## Diagnostics
+The diagnostics for 
+[this module](https://execlim.github.io/Isca/modules/idealised_moist_phys.html#diagnostics) 
+can be specified using the `module_name` of `atmosphere` in the 
+diagnostic table file. The list of available diagnostics is available on 
+[Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html#diagnostics). 
+Some are also given below:
+
+### `precipitation`
+Rain and Snow from resolved and parameterised condensation/convection.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $kgm^{-2}s^{-1}$*
+
+### **Condensation**
+#### `condensation_rain`
+Rain from condensation.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $kgm^{-2}s^{-1}$*
+
+#### `dt_qg_condensation`
+Moisture tendency from condensation.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $kgkg^{-1}s^{-1}$*
+
+#### `dt_qg_condensation`
+Temperature tendency from condensation.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $Ks^{-1}$*
+
+
+### **Convection**
+#### `convection_rain`
+Convective precipitation.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $kgm^{-2}s^{-1}$*
+
+#### `dt_qg_convection`
+Moisture tendency from convection.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $kgkg^{-1}s^{-1}$*
+
+#### `dt_qg_convection`
+Temperature tendency from convection.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $Ks^{-1}$*
+
+#### `cape`
+Convective Available Potential Energy.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $JK^{-1}$*
+
+#### `cin`
+Convective Inhibition.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $JK^{-1}$*
+
+### **Near Surface Variables**
+#### `temp_2m`
+Air temperature $2m$ above surface.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $K$*
+
+#### `sphum_2m`
+Specific humidity $2m$ above surface.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $kg/kg$*
+
+#### `rh_2m`
+Relative humidity $2m$ above surface.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $%$*
+
+#### `u_10m`
+Zonal wind $10m$ above surface.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $ms^{-1}$*
+
+#### `v_10m`
+Meridional wind $10m$ above surface.</br>
+*Dimensions: time, lat, lon*</br>
+*Units: $ms^{-1}$*

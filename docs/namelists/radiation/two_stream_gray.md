@@ -159,33 +159,33 @@ of the more common ones are also given below.
 
 ### `co2`
 Carbon dioxide concentration.</br>
-*Dimensions: time, lat, long, pressure*</br>
+*Dimensions: time*</br>
 *Units: $ppmv$*
 
 ### **Radiation**
 #### `olr`
 Outgoing Longwave radiation. May be useful, along with [`swdn_toa`](#swdn_toa) to investigate how long experiment takes 
 to spin up.</br>
-*Dimensions: time, lat, long*</br>
+*Dimensions: time, lat, lon*</br>
 *Units: $Wm^{-2}$*
 
 #### `swdn_toa`
 Shortwave flux down at top of atmosphere. May be useful, along with [`olr`](#olr) to investigate how long 
 experiment takes to spin up.</br>
-*Dimensions: time, lat, long*</br>
+*Dimensions: time, lat, lon*</br>
 *Units: $Wm^{-2}$*
 
 #### `swdn_sfc`
 Absorbed shortwave flux at the surface.</br>
-*Dimensions: time, lat, long*</br>
+*Dimensions: time, lat, lon*</br>
 *Units: $Wm^{-2}$*
 
 #### `lwdn_sfc`
 Downward longwave flux at the surface.</br>
-*Dimensions: time, lat, long*</br>
+*Dimensions: time, lat, lon*</br>
 *Units: $Wm^{-2}$*
 
 #### `lwup_sfc`
 Upward longwave flux at the surface.</br>
-*Dimensions: time, lat, long*</br>
+*Dimensions: time, lat, lon*</br>
 *Units: $Wm^{-2}$*

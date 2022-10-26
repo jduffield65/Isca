@@ -77,15 +77,20 @@ nav:
     - Namelists:
         - namelists/index.md
         - Main:
+          - namelists/main/index.md
           - Atmosphere: namelists/main/atmosphere.md
           - Held Suarez: namelists/main/held_suarez.md
           - Idealized Moist Physics: namelists/main/idealized_moist_physics.md
+          - Spectral Dynamics: namelists/main/spectral_dynamics.md
         - Convection:
+          - namelists/convection/index.md
           - Quasi Equilibrium Moist: namelists/convection/qe_moist_convection.md
           - Betts-Miller: namelists/convection/betts_miller.md
           - Relaxed Arakawa Schubert: namelists/convection/ras.md
-        - Large Scale Condensation:
-          - namelists/lscale_cond/index.md
+        - Condensation:
+          - namelists/condensation/index.md
+          - Large Scale Condensation: namelists/condensation/lscale_cond.md
+          - Saturation Vapor Pressure: namelists/condensation/sat_vapor_pres.md
         - Radiation:
           - Gray: namelists/radiation/two_stream_gray.md
           - RRTM: namelists/radiation/rrtm.md
