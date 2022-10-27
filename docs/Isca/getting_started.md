@@ -203,7 +203,9 @@ The `namelist_hs.nml` file specifies all the
 for the experiment. It also contains an additional `experiment_details` section which indicates information 
 on how to run the simulation, most of which is relevant for submitting jobs to [*Slurm*](../hpc_basics/slurm.md):
 
-- `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
+- `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`.</br>You can use `name='exp/run1'` 
+to set create a new `exp` directory and then save the `run1` data within it. This may be useful for running similar
+experiments with different parameters.
 - `n_months_total`: *int*. Total duration of simulation in months.
 - `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
 E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each

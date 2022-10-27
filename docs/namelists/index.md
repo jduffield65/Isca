@@ -13,7 +13,7 @@ in that particular namelist, as well as their default values.
 
 These options can be found, by looking at the [module source code](#mod_name) (e.g. 
 [idealized_moist_phys.F90](https://github.com/ExeClim/Isca/blob/master/src/atmos_spectral/driver/solo/idealized_moist_phys.F90) for
-[`idealized_moist_phys_nml`](main/idealized_moist_physics.md)) and searcing for the word *namelist*.
+[`idealized_moist_phys_nml`](main/idealized_moist_physics.md)) and searching for the word *namelist*.
 You should then find some code like that below, indicating all the options in the namelist.
 ```fortran
 namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, &

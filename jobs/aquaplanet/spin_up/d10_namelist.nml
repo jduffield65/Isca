@@ -4,7 +4,7 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/d5'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   name = 'aquaplanet/d10'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    n_months_total = 120           ! Total duration of simulation in months.
    n_months_job = 12             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -65,7 +65,7 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 10.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
