@@ -107,5 +107,7 @@ nav:
     - Code:
         - Run:
             - Base: code/run/base.md
+        - Exp:
+            - Time Series: code/exp/time_series.md
         - Utils:
             - Load: code/utils/load.md
