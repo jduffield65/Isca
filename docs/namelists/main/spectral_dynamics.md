@@ -14,6 +14,7 @@ The number of pressure coordinates i.e. number of vertical coordinates. </br>
 How to specify the vertical coordinates, there are two options: </br>
 
 * `even_sigma`: Levels are equally separated in $\sigma$ such that there are [`num_levels`](#num_levels) levels. </br>
+* `uneven_sigma`: Not really sure what this does but it is an option.
 * `input`: Each coordinate is explicitly specified using the 
 [`vert_coordinate_nml`](https://github.com/ExeClim/Isca/blob/master/src/atmos_spectral/init/vert_coordinate.F90) 
 namelist. </br>

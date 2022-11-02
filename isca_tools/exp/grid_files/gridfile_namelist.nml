@@ -56,15 +56,15 @@
     damping_order = 4
     exponent = 7.5
     initial_sphum = 0.0
-    reference_sea_level_press = 100000.0
+    reference_sea_level_press = 120000.0        ! Use 1200 not 1000 Pa as need to do vertical interpolation near surface when p_surf > 1000.
     scale_heights = 6.0
     surf_res = 0.5
     valid_range_t = 100.0, 800.0
-    vert_coord_option = 'uneven_sigma'
+    vert_coord_option = 'even_sigma'
     water_correction_limit = 20000.0
     lon_max = 256
     lat_max = 128
     num_fourier = 85
     num_spherical = 86
-    num_levels = 25
+    num_levels = 2          ! Use small value as just want a template dataset and I am guessing timeseries variables don't vary much with altitude?
 /

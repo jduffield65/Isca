@@ -11,3 +11,5 @@
 
 
 "dynamics", "ps", "ps", "atmos_monthly", "all", .true., "none", 2,
+"dynamics", "pres_half", "pres_half", "atmos_monthly", "all", .true., "none", 2,
+"dynamics", "pres_full", "pres_full", "atmos_monthly", "all", .true., "none", 2,
