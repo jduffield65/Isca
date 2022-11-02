@@ -107,7 +107,8 @@ nav:
     - Code:
         - Run:
             - Base: code/run/base.md
-        - Exp:
-            - Time Series: code/exp/time_series.md
+        - Time Series:
+            - Base: code/time_series/base.md
+            - Cmip Time: code/time_series/cmip_time.md
         - Utils:
             - Load: code/utils/load.md

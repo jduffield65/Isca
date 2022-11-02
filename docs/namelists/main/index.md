@@ -16,8 +16,9 @@ Can also use the options `hours`, `minutes` and `seconds` if you want to increas
 
 ### `calendar`
 *string*</br>
-Not exactly sure what this does, but I think it should match [`days`](#days) e.g. if `days=30` then 
-`calendar=thirty_day` and if `days=15` then `calendar=fifteen_day`. </br>
+Specifies the calendar used for the experiment. </br>
+Options are `thirty_day`, `julian`, `noleap` or `no_calendar`.</br>
+Typical is `thirty_day` which means months of $30$ days each so a year would be $360$ days.
 **Default:** N/A
 
 ### `dt_atmosphere`

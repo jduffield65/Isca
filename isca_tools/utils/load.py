@@ -55,7 +55,8 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
     return d
 
 
-def load_namelist(exp_name: str, data_dir: Optional[str] = None) -> f90nml.Namelist:
+def load_namelist(exp_name: Optional[str] = None, data_dir: Optional[str] = None,
+                  namelist_file: Optional[str] = None) -> f90nml.Namelist:
     """
     Returns all the namelists options and their corresponding values specified in the namelist *.nml* file
     for the experiment indicated by `exp_name`.
@@ -64,15 +65,19 @@ def load_namelist(exp_name: str, data_dir: Optional[str] = None) -> f90nml.Namel
         exp_name: Name of folder in `data_dir` where data for this experiment was saved.
         data_dir: Directory which contains the `exp_name` directory. If `None`, will assume this is
             the directory specified through the environmental variable `GFDL_DATA`.
-
+        namelist_file: Path to the namelist file to load. Use this option if data for the experiment has not
+            been created yet.
     Returns:
         Namelist values used for this experiment.
     """
-    if data_dir is None:
-        data_dir = os.environ['GFDL_DATA']
-    exp_dir = os.path.join(data_dir, exp_name)
+    if namelist_file is not None:
+        file_path = namelist_file
+    else:
+        if data_dir is None:
+            data_dir = os.environ['GFDL_DATA']
+        exp_dir = os.path.join(data_dir, exp_name)
 
-    # Namelist file_name is the same for all runs and is the only file with the suffix '.nml' in the run folder
-    file_name = get_file_suffix(os.path.join(exp_dir, 'run%04d' % 1), '.nml')[0]
-    file_path = os.path.join(exp_dir, 'run%04d' % 1, file_name)
+        # Namelist file_name is the same for all runs and is the only file with the suffix '.nml' in the run folder
+        file_name = get_file_suffix(os.path.join(exp_dir, 'run%04d' % 1), '.nml')[0]
+        file_path = os.path.join(exp_dir, 'run%04d' % 1, file_name)
     return f90nml.read(file_path)
