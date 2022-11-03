@@ -1,4 +1,4 @@
-from netCDF4 import Dataset
+from netCDF4 import Dataset, date2num
 import os
 import numpy as np
 from .cmip_time import day_number_to_date, FakeDT
@@ -141,22 +141,74 @@ def create_time_arr(duration_days: int, time_spacing: int, start_year: int = 0, 
 
 def create_time_series_file(file_name: str, namelist_file: str, res: int, var_name: str,
                             var_val_func: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray],
-                            duration_days: int, time_spacing: int):
-    # Maybe give namelist file as input and work out automatically from it e.g. start time and calendar.
+                            time_spacing: int):
+    """
+    Creates a *.nc* file containing the value of `var_name` as a function of time, pressure, latitude and longitude to
+    be used during a simulation.
+
+    Args:
+        file_name: Path where the *.nc* file containing the value of `var_name` as a function of time, pressure,
+            latitude and longitude will be saved.
+        namelist_file: File path to namelist `nml` file for the experiment.
+            This specifies the physical parameters used for the simulation.
+        res: Experiment resolution. Must be either `21`, `42` or `85`.
+        var_name: Name of variable that a time series is being created for e.g. `'co2'`.
+        var_val_func: Function which takes as arguments `time`, `pressure`, `latitude` and `longitude` and ouputs
+            the value of `var_name` in a [`n_time` x `n_pressure` x `n_lat` x `n_lon`] numpy array.
+        time_spacing: Time interval in days at which the value of `var_name` can change.
+
+    """
+    # Create copy of base file for this resolution and save to file_name
     grid_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'grid_files')
     base_file_name = os.path.join(grid_dir, f"t{res}_grid.nc")
     if not os.path.exists(base_file_name):
         # Create base nc file with all the dimensions if it does not exist.
         create_grid_file(res)
-    # Create copy of base file for this resolution and save to file_name
     dataset_base = xr.open_dataset(base_file_name)
-    dataset_base.to_netcdf(file_name)
-    exp_details = load_namelist(namelist_file=namelist_file)['experiment_details']
-    time_arr, day_number, time_units = create_time_arr(duration_days, time_spacing, start_year, start_month, start_day,
-                                                       start_time, calendar)
 
-    out_file = Dataset(file_name, 'a', format='NETCDF3_CLASSIC')   # Load copy of base file in append mode so can add
+    # make sure output file has .nc suffix
+    file_name = file_name.replace('.nc', '')
+    file_name = file_name + '.nc'
+    if os.path.exists(file_name):
+        raise ValueError(f"The file {file_name} already exists. Delete or re-name this to continue.")
+    dataset_base.to_netcdf(file_name)
+
+    # Load in namelist file to get details about the calendar used for the experiment
+    namelist = load_namelist(namelist_file=namelist_file)
+    calendar = namelist['main_nml']['calendar']
+    if calendar.lower() == 'thirty_day':
+        calendar = '360_day'
+    if calendar.lower() == 'no_calendar':
+        raise ValueError(f"Calendar for this experiment is {calendar}.\n"
+                         f"Not sure what calendar to pass to create_time_arr function.")
+    if 'current_date' not in namelist['main_nml']:
+        # default start date is 0 year, first month, first day I THINK - NOT SURE.
+        current_date = [0, 1, 1, 0, 0, 0]
+    else:
+        current_date = namelist['main_nml']['current_date']
+
+    # Load copy of base file in append mode so can add
+    out_file = Dataset(file_name, 'a', format='NETCDF3_CLASSIC')
+    # Add time as a dimension and variable
+    out_file.createDimension('time', 0)  # Key point is to have the length of the time axis 0, or 'unlimited'.
+                                         # This seems necessary to get the code to run properly.
+    # Time calendar details
+    start_time = f'{current_date[3]:02d}:{current_date[4]:02d}:{current_date[5]:02d}'
+    duration_days = namelist['experiment_details']['n_months_total'] * namelist['main_nml']['days']
+    day_number = np.arange(0, duration_days, time_spacing)
+    time_units = f"days since {current_date[0]:04d}-{current_date[1]:02d}-{current_date[2]:02d} {start_time}"
+
+    times = out_file.createVariable('time', 'd', ('time',))
+    times.units = time_units
+    if calendar == '360_day':
+        calendar = 'thirty_day_months'
+    times.calendar = calendar.upper()
+    times.calendar_type = calendar.upper()
+    times.cartesian_axis = 'T'
+    times[:] = day_number
+
+    # Add variable info to file - allow to vary in 4 dimensions.
     var_array = out_file.createVariable(var_name, 'f4', ('time', 'pfull', 'lat', 'lon',))
-    var_array[:] = var_val_func(day_number, out_file.variables['pfull'], out_file.variables['lat'],
-                                out_file.variables['lon'])
+    var_array[:] = var_val_func(np.asarray(out_file.variables['time']), np.asarray(out_file.variables['pfull']),
+                                np.asarray(out_file.variables['lat']), np.asarray(out_file.variables['lon']))
     out_file.close()

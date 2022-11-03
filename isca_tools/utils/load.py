@@ -65,13 +65,15 @@ def load_namelist(exp_name: Optional[str] = None, data_dir: Optional[str] = None
         exp_name: Name of folder in `data_dir` where data for this experiment was saved.
         data_dir: Directory which contains the `exp_name` directory. If `None`, will assume this is
             the directory specified through the environmental variable `GFDL_DATA`.
-        namelist_file: Path to the namelist file to load. Use this option if data for the experiment has not
+        namelist_file: Path to the namelist *.nml* file to load. Use this option if data for the experiment has not
             been created yet.
     Returns:
         Namelist values used for this experiment.
     """
     if namelist_file is not None:
-        file_path = namelist_file
+        # Make sure file_path has the .nml suffix
+        file_path = namelist_file.replace('.nml', '')
+        file_path = file_path + '.nml'
     else:
         if data_dir is None:
             data_dir = os.environ['GFDL_DATA']

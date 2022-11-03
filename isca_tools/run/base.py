@@ -104,7 +104,11 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
     exp.namelist = namelist
     exp.diag_table = diag_table
     exp.inputfiles = [namelist_file, diag_table_file]
-
+    if 'two_stream_gray_rad_nml' in namelist:
+        if 'co2_file' in namelist['two_stream_gray_rad_nml']:
+            # Add co2 conc file to input files if has been specified - add .nc suffix as not in namelist
+            exp.inputfiles += [os.path.join(os.environ['HOME'], exp_details['input_dir'],
+                                            namelist['two_stream_gray_rad_nml']['co2_file']+'.nc')]
     exp.set_resolution(exp_details['resolution'])  # set resolution
     if month_start == 1:
         # If first month, then there is no restart file to use
