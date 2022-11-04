@@ -2,6 +2,7 @@ import os
 import sys
 from isca import Experiment, IscaCodeBase, GFDL_BASE
 from isca.diagtable import DiagTable
+from ..utils.load import get_file_suffix
 import f90nml
 import numpy as np
 from datetime import datetime
@@ -19,6 +20,7 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             Also contains `experiment_details` section which contains the following:
 
             - `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
+            - `input_dir`: *string*. Directory containing any input files e.g. `namelist.nml` or `co2.nc`.
             - `n_months_total`: *int*. Total duration of simulation in months.
             - `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
             E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
@@ -52,9 +54,11 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # Iterate over all jobs
     for month_job in month_jobs:
         if slurm:
+            # Note that sys.argv[0] is the path to the run_script.py script that was used to call this function.
+            # We now call it again but with input arguments so that it runs the job on slurm.
             os.system(f"bash {slurm_script} {exp_details['name']} {month_job[0]} {len(month_job)} "
                       f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']}")
+                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {sys.argv[0]}")
         else:
             run_job(namelist_file, diag_table_file, month_job[0], len(month_job))
 
@@ -73,6 +77,7 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
             Also contains `experiment_details` section which contains the following:
 
             - `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`
+            - `input_dir`: *string*. Directory containing any input files e.g. `namelist.nml` or `co2.nc`.
             - `n_months_total`: *int*. Total duration of simulation in months.
             - `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
             E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
@@ -104,11 +109,13 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
     exp.namelist = namelist
     exp.diag_table = diag_table
     exp.inputfiles = [namelist_file, diag_table_file]
-    if 'two_stream_gray_rad_nml' in namelist:
-        if 'co2_file' in namelist['two_stream_gray_rad_nml']:
-            # Add co2 conc file to input files if has been specified - add .nc suffix as not in namelist
-            exp.inputfiles += [os.path.join(os.environ['HOME'], exp_details['input_dir'],
-                                            namelist['two_stream_gray_rad_nml']['co2_file']+'.nc')]
+
+    # Get any additional input files e.g. co2 concentration or land - all of which should have a .nc suffix.
+    nc_files = get_file_suffix(exp_details['input_dir'], '.nc')
+    if len(nc_files) > 0:
+        nc_files = [os.path.join(exp_details['input_dir'], val) for val in nc_files]
+        exp.inputfiles += nc_files
+
     exp.set_resolution(exp_details['resolution'])  # set resolution
     if month_start == 1:
         # If first month, then there is no restart file to use
@@ -122,23 +129,23 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
         exp.run(i, num_cores=exp_details['n_cores'], overwrite_data=exp_details['overwrite_data'])
 
 
-if __name__ == "__main__":
-    # When using slurm, it will call run_jobs by python base.py which uses this.
-    if sys.argv[1] in ["--help", "-h"]:
-        print('Need to provide 4 arguments to start run_job:\n'
-              'namelist_file - File that indicates physical parameters used in simulation.\n'
-              'diag_table_file - File that specifies the outputs of the experiment.\n'
-              'month_start - Index of month at which this job starts the simulation (starting with 1).\n'
-              'month_duration - How many months to run simulation for in this job.')
-    if len(sys.argv) == 5:
-        start_time = datetime.utcnow()
-        run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
-        end_time = datetime.utcnow()
-        # Print out how long it takes, so saves when running with slurm, to output txt file
-        print(f"Simulation Start Month: {int(sys.argv[3])}")
-        print(f"Simulation Length/Months: {int(sys.argv[4])}")
-        print(f"Start Time: {start_time.strftime('%B %d %Y - %H:%M:%S')}")
-        print(f"End Time: {end_time.strftime('%B %d %Y - %H:%M:%S')}")
-        print(f"Duration/Seconds: {int(np.round((end_time-start_time).total_seconds()))}")
-    else:
-        raise ValueError(f"Only {len(sys.argv)} parameters provided but 5 expected.")
+# if __name__ == "__main__":
+#     # When using slurm, it will call run_jobs by python base.py which uses this.
+#     if sys.argv[1] in ["--help", "-h"]:
+#         print('Need to provide 4 arguments to start run_job:\n'
+#               'namelist_file - File that indicates physical parameters used in simulation.\n'
+#               'diag_table_file - File that specifies the outputs of the experiment.\n'
+#               'month_start - Index of month at which this job starts the simulation (starting with 1).\n'
+#               'month_duration - How many months to run simulation for in this job.')
+#     if len(sys.argv) == 5:
+#         start_time = datetime.utcnow()
+#         run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+#         end_time = datetime.utcnow()
+#         # Print out how long it takes, so saves when running with slurm, to output txt file
+#         print(f"Simulation Start Month: {int(sys.argv[3])}")
+#         print(f"Simulation Length/Months: {int(sys.argv[4])}")
+#         print(f"Start Time: {start_time.strftime('%B %d %Y - %H:%M:%S')}")
+#         print(f"End Time: {end_time.strftime('%B %d %Y - %H:%M:%S')}")
+#         print(f"Duration/Seconds: {int(np.round((end_time-start_time).total_seconds()))}")
+#     else:
+#         raise ValueError(f"Only {len(sys.argv)} parameters provided but 5 expected.")

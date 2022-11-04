@@ -21,9 +21,10 @@ sbatch <<EOT
 # $7 - namelist file
 # $8 - diagnostic output file indicating what to save
 # $9 - maximum allowed walltime to run job
+# ${10} - python script path to run i.e. the path of run_script.py
 
-# Run python script for experiment and record how long it takes
-python $(dirname "$BASH_SOURCE")/base.py $7 $8 $2 $3   # run job
+# Run the run_script.py script for experiment and record how long it takes
+python ${10} $7 $8 $2 $3   # run job
 
 # Move txt documents containing erros and printed info to experiment data folder
 mkdir -p $GFDL_DATA/$1/console_output

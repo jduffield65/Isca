@@ -195,7 +195,8 @@ def create_time_series_file(file_name: str, namelist_file: str, res: int, var_na
     # Time calendar details
     start_time = f'{current_date[3]:02d}:{current_date[4]:02d}:{current_date[5]:02d}'
     duration_days = namelist['experiment_details']['n_months_total'] * namelist['main_nml']['days']
-    day_number = np.arange(0, duration_days, time_spacing)
+    # last value in day_number must be more than last day in simulation so can interpolate variable value on all days.
+    day_number = np.arange(0, duration_days + time_spacing, time_spacing)
     time_units = f"days since {current_date[0]:04d}-{current_date[1]:02d}-{current_date[2]:02d} {start_time}"
 
     times = out_file.createVariable('time', 'd', ('time',))

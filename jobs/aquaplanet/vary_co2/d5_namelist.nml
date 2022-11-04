@@ -5,18 +5,17 @@
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
    name = 'aquaplanet/vary_co2/d5'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/vary_co2'    ! Directory containing any input files e.g. namelist.nml
    n_months_total = 120           ! Total duration of simulation in months.
    n_months_job = 12             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 8                 ! Number of cores for each node to run job on (Slurm info).
+   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T21'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '01:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
-   input_dir = 'Isca/jobs/aquaplanet/vary_co2'    ! Directory containing any input files e.g. namelist.nml
-                                                  ! for the experiment relative to $HOME
 /
 
 &main_nml

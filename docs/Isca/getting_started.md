@@ -99,7 +99,8 @@ some output data in the folder </br> `/gpfs1/scratch/jamd1/isca_output/held_suar
 
 ### Required Files
 To run a general experiment, you need to create two files, a [namelist](../namelists/index.md) *nml* file specifying the 
-configuration options for the experiment and a diagnostic table file, specifying what diagnostics to save for the experiment.
+configuration options for the experiment and a diagnostic table file, specifying what 
+[diagnostics](../namelists/main/spectral_dynamics.md#diagnostics) to save for the experiment.
 
 The corresponding files for the [*Held Suarez*](#held-suarez) experiment are given below:
 
@@ -108,6 +109,7 @@ The corresponding files for the [*Held Suarez*](#held-suarez) experiment are giv
     ! This section gives info to give to SLURM when running experiment
     &experiment_details
        name = 'held_suarez'         ! Name of experiment
+       input_dir = '/gpfs1/home/jamd1/Isca/jobs/held_suarez'
        n_months_total = 12
        n_months_job = 12
        n_nodes = 1
@@ -200,24 +202,9 @@ The corresponding files for the [*Held Suarez*](#held-suarez) experiment are giv
 
 The `namelist_hs.nml` file specifies all the 
 [namelist options](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/exp/test_cases/held_suarez/held_suarez_test_case.py#L47-L100) 
-for the experiment. It also contains an additional `experiment_details` section which indicates information 
-on how to run the simulation, most of which is relevant for submitting jobs to [*Slurm*](../hpc_basics/slurm.md):
-
-- `name`: *string*. Name of experiment e.g. data saved in folder `$GFDL_DATA/{name}`.</br>You can use `name='exp/run1'` 
-to set create a new `exp` directory and then save the `run1` data within it. This may be useful for running similar
-experiments with different parameters.
-- `n_months_total`: *int*. Total duration of simulation in months.
-- `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
-E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
-of length 6 months.
-- `n_nodes`: *int*. Number of nodes to run job on (*Slurm* info).
-- `n_cores`: *int*. Number of cores for each node to run job on (*Slurm* info).
-- `resolution`: *string*. Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
-- `partition`: *string*. *Slurm* queue to submit job to.
-- `overwrite_data`: *bool*. If this is `True` and data already exists in `$GFDL_DATA/{name}`,
-    then it will be overwritten. If it is `False` and the data exists, an error will occur.
-- `compile`: *bool*. If `True`, it will recompile the codebase before running the experiment.
-- `max_walltime`: *string*. Maximum time that job can run on *Slurm*. E.g. 1 hour would be '01:00:00'.
+for the experiment. There is also an additional [`experiment_details`](../namelists/main/experiment_details.md) 
+section which contains information on how to [run](../code/run/base.md#isca_tools.run.base.run_experiment) 
+the simulation.
 
 ??? note "*nml* files"
     If a parameter is a boolean e.g. `overwrite_data` or `compile`, the format must be `.false.` or `.true.`.</br>

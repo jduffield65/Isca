@@ -129,11 +129,12 @@ The input file needs to be 4D (3 spatial dimensions and time), but no spatial va
 
 #### `co2_file`
 *string*</br>
-Name of $CO_2$ file to read. </br> 
-The file should have a *.nc* appendix but that should be left out here. </br>
-Isca provides a 
-[python script](https://github.com/ExeClim/Isca/blob/master/src/extra/python/scripts/create_co2_timeseries.py) for
-producing such a file.</br>
+Name of $CO_2$ file to read. </br>
+The file should be in the [`input_dir`](../main/experiment_details.md#input_dir) and
+have a *.nc* appendix but that should be left out here. </br>
+File is produced using the `create_time_series_file` function in `isca_tools` which is extended from a 
+[python script](https://github.com/ExeClim/Isca/blob/master/src/extra/python/scripts/create_co2_timeseries.py) 
+provided by *Isca*.</br>
 Only ever required if [`do_read_co2 = .true.`](#do_read_co2).</br>
 **Default:** `co2`
 

@@ -78,6 +78,7 @@ nav:
         - namelists/index.md
         - Main:
           - namelists/main/index.md
+          - Experiment Details: namelists/main/experiment_details.md
           - Atmosphere: namelists/main/atmosphere.md
           - Held Suarez: namelists/main/held_suarez.md
           - Idealized Moist Physics: namelists/main/idealized_moist_physics.md
