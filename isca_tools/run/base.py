@@ -5,7 +5,6 @@ from isca.diagtable import DiagTable
 from ..utils.load import get_file_suffix
 import f90nml
 import numpy as np
-from datetime import datetime
 
 
 def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False):
@@ -127,25 +126,3 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
     for i in range(month_start + 1, month_start + month_duration):
         # For all months but first, use latest restart file to set up simulation.
         exp.run(i, num_cores=exp_details['n_cores'], overwrite_data=exp_details['overwrite_data'])
-
-
-# if __name__ == "__main__":
-#     # When using slurm, it will call run_jobs by python base.py which uses this.
-#     if sys.argv[1] in ["--help", "-h"]:
-#         print('Need to provide 4 arguments to start run_job:\n'
-#               'namelist_file - File that indicates physical parameters used in simulation.\n'
-#               'diag_table_file - File that specifies the outputs of the experiment.\n'
-#               'month_start - Index of month at which this job starts the simulation (starting with 1).\n'
-#               'month_duration - How many months to run simulation for in this job.')
-#     if len(sys.argv) == 5:
-#         start_time = datetime.utcnow()
-#         run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
-#         end_time = datetime.utcnow()
-#         # Print out how long it takes, so saves when running with slurm, to output txt file
-#         print(f"Simulation Start Month: {int(sys.argv[3])}")
-#         print(f"Simulation Length/Months: {int(sys.argv[4])}")
-#         print(f"Start Time: {start_time.strftime('%B %d %Y - %H:%M:%S')}")
-#         print(f"End Time: {end_time.strftime('%B %d %Y - %H:%M:%S')}")
-#         print(f"Duration/Seconds: {int(np.round((end_time-start_time).total_seconds()))}")
-#     else:
-#         raise ValueError(f"Only {len(sys.argv)} parameters provided but 5 expected.")

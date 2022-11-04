@@ -13,6 +13,12 @@ def create_grid_file(res: int = 21):
     This grid file is required to create timeseries files and includes the variables `lon`, `lonb`, `lat`, `latb`,
     `pfull` and `phalf`.
 
+    ??? note "Pressure values"
+        The `'_exp.nc'` files in the `grid_files` folder for each resolution contain only 2 pressure values.
+        To change this, the `'_exp.nc'` files will be need to be created again using different pressure levels
+        as specified in the `gridfile_namelist.nml` file. I.e. a quick experiment needs to be run
+        using a modified version of `gridfile_namelist.nml`.
+
     Function is extended from an
     [Isca script](https://github.com/ExeClim/Isca/blob/master/src/extra/python/scripts/gfdl_grid_files/grid_file_generator.py)
     but also includes pressure level info.
@@ -139,25 +145,38 @@ def create_time_arr(duration_days: int, time_spacing: int, start_year: int = 0, 
     return time_arr, day_number, time_units
 
 
-def create_time_series_file(file_name: str, namelist_file: str, res: int, var_name: str,
+def create_time_series_file(file_name: str, namelist_file: str, var_name: str,
                             var_val_func: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray],
                             time_spacing: int):
     """
     Creates a *.nc* file containing the value of `var_name` as a function of time, pressure, latitude and longitude to
-    be used during a simulation.
+    be used during a simulation using pressure, latitude and longitude information from the `t{res}_grid.nc` file.
+
+    ??? note "Pressure values"
+        The `'_exp.nc'` files in the `grid_files` folder for each resolution contain only 2 pressure values.
+        To change this, the `'_exp.nc'` files will be need to be created again using different pressure levels
+        as specified in the `gridfile_namelist.nml` file. I.e. a quick experiment needs to be run
+        using a modified version of `gridfile_namelist.nml`.
+
+        Then `create_grid_file` needs to be run to create the new `'_grid.nc'` file for the given resolution.
 
     Args:
         file_name: Path where the *.nc* file containing the value of `var_name` as a function of time, pressure,
             latitude and longitude will be saved.
         namelist_file: File path to namelist `nml` file for the experiment.
             This specifies the physical parameters used for the simulation.
-        res: Experiment resolution. Must be either `21`, `42` or `85`.
         var_name: Name of variable that a time series is being created for e.g. `'co2'`.
         var_val_func: Function which takes as arguments `time`, `pressure`, `latitude` and `longitude` and ouputs
             the value of `var_name` in a [`n_time` x `n_pressure` x `n_lat` x `n_lon`] numpy array.
         time_spacing: Time interval in days at which the value of `var_name` can change.
 
     """
+    # TODO: Maybe change this function so it runs a simple experiment, copies long,lat,pressure info then deletes
+    #   all files. I.e. make it so it does not rely on the files in the grid_files folder except for the namelist files.
+
+    namelist = load_namelist(namelist_file=namelist_file)
+    res = int(namelist['experiment_details']['resolution'][1:])     # resolution for experiment read in
+
     # Create copy of base file for this resolution and save to file_name
     grid_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'grid_files')
     base_file_name = os.path.join(grid_dir, f"t{res}_grid.nc")
@@ -174,7 +193,6 @@ def create_time_series_file(file_name: str, namelist_file: str, res: int, var_na
     dataset_base.to_netcdf(file_name)
 
     # Load in namelist file to get details about the calendar used for the experiment
-    namelist = load_namelist(namelist_file=namelist_file)
     calendar = namelist['main_nml']['calendar']
     if calendar.lower() == 'thirty_day':
         calendar = '360_day'

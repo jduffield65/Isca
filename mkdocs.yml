@@ -74,6 +74,7 @@ nav:
     - Isca:
         - Getting Started: Isca/getting_started.md
         - Benchmarking: Isca/benchmarking.md
+        - Time Series: Isca/time_series.md
     - Namelists:
         - namelists/index.md
         - Main:

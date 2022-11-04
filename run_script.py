@@ -13,6 +13,14 @@ if len(sys.argv) == 1:
     diag_table_file = os.path.join(exp_dir, 'd5_diag_table')
     run_experiment(namelist_file, diag_table_file, slurm=True)
 
+    # from isca_tools.time_series.base import create_time_series_file
+    # def co2_func(days, pressure, lat, lon):
+    #     co2_val = np.zeros((days.shape[0], pressure.shape[0], lat.shape[0], lon.shape[0]))
+    #     co2_val[days < 360 * 4] = 300
+    #     co2_val[days >= 360 * 4] = 3500
+    #     return co2_val
+    # create_time_series_file(os.path.join(exp_dir, 'co2_timeseries_t21.nc'), namelist_file, 21, 'co2', co2_func, 360)
+
 elif len(sys.argv) == 5:
     # This is when calling the script from the isca_tools/run/run_slurm.sh shell script
     # Cannot include in isca_tools package due to relative import issues.
