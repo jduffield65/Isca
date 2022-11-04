@@ -134,6 +134,8 @@ can drop in and out of it and leave it running for ages:</br>
 * If you keep the *screen* session going, you should only have to re-run the line </br>
 `ssh -N -f -L localhost:1111:localhost:1111 jamd1@kennedy.st-andrews.ac.uk`</br> 
 everytime you want to use the notebook again.
+* You may need to restart the screen session every now and again with a new port number. I had to do this 
+because I recieved an error: Run error - connection reset.
 
 ??? warning "Changes to jupyter notebook files do not sync to remote computer"
     To upload the changes you made to the jupyter notebook file locally, you can use:</br>
