@@ -4,14 +4,14 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/vary_co2/d5'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/vary_co2'    ! Directory containing any input files e.g. namelist.nml
-   n_months_total = 120           ! Total duration of simulation in months.
-   n_months_job = 12             ! Approximate duration of each job of the simulation in months.
+   name = 'aquaplanet/spin_up/byrne/d1'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/spin_up/byrne'
+   n_months_total = 600           ! Total duration of simulation in months.
+   n_months_job = 120             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info).
-   resolution = 'T21'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
+   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
+   resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
@@ -66,7 +66,7 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 1.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
@@ -102,11 +102,9 @@
 /
 
 &two_stream_gray_rad_nml
-    rad_scheme = 'byrne'            ! Has to be byrne not frierson for varying co2
+    rad_scheme = 'byrne'
     do_seasonal = .false.
     atm_abs = 0.2                   ! default is 0.0
-    do_read_co2 = .true.            !Read in CO2 timeseries from input file
-    co2_file = 'co2_timeseries_t21' !Tell model name of co2 input file
 /
 
 &diag_manager_nml

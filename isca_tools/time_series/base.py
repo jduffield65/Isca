@@ -161,8 +161,9 @@ def create_time_series_file(file_name: str, namelist_file: str, var_name: str,
         Then `create_grid_file` needs to be run to create the new `'_grid.nc'` file for the given resolution.
 
     Args:
-        file_name: Path where the *.nc* file containing the value of `var_name` as a function of time, pressure,
-            latitude and longitude will be saved.
+        file_name: *.nc* file containing the value of `var_name` as a function of time, pressure,
+            latitude and longitude will be saved with this name in the folder given by `input_dir` in the
+            `experiment_details` namelist of the `namelist_file`.
         namelist_file: File path to namelist `nml` file for the experiment.
             This specifies the physical parameters used for the simulation.
         var_name: Name of variable that a time series is being created for e.g. `'co2'`.
@@ -188,6 +189,7 @@ def create_time_series_file(file_name: str, namelist_file: str, var_name: str,
     # make sure output file has .nc suffix
     file_name = file_name.replace('.nc', '')
     file_name = file_name + '.nc'
+    file_name = os.path.join(namelist['experiment_details']['input_dir'], file_name)
     if os.path.exists(file_name):
         raise ValueError(f"The file {file_name} already exists. Delete or re-name this to continue.")
     dataset_base.to_netcdf(file_name)

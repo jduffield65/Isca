@@ -13,7 +13,8 @@ Some of the most common options are described below:
 *string*</br> There are 4 choices of configuration for solving the two stream radiative transfer equations in *Isca*:
 
 * [`FRIERSON`](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#frierson-byrne-schemes) - Semi-gray 
-scheme with prescribed longwave and shortwave optical depths.
+scheme with prescribed longwave and shortwave optical depths.</br> 
+Changing the [$CO_2$](#do_read_co2) concentration does not affect this scheme.
 * [`BYRNE`](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#frierson-byrne-schemes) - Semi-gray scheme 
 with longwave optical depth dependent on water vapour content and $CO_2$ concentration. 
 Shortwave optical depth is prescribed.
@@ -23,7 +24,8 @@ and the second corresponds to all other infrared wavelengths ($>4\mu m$).
 Longwave and shortwave optical depths depend on water vapour content and  concentration.
 * [`SCHNEIDER`](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#schneider-giant-planet-scheme) - Semi-gray 
 scheme for use in **giant planet simulations**. Longwave and shortwave optical depths are prescribed. 
-Does not require a surface temperature as input, and allows specification of an interior heat flux.
+Does not require a surface temperature as input, and allows specification of an interior heat flux. </br>
+Changing the [$CO_2$](#do_read_co2) concentration does not affect this scheme.
 
 ??? note "Reference Pressure, $P_0$"
     A reference pressure, $P_0$, is used in the `FRIERSON`/`BYRNE`/`SCHNEIDER` shortwave optical depth, as well as in 
@@ -125,6 +127,8 @@ Only ever required if [`do_seasonal = .true.`](#do_seasonal).</br>
 If `True`, reads time-varying $CO_2$ concentration from an [input file](#co2_file). </br> 
 The input file needs to be 4D (3 spatial dimensions and time), but no spatial variation should be defined 
 (the code only reads in maximum value at a given time). </br>
+???+ warning "Compatible [`rad_schemes`](#rad_scheme)"
+    Varying $CO_2$ concentration can only be using if [`rad_scheme`](#rad_scheme) is `byrne` or `geen`.
 **Default:** `False`
 
 #### `co2_file`
@@ -147,7 +151,9 @@ Only ever required if [`do_read_co2 = .true.`](#do_read_co2).</br>
 #### `carbon_conc`
 *float*</br>
 Prescribed concentration (in $ppmv$) of $CO_2$ which remains constant throughout the simulation.</br>
-Only ever required if [`do_read_co2 = .false.`](#do_read_co2).</br>
+Only ever required if [`do_read_co2 = .false.`](#do_read_co2) and [`rad_scheme`](#rad_scheme) is either 
+`byrne` or `geen`.</br> For other [`rad_schemes`](#rad_scheme), optical depth is prescribed so $CO_2$ concentration
+has no effect.</br>
 **Default:** `360.0`
 
 ## Diagnostics

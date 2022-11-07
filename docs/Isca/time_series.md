@@ -56,7 +56,7 @@ $5$ years and $600 ppmv$ thereafter, I would run the following:
     /
 
     &two_stream_gray_rad_nml
-        rad_scheme = 'frierson'
+        rad_scheme = 'byrne'            !Must be 'byrne' or 'geen' otherwise optical depth independent of CO2
         do_read_co2 = .true.            !Read in CO2 timeseries from input file
         co2_file = 'co2'                !Tell model name of co2 input file
     /
@@ -92,6 +92,10 @@ hence why $360$ appears in `co2_func`.
 The [`co2_file`](../namelists/radiation/two_stream_gray.md#co2_file) option in the namelist indicates the name of 
 the file within the [`input_dir`](../namelists/main/experiment_details.md#input_dir). It must be specified without 
 the `.nc` suffix.
+
+To allow for varying $CO_2$ concentration to have any effect, 
+[`rad_scheme`](../namelists/radiation/two_stream_gray.md#rad_scheme) must be either `byrne` or `geen`. Otherwise,
+the optical depth is prescribed and independent of $CO_2$ concentration.
 
 The same `co2.nc` file can be used with the *Rapid Radiative Transfer Model* too by including 
 [`rrtm_radiation_nml`](../namelists/radiation/rrtm.md) in the namelist file:

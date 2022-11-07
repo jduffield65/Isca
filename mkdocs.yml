@@ -107,6 +107,9 @@ nav:
             - Vertical Turbulence Driver: namelists/turbulence/vert_turb_driver.md
             - Diffusivity: namelists/turbulence/diffusivity.md
     - Code:
+        - Land:
+            - Base: code/land/base.md
+            - Mountains: code/land/mountains.md
         - Run:
             - Base: code/run/base.md
         - Time Series:
