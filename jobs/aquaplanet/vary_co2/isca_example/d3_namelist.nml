@@ -1,11 +1,11 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
-! in the mixed_layer_nml namelist.
-! It is also run for 10 years.
+! This is the variable co2 example but with constant co2 concentration
+! Basically to test if byrne radiation scheme works.
+! https://github.com/ExeClim/Isca/blob/master/exp/test_cases/variable_co2_concentration/variable_co2_grey.py
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/spin_up/byrne/d1'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/spin_up/byrne'
+   name = 'aquaplanet/vary_co2/isca_example'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/vary_co2/isca_example'
    n_months_total = 120           ! Total duration of simulation in months.
    n_months_job = 120             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -65,8 +65,8 @@
 /
 
 &mixed_layer_nml
-    albedo_value = 0.38                 ! Frierson was 0.31, need to increase for it to converge with byrne.
-    depth = 1.0                         ! different from frierson_test_case value of 2.5
+    albedo_value = 0.38         ! Higher than for Frierson case where was 0.31
+    depth = 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
@@ -78,12 +78,6 @@
     rhbm = 0.7
 /
 
-! Not sure why we need this namelist as we are doing simple betts miller which uses qe_moist_convection_nml
-&betts_miller_nml
-    rhbm = 0.7
-    do_simp = .false.
-    do_shallower = .true.
-/
 
 &lscale_cond_nml
     do_evap = .true.
@@ -103,8 +97,11 @@
 
 &two_stream_gray_rad_nml
     rad_scheme = 'byrne'
-    do_seasonal = .false.
+    do_seasonal = .true.
+    equinox_day =  0.75
     atm_abs = 0.2                   ! default is 0.0
+    do_read_co2 = .true.
+    co2_file = 'co2'
 /
 
 &diag_manager_nml

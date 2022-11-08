@@ -4,7 +4,7 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/spin_up/byrne/d1'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   name = 'aquaplanet/spin_up/byrne/d10'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/spin_up/byrne'
    n_months_total = 120           ! Total duration of simulation in months.
    n_months_job = 120             ! Approximate duration of each job of the simulation in months.
@@ -66,7 +66,7 @@
 
 &mixed_layer_nml
     albedo_value = 0.38                 ! Frierson was 0.31, need to increase for it to converge with byrne.
-    depth = 1.0                         ! different from frierson_test_case value of 2.5
+    depth = 10.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0

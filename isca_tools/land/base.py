@@ -14,6 +14,9 @@ def write_land(file_name: str, namelist_file: str, land_mode: Optional[str] = No
     This function generates a *.nc* file containing the variable `land_mask`, indicating the coordinates where land is,
     and `zsurf`, indicating the topography at each coordinate.
 
+    Extended from an
+    [Isca script](https://github.com/ExeClim/Isca/blob/master/src/extra/python/isca/land_generator_fn.py).
+
     Args:
         file_name: *.nc* file containing the land coordinates and corresponding topography will be saved with this name
             in the folder given by `input_dir` in the `experiment_details` namelist of the `namelist_file`.

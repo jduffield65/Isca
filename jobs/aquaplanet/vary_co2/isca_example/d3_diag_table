@@ -11,4 +11,3 @@
 "mixed_layer", "t_surf", "t_surf", "atmos_monthly", "all", .true., "none", 2,
 "two_stream", "olr", "olr", "atmos_monthly", "all", .true., "none", 2,
 "two_stream", "swdn_toa", "swdn_toa", "atmos_monthly", "all", .true., "none", 2,
-"two_stream", "co2", "co2", "atmos_monthly", "all", .true., "none", 2,
