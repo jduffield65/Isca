@@ -7,10 +7,10 @@ import numpy as np
 if len(sys.argv) == 1:
     # When calling the script with no arguments, it just runs the experiment.
     jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved here - CHANGE FOR EACH EXPERIMENT
-    exp_dir = os.path.join(jobs_dir, 'aquaplanet/vary_co2')  # specific experiment - CHANGE FOR EACH EXPERIMENT
+    exp_dir = os.path.join(jobs_dir, 'benchmarking/experiments/socrates')  # specific experiment - CHANGE FOR EACH EXPERIMENT
 
-    namelist_file = os.path.join(exp_dir, 'd5_namelist.nml')
-    diag_table_file = os.path.join(exp_dir, 'd5_diag_table')
+    namelist_file = os.path.join(exp_dir, 'namelist.nml')
+    diag_table_file = os.path.join(exp_dir, 'diag_table')
     run_experiment(namelist_file, diag_table_file, slurm=True)
 
     # For creating co2 timeseries .nc file

@@ -7,7 +7,8 @@ This can be done using the
 [`create_time_series_file`](../code/time_series/base.md#isca_tools.time_series.base.create_time_series_file) function.
 
 ## Carbon dioxide Example
-To produce a file called `co2.nc` for an experiment that had $CO_2$ concentration of $300 ppmv$ for the first 
+To produce a file called `co2.nc` within the [`input_dir`](../namelists/main/experiment_details.md#input_dir) for an 
+experiment that had $CO_2$ concentration of $300 ppmv$ for the first 
 $5$ years and $600 ppmv$ thereafter, I would run the following:
 
 === "Code"
@@ -21,7 +22,7 @@ $5$ years and $600 ppmv$ thereafter, I would run the following:
         co2_val[days < 360 * 5] = 300
         return co2_val
     
-    create_time_series_file('/gpfs1/home/jamd1/Isca/jobs/experiment/co2.nc', 
+    create_time_series_file('co2.nc', 
                             '/gpfs1/home/jamd1/Isca/jobs/experiment/namelist.nml',
                             'co2',co2_func, 360)
     ```
@@ -97,13 +98,22 @@ To allow for varying $CO_2$ concentration to have any effect,
 [`rad_scheme`](../namelists/radiation/two_stream_gray.md#rad_scheme) must be either `byrne` or `geen`. Otherwise,
 the optical depth is prescribed and independent of $CO_2$ concentration.
 
-The same `co2.nc` file can be used with the *Rapid Radiative Transfer Model* too by including 
-[`rrtm_radiation_nml`](../namelists/radiation/rrtm.md) in the namelist file:
+The same `co2.nc` file can be used with the *Rapid Radiative Transfer Model*/*SOCRATES* radiation scheme too,
+by including 
+[`rrtm_radiation_nml`](../namelists/radiation/rrtm.md)/[`socrates_rad_nml`](../namelists/radiation/socrates.md) 
+in the namelist file:
 
-```nml
-&rrtm_radiation_nml
-    do_read_co2 = .true.            !Read in CO2 timeseries from input file
-    co2_file = 'co2'                !Tell model name of co2 input file
-/
-```
-
+=== "*RRTM*"
+    ```nml
+    &rrtm_radiation_nml
+        do_read_co2 = .true.            !Read in CO2 timeseries from input file
+        co2_file = 'co2'                !Tell model name of co2 input file
+    /
+    ```
+=== "*SOCRATES*"
+    ```nml
+    &socrates_rad_nml
+        do_read_co2 = .true.            !Read in CO2 timeseries from input file
+        co2_file = 'co2'                !Tell model name of co2 input file
+    /
+    ```

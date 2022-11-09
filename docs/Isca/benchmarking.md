@@ -313,12 +313,7 @@ test experiments, as well as a test using [*SOCRATES*](../namelists/radiation/so
 for 1 month on 1 node (using the *debug* partition).
 
 The [*SOCRATES*](../namelists/radiation/socrates.md) experiment was the same as the 
-[*Frierson*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py) case but with
-an [`albedo`](../namelists/surface/mixed_layer.md#albedo_value) of $0.38$, a 
-[`depth`](../namelists/surface/mixed_layer.md#depth) of $5m$ and the 
-[`socrates_nml`](../namelists/radiation/socrates.md) namelist set up with the values used in the 
-[`socrates_aquaplanet.py`](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/socrates_test/socrates_aquaplanet.py) 
-example script. Running this with only $8$ cores gave an error, hence why no times are included.
+[simple one](socrates.md#running-a-simple-experiment) used when setting up *SOCRATES*.
 
 The time taken for the simulations are shown below:
 

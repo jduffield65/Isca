@@ -38,3 +38,5 @@ export GFDL_ENV=ubuntu_conda
 export GFDL_WORK=/gpfs1/scratch/other/jamd1/isca_work
 # directory for storing model output
 export GFDL_DATA=/gpfs1/scratch/other/jamd1/isca_output
+# Socrates source code location
+export GFDL_SOC=/gpfs1/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/
