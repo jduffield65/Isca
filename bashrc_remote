@@ -38,5 +38,3 @@ export GFDL_ENV=ubuntu_conda
 export GFDL_WORK=/gpfs1/scratch/other/jamd1/isca_work
 # directory for storing model output
 export GFDL_DATA=/gpfs1/scratch/other/jamd1/isca_output
-# directory of Socrates output
-export GFDL_SOC=/gpfs1/scratch/other/jamd1/socrates

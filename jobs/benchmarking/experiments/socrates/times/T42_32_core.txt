@@ -1,0 +1,5 @@
+Simulation Start Month: 1
+Simulation Length/Months: 6
+Start Time: November 08 2022 - 23:37:51
+End Time: November 08 2022 - 23:52:02
+Duration/Seconds: 851

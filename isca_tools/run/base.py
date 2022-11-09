@@ -1,6 +1,6 @@
 import os
 import sys
-from isca import Experiment, IscaCodeBase, GFDL_BASE
+from isca import Experiment, IscaCodeBase, GFDL_BASE, SocratesCodeBase
 from isca.diagtable import DiagTable
 from ..utils.load import get_file_suffix
 import f90nml
@@ -99,6 +99,11 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
     exp_details = namelist['experiment_details']
 
     cb = IscaCodeBase.from_directory(GFDL_BASE)
+    if 'idealized_moist_phys_nml' in namelist and 'do_socrates_radiation' in namelist['idealized_moist_phys_nml']:
+        if namelist['idealized_moist_phys_nml']['do_socrates_radiation']:
+            # Different codebase if using socrates
+            cb = SocratesCodeBase.from_directory(GFDL_BASE)
+
     if exp_details['compile']:
         cb.compile()
 

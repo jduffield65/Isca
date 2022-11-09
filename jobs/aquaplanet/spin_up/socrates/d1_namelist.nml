@@ -1,14 +1,14 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
-! in the mixed_layer_nml namelist.
-! Also has byrne radiation instead of frierson and albedo of 0.38 instead of 0.31.
+! This experiment is the same as frierson_test_case but with socrates radiation as specified
+! in the socrates_aquaplanet.py example and with a mixed layer depth of 1m rather 2.5m in the mixed_layer_nml namelist.
+! Albedo is also set to 0.38 as used for the byrne radiation.
 ! It is also run for 10 years.
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/spin_up/byrne/d5'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/spin_up/byrne'
+   name = 'aquaplanet/spin_up/socrates/d1'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/spin_up/socrates/'
    n_months_total = 120           ! Total duration of simulation in months.
-   n_months_job = 120             ! Approximate duration of each job of the simulation in months.
+   n_months_job = 6             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
@@ -38,7 +38,8 @@
     roughness_heat = 3.21e-05
     roughness_moist = 3.21e-05
     roughness_mom = 3.21e-05
-    two_stream_gray = .true.
+    two_stream_gray = .false.
+    do_socrates_radiation = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
 /
 
@@ -67,7 +68,8 @@
 
 &mixed_layer_nml
     albedo_value = 0.38                 ! Frierson was 0.31, need to increase for it to converge with byrne.
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+                                        ! socrates_aquaplanet.py also has 0.38 so keeping this value.
+    depth = 1.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
@@ -102,12 +104,6 @@
     trayfric = -0.25
 /
 
-&two_stream_gray_rad_nml
-    rad_scheme = 'byrne'
-    do_seasonal = .false.
-    atm_abs = 0.2                   ! default is 0.0
-/
-
 &diag_manager_nml
     mix_snapshot_average_fields = .false.       ! time avg fields are labelled with time in middle of window
 /
@@ -140,4 +136,20 @@
 &vert_coordinate_nml
     bk = 0.000000, 0.0117665, 0.0196679, 0.0315244, 0.0485411, 0.0719344, 0.1027829, 0.1418581, 0.1894648, 0.2453219, 0.3085103, 0.3775033, 0.4502789, 0.5244989, 0.5977253, 0.6676441, 0.7322627, 0.7900587, 0.8400683, 0.8819111, 0.9157609, 0.9422770, 0.9625127, 0.9778177, 0.9897489, 1.0000000
     pk = 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000
+/
+
+! Specify socrates radiation using parameters given in socrates_aquaplanet.py script.
+&socrates_rad_nml
+    stellar_constant = 1370
+    lw_spectral_filename = '/gpfs1/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_lw_ga7'
+    sw_spectral_filename = '/gpfs1/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_sw_ga7'
+    do_read_ozone = .true.
+    ozone_file_name = 'ozone_1990'
+    ozone_field_name = 'ozone_1990'
+    dt_rad = 3600
+    store_intermediate_rad = .true.
+    chunk_size = 16
+    use_pressure_interp_for_half_levels = .false.
+    tidally_locked = .false.
+    solday = 90
 /

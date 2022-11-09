@@ -1,5 +1,6 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
+! This experiment is the same as frierson_test_case but with a mixed layer depth of 1m rather 2.5m
 ! in the mixed_layer_nml namelist.
+! Also has byrne radiation instead of frierson and albedo of 0.38 instead of 0.31.
 ! It is also run for 10 years.
 
 ! This section gives info to give to Slurm when running experiment
