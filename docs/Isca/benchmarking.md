@@ -306,10 +306,20 @@ The variables corresponding to each index, as well as the times, are saved in th
 `/gpfs1/home/jamd1/isca_jobs/benchmarking/task_times.csv`.
 
 ## Results
-I ran the benchmarking for both the 
+I ran the benchmarking for the
 [*Held Suarez*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/held_suarez/held_suarez_test_case.py) and 
 [*Frierson*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py) 
-test experiments for 1 month on 1 node (using the *debug* partition). 
+test experiments, as well as a test using [*SOCRATES*](../namelists/radiation/socrates.md) 
+for 1 month on 1 node (using the *debug* partition).
+
+The [*SOCRATES*](../namelists/radiation/socrates.md) experiment was the same as the 
+[*Frierson*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py) case but with
+an [`albedo`](../namelists/surface/mixed_layer.md#albedo_value) of $0.38$, a 
+[`depth`](../namelists/surface/mixed_layer.md#depth) of $5m$ and the 
+[`socrates_nml`](../namelists/radiation/socrates.md) namelist set up with the values used in the 
+[`socrates_aquaplanet.py`](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/socrates_test/socrates_aquaplanet.py) 
+example script. Running this with only $8$ cores gave an error, hence why no times are included.
+
 The time taken for the simulations are shown below:
 
 ![image.png](../images/Isca/benchmarking.png){width="500"}
@@ -327,5 +337,4 @@ All other results were run on one node, using the *debug* partition.
     [`mpp_domains_define.inc`](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/shared/mpp/include/mpp_domains_define.inc#L189)
     and the issue is likely to be that you can't have a resolution lower than the number of cores. 
     This is probably because, it causes problems when trying to splitting longitude or latitude domains between cores.
-
 
