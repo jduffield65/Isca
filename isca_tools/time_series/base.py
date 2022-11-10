@@ -1,4 +1,4 @@
-from netCDF4 import Dataset, date2num
+from netCDF4 import Dataset
 import os
 import numpy as np
 from .cmip_time import day_number_to_date, FakeDT

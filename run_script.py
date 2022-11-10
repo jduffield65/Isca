@@ -11,7 +11,7 @@ if len(sys.argv) == 1:
 
     namelist_file = os.path.join(exp_dir, 'd5_namelist.nml')
     diag_table_file = os.path.join(exp_dir, 'd5_diag_table')
-    run_experiment(namelist_file, diag_table_file, slurm=True)
+    # run_experiment(namelist_file, diag_table_file, slurm=True)
 
     # For creating co2 timeseries .nc file
     # from isca_tools.time_series.base import create_time_series_file
@@ -26,6 +26,9 @@ if len(sys.argv) == 1:
     # from isca_tools.land.plot import show_land
     # write_land('land.nc', os.path.join(exp_dir, 'd5_namelist.nml'), 'square',[-10, 10, 180-30, 180+30])
     # show_land(os.path.join(exp_dir, 'land.nc'))
+
+    from isca_tools.utils.land import get_ocean_coords
+    get_ocean_coords(namelist_file)
 
 
 elif len(sys.argv) == 5:
