@@ -3,7 +3,9 @@ The [`idealized_moist_phys_nml`](https://github.com/ExeClim/Isca/blob/master/src
 only ever needs to be specified if 
 [`idealized_moist_model = True` in `atmosphere_nml`](atmosphere.md#idealized_moist_model).
 It contains options which specify the various modules associated with Isca’s moist physics configurations and is
-described on [Isca's website](https://execlim.github.io/Isca/modules/idealised_moist_phys.html).
+described on [Isca's website](https://execlim.github.io/Isca/modules/idealised_moist_phys.html). *Isca* also gives
+numerous [example scripts](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py) 
+using the `idealized_moist_phys_nml` namelist.</br>
 Some of the most common options are described below:
 
 ## Options
@@ -113,6 +115,12 @@ via adjustment of the [roughness length](#land_roughness_prefactor) (larger over
 [mixed layer depth](../surface/mixed_layer.md#land_depth)/
 [heat capacity](../surface/mixed_layer.md#land_h_capacity_prefactor) (smaller over land).
 
+*Isca* give an 
+[example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/realistic_continents/namelist_basefile.nml)
+using land.
+
+The file indicated by [`land_file_name`](#land_file_name) is generated using the `write_land` function 
+within `isca_tools`.
 
 #### `mixed_layer_bc`
 *bool*</br>
@@ -128,11 +136,16 @@ There are 3 choices of the land mask in *Isca*:
 * `zsurf` - Define land where surface geopotential height at model initialisation exceeds a threshold of 10.
 * `none` - Do not apply land mask.
 
+This should be set to the same value as [`land_option`](../surface/mixed_layer.md#land_option) in the 
+[`mixed_layer_nml`](../surface/mixed_layer.md) namelist.
+
 **Default:** `none`
 
 #### `land_file_name`
 *string*</br>
 Filename for the input land-mask.</br>Only ever required if [`land_option = 'input'`](#land_option).</br>
+If the file is called `land.nc` and is in the [`input_dir`](experiment_details.md#input_dir) then `land_file_name`
+should be `INPUT/land.nc`.</br>
 **Default:** `'INPUT/land.nc'`
 
 #### `land_field_name`
@@ -150,6 +163,9 @@ Only ever required if [`land_option`](#land_option) is not `none`.</br>
 #### `bucket`
 *bool*</br>
 If `True`, use bucket hydrology. </br>
+*Isca* give an 
+[example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/bucket_hydrology/bucket_model_test_case.py) 
+using bucket hydrology.</br>
 **Default:** `False`
 
 #### `init_bucket_depth`

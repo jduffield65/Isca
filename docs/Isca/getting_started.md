@@ -65,7 +65,7 @@ experiment.
 
 To run this, you can do the following:
 
-- [Login](kennedy.md#login) to kennedy.
+- [Login](../hpc_basics/kennedy.md#login) to kennedy.
 - Run `conda activate isca_env` to activate the Isca *CONDA* environment.
 - Create the following script, titled `held_suarez_run.sh`, and transfer it to a suitable location
 on kennedy.
@@ -226,7 +226,7 @@ Once you have done this, and have [created](#required-files) a namelist file wit
 `isca_jobs/experiment/namelist.nml` and diagnostic table file with path `isca_jobs/experiment/diag_table`, you can
 do the following:
 
-- [Login](kennedy.md#login) to kennedy.
+- [Login](../hpc_basics/kennedy.md#login) to kennedy.
 - Run `conda activate isca_env` to activate the Isca *CONDA* environment.
 - Run: 
 ```bash

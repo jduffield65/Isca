@@ -3,7 +3,9 @@ The [`rrtm_radiation_nml`](https://github.com/ExeClim/Isca/blob/master/src/atmos
 only ever needs to be specified if 
 [`do_rrtm_radiation = .true.`](../main/idealized_moist_physics.md#do_rrtm_radiation) in 
 `idealized_moist_phys_nml`. If this is the case, then the Rapid Radiative Transfer Model will be
-the radiation scheme that is used.
+the radiation scheme that is used. *Isca* gives an 
+[example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/realistic_continents/namelist_basefile.nml)
+using this radiation scheme.</br>
 Some of the most common options for configuring this radiation scheme are described below:
 
 ## Options

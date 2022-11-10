@@ -5,7 +5,8 @@ only ever needs to be specified if
 `idealized_moist_phys_nml`.
 It contains options which deal with the exchange of heat, momentum at the surface, including the difference 
 between ocean and land. It is described on 
-[Isca's website](https://execlim.github.io/Isca/modules/surface_flux.html).</br>
+[Isca's website](https://execlim.github.io/Isca/modules/surface_flux.html) and is used in the 
+[realistic continents example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/realistic_continents/namelist_basefile.nml).</br>
 Some of the most common options are described below:
 
 ## Options

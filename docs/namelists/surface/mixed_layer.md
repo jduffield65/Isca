@@ -5,8 +5,10 @@ only ever needs to be specified if
 `idealized_moist_phys_nml`.
 It contains options which deal with the mixed layer boundary condition, including the difference 
 between ocean and land. 
-It is described on [Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html).</br>
-Some of the most common options are described below:
+It is described on [Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html) and is 
+used in numerous 
+[example scripts](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/realistic_continents/namelist_basefile.nml).
+</br>Some of the most common options are described below:
 
 ## Options
 ### `evaporation`
@@ -281,21 +283,25 @@ it just uses the ocean [`depth`](#depth).</br>
 #### `slandlon`
 *list - float*</br>
 `slandlon[k]` is the start longitude of land box $k$.</br>
+Only ever required if [`land_option`](#land_option) is `'lonlat'`.</br>
 **Default:** `0`
 
 #### `slandlat`
 *list - float*</br>
 `slandlat[k]` is the start latitude of land box $k$.</br>
+Only ever required if [`land_option`](#land_option) is `'lonlat'`.</br>
 **Default:** `0`
 
 #### `elandlon`
 *list - float*</br>
 `elandlon[k]` is the end longitude of land box $k$.</br>
+Only ever required if [`land_option`](#land_option) is `'lonlat'`.</br>
 **Default:** `-1`
 
 #### `elandlat`
 *list - float*</br>
 `elandlat[k]` is the end latitude of land box $k$.</br>
+Only ever required if [`land_option`](#land_option) is `'lonlat'`.</br>
 **Default:** `-1`
 
 ## Diagnostics

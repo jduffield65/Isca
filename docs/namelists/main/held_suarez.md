@@ -6,6 +6,10 @@ only ever needs to be specified if
 It contains options which specify the Newtonian cooling thermal relaxation profile. Some of the most common
 ones are described below:
 
+*Isca* gives an 
+[example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/held_suarez/held_suarez_test_case.py) 
+indicating typical usage of the `hs_forcing_nml`.
+
 ## Options
 ### `t_zero`
 *float*</br>

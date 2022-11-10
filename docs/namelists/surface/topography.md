@@ -4,7 +4,10 @@ only ever needs to be specified if
 [`land_option`](../main/idealized_moist_physics.md#land_option) is `input` in 
 `idealized_moist_phys_nml`.
 It contains options which specify the topography of the land. It is described on 
-[Isca's website](https://execlim.github.io/Isca/modules/topography.html#spectral-init-cond).</br>
+[Isca's website](https://execlim.github.io/Isca/modules/topography.html#spectral-init-cond) and there is an
+[example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/realistic_continents/namelist_basefile.nml)
+using topography.
+
 The options are described below:
 
 ## Options
@@ -21,10 +24,10 @@ This indicates how the topography is specified. There are 4 options:</br>
 
 ### `topog_file_name`
 *string*</br> 
-File that contains the topography information. </br> This is probably going to be the same as 
-[`land_file_name`](../main/idealized_moist_physics.md#land_file_name).</br>
-Isca provides [instructions](https://execlim.github.io/Isca/modules/topography.html#creating-custom-topography) on
-how to create such a file. </br>
+File that contains the topography information. </br> This should be the same as 
+[`land_file_name`](../main/idealized_moist_physics.md#land_file_name) but without `INPUT` i.e.
+if the file is called `land.nc` and is in the [`input_dir`](../main/experiment_details.md#input_dir) then 
+`topog_file_name` should be `land.nc`.</br>
 **Default:** `topography.data.nc`
 
 ### `topog_field_name`

@@ -29,7 +29,9 @@ def write_land(file_name: str, namelist_file: str, land_mode: Optional[str] = No
             * `continents`: Use all or a subset of Earth's continents as set by the `continents` variable.
         boundaries: `float [4]`.
             The `[South, North, West, East]` boundaries of the land in degrees.
-            Only required if `land_mode = square`.
+            Only required if `land_mode = square`.</br>
+            $-180 \leq \phi \leq 180$</br>
+            $0 \leq \lambda \leq 360$
         continents: There are 7 possible continents:
 
             * `NA`: North America
@@ -63,7 +65,7 @@ def write_land(file_name: str, namelist_file: str, land_mode: Optional[str] = No
             Otherwise, *aquamountains* are possible.
 
     """
-
+    # TODO: can probably extend the 'square' option to give a sequence of squares.
     namelist = load_namelist(namelist_file=namelist_file)
     # Load in grid file containing longitude/latitude info for the resolution used for this experiment
     res = int(namelist['experiment_details']['resolution'][1:])  # resolution for experiment read in

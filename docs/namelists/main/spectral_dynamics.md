@@ -1,6 +1,8 @@
 # Spectral Dynamics
 The [`spectral_dynamics_nml`](https://github.com/ExeClim/Isca/blob/master/src/atmos_spectral/model/spectral_dynamics.F90) 
-contains options relating to Isca's spectral dynamical core.
+contains options relating to Isca's spectral dynamical core. 
+The [*Frierson* example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py)
+uses this namelist and some of the [diagnostics](#diagnostics).</br>
 Some of the most common options are described below:
 
 ## Options

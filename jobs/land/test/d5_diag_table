@@ -1,0 +1,14 @@
+"FMS Model results"
+0001 1 1 0 0 0
+# = output files =
+# file_name, output_freq, output_units, format, time_units, long_name
+
+"atmos_monthly", 30, "days", 1, "days", "time",
+
+# = diagnostic field entries =
+# module_name, field_name, output_name, file_name, time_sampling, time_avg, other_opts, precision
+
+"mixed_layer", "t_surf", "t_surf", "atmos_monthly", "all", .true., "none", 2,
+"two_stream", "olr", "olr", "atmos_monthly", "all", .true., "none", 2,
+"two_stream", "swdn_toa", "swdn_toa", "atmos_monthly", "all", .true., "none", 2,
+"two_stream", "co2", "co2", "atmos_monthly", "all", .true., "none", 2,

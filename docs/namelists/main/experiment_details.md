@@ -1,7 +1,7 @@
 # Experiment details
 
 The `experiment_details` namelist contains information on how to run the simulation, most of which is 
-relevant for submitting jobs to *Slurm*. It is an addition I made to the namelists in the *Isca* source code and 
+relevant for submitting jobs to *Slurm*. It is an addition I made to the namelists in the *Isca* source code, and 
 all options must be specified to run the simulation using `isca_tools`.
 
 ## Options

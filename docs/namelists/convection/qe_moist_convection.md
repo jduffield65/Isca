@@ -3,7 +3,9 @@ The [`qe_moist_convection_nml`](https://github.com/ExeClim/Isca/blob/master/src/
 only ever needs to be specified if 
 [`convection_scheme = SIMPLE_BETTS_MILLER_CONV`](../main/idealized_moist_physics.md#convection_scheme) in 
 `idealized_moist_phys_nml`.
-This convection scheme is described on [Isca's website](https://execlim.github.io/Isca/modules/convection_simple_betts_miller.html).
+This convection scheme is described on [Isca's website](https://execlim.github.io/Isca/modules/convection_simple_betts_miller.html) 
+and is used in the 
+[*Frierson* example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py).</br>
 Some of the most common options are also described below:
 
 ## Options

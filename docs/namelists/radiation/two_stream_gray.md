@@ -5,7 +5,9 @@ namelist only ever needs to be specified if
 `idealized_moist_phys_nml`.
 It contains options which specify the configuration to use to solve the two stream radiative transfer equations, as well
 as configuring the incoming solar radiation.
-It is described on [Isca's website](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html). </br>
+It is described on [Isca's website](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html) and is used in the 
+[*Frierson* example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py). 
+</br>
 Some of the most common options are described below:
 
 ## Options
@@ -18,6 +20,16 @@ Changing the [$CO_2$](#do_read_co2) concentration does not affect this scheme.
 * [`BYRNE`](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#frierson-byrne-schemes) - Semi-gray scheme 
 with longwave optical depth dependent on water vapour content and $CO_2$ concentration. 
 Shortwave optical depth is prescribed.
+
+    ??? note "Convergence with *Frierson* example script"
+        Just running the 
+        [*Frierson* example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py)
+        but changing the `rad_scheme` from `frierson` to `byrne` did not converge for me - temperature kept rising.
+        To make it converge, I had to increase the [`albedo_value`](../surface/mixed_layer.md#albedo_value) 
+        from $0.31$ to $0.38$. The later being the value used in the only 
+        [example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/variable_co2_concentration/variable_co2_grey.py) 
+        using `byrne` radiation.
+
 * [`GEEN`](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#geen-scheme) - Multi-band scheme with 
 two longwave bands and one shortwave band. One longwave band corresponds to an infrared window region ($8-14\mu m$) 
 and the second corresponds to all other infrared wavelengths ($>4\mu m$). 
@@ -121,6 +133,9 @@ Only ever required if [`do_seasonal = .true.`](#do_seasonal).</br>
 </br>
 
 ### $CO_2$
+*Isca* give an 
+[example script](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/variable_co2_concentration/variable_co2_grey.py)
+using varying $CO_2$ concentration.
 
 #### `do_read_co2`
 *bool*</br>

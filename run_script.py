@@ -7,10 +7,10 @@ import numpy as np
 if len(sys.argv) == 1:
     # When calling the script with no arguments, it just runs the experiment.
     jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved here - CHANGE FOR EACH EXPERIMENT
-    exp_dir = os.path.join(jobs_dir, 'benchmarking/experiments/socrates')  # specific experiment - CHANGE FOR EACH EXPERIMENT
+    exp_dir = os.path.join(jobs_dir, 'land/test')  # specific experiment - CHANGE FOR EACH EXPERIMENT
 
-    namelist_file = os.path.join(exp_dir, 'namelist.nml')
-    diag_table_file = os.path.join(exp_dir, 'diag_table')
+    namelist_file = os.path.join(exp_dir, 'd5_namelist.nml')
+    diag_table_file = os.path.join(exp_dir, 'd5_diag_table')
     run_experiment(namelist_file, diag_table_file, slurm=True)
 
     # For creating co2 timeseries .nc file
@@ -24,8 +24,7 @@ if len(sys.argv) == 1:
     # # For creating land .nc file
     # from isca_tools.land.base import write_land
     # from isca_tools.land.plot import show_land
-    # exp_dir = os.path.join(jobs_dir, 'aquaplanet/vary_co2/')
-    # write_land('land.nc', os.path.join(exp_dir, 'd5_namelist.nml'), 'continents', topography='all')
+    # write_land('land.nc', os.path.join(exp_dir, 'd5_namelist.nml'), 'square',[-10, 10, 180-30, 180+30])
     # show_land(os.path.join(exp_dir, 'land.nc'))
 
 
