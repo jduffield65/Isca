@@ -119,6 +119,7 @@ The corresponding files for the [*Held Suarez*](#held-suarez) experiment are giv
        overwrite_data = .false.
        compile = .false.
        max_walltime = '01:00:00'
+       delete_restart_files = .true.
     /
     
     &atmosphere_nml

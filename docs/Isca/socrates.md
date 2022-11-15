@@ -125,6 +125,7 @@ e.g. in the `namelist.nml` file given below, you would have to use your username
            overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
            compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
            max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
+           delete_restart_files = .true.    ! Only want to save 1 restart file
         /
         
         &main_nml

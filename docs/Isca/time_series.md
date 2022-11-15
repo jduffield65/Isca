@@ -39,7 +39,8 @@ $5$ years and $600 ppmv$ thereafter, I would run the following:
     partition = 'debug'         
     overwrite_data = .false.    
     compile = .false.           
-    max_walltime = '01:00:00'   
+    max_walltime = '01:00:00'  
+    delete_restart_files = .true.
     /
 
     &main_nml

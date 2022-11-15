@@ -93,3 +93,8 @@ Vorticity.</br>
 Divergence.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $s^{-1}$*
+
+### `height`
+Geopotential height at full model levels.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $m$*

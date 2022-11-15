@@ -70,3 +70,9 @@ Typically set to `False`. </br>
 Maximum time that job can run on *Slurm*.</br> 
 $1$ hour would be `'01:00:00'` and $30$ minutes would be `'30:00'`.</br>
 **Default:** N/A
+
+### `delete_restart_files`
+*bool*</br>
+If `True`, only the restart file for the final month will be kept.
+Otherwise, a restart file will be generated for every month.</br>
+**Default:** N/A
