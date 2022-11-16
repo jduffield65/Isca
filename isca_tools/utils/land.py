@@ -45,7 +45,7 @@ def get_land_coords(namelist_file: Optional[str] = None, land_file: Optional[str
     Returns:
         `land_lat`: `float [n_land_coords]`</br>
             Land is present at the coordinate indicated by (`land_lat[i]`, `land_lon[i]`) for all `i`.</br>
-            Units are degrees ($-180 \leq \phi \leq 180$).
+            Units are degrees ($-90 \leq \phi \leq 90$).
         `land_lon`: `float [n_land_coords]`</br>
             Land is present at the coordinate indicated by (`land_lat[i]`, `land_lon[i]`) for all `i`.</br>
             Units are degrees ($0 \leq \lambda \leq 360$).
@@ -76,7 +76,7 @@ def get_ocean_coords(namelist_file: Optional[str] = None, land_file: Optional[st
     Returns:
         `ocean_lat`: `float [n_ocean_coords]`</br>
             Ocean is present at the coordinate indicated by (`ocean_lat[i]`, `ocean_lon[i]`) for all `i`.</br>
-            Units are degrees ($-180 \leq \phi \leq 180$).
+            Units are degrees ($-90 \leq \phi \leq 90$).
         `ocean_lon`: `float [n_ocean_coords]`</br>
             Ocean is present at the coordinate indicated by (`ocean_lat[i]`, `ocean_lon[i]`) for all `i`.</br>
             Units are degrees ($0 \leq \lambda \leq 360$).

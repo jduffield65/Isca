@@ -30,7 +30,7 @@ def write_land(file_name: str, namelist_file: str, land_mode: Optional[str] = No
         boundaries: `float [4]`.
             The `[South, North, West, East]` boundaries of the land in degrees.
             Only required if `land_mode = square`.</br>
-            $-180 \leq \phi \leq 180$</br>
+            $-90 \leq \phi \leq 90$</br>
             $0 \leq \lambda \leq 360$
         continents: There are 7 possible continents:
 

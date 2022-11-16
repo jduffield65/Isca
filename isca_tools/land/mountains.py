@@ -72,7 +72,8 @@ def gaussian_mountain(lon_array: np.ndarray, lat_array: np.ndarray, central_lat:
             Array indicating the latitude at each (latitude, longitude) coordinate in the grid used for the experiment.
         central_lat: Latitude coordinate of mountain in degrees.
         central_lon: Longitude coordinate of mountain in degrees.
-        radius_degrees: Radius of mountain in degrees. Typical: 20.
+        radius_degrees: Radius of mountain in degrees. Altitude at a distance from the center greater than this will
+            be set to 0, so set to very high number to ignore this functionality. Typical: 20.
         std_dev: Standard deviation indicating how steep the mountain is. The smaller the value, the steeper the
             mountain. Units are degrees and typical value would be 10.
         height: Height of mountain peak in meters.
@@ -85,5 +86,5 @@ def gaussian_mountain(lon_array: np.ndarray, lat_array: np.ndarray, central_lat:
     """
     rsqd_array = np.sqrt((lon_array - central_lon) ** 2. + (lat_array - central_lat) ** 2.)
     h_arr = height * np.exp(-(rsqd_array**2.)/(2.*std_dev**2.))
-    h_arr[rsqd_array < radius_degrees] = 0  # Make sure height goes to 0 at some point
+    h_arr[rsqd_array > radius_degrees] = 0  # Make sure height goes to 0 at some point
     return h_arr

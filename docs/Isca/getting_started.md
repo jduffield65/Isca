@@ -241,6 +241,19 @@ This may be useful for debugging small jobs.
 What this last line of code does is call the function 
 [`run_experiment`](../code/run/base.md#isca_tools.run.base.run_experiment).
 
+Rather than submitting the job using terminal, you can also do it through running the following python script:
+```python
+import os
+from isca_tools import run_experiment
+
+jobs_dir = os.path.join(os.environ['HOME'], 'isca_jobs')  # all jobs saved here
+exp_dir = os.path.join(jobs_dir, 'experiment')            # specific experiment - CHANGE FOR EACH EXPERIMENT
+
+namelist_file = os.path.join(exp_dir, 'namelist.nml')
+diag_table_file = os.path.join(exp_dir, 'diag_table')
+run_experiment(namelist_file, diag_table_file, slurm=True)
+```
+
 ### Output Data
 This will save data to the folder `/gpfs1/scratch/jamd1/isca_output/name/` where `name` is the value of `name`
 indicated in the `experiment_details` section of the [`namelist.nml`](#required-files) file.

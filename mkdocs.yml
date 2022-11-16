@@ -75,6 +75,7 @@ nav:
         - Getting Started: Isca/getting_started.md
         - Benchmarking: Isca/benchmarking.md
         - Time Series: Isca/time_series.md
+        - Land: Isca/land.md
         - SOCRATES: Isca/socrates.md
     - Namelists:
         - namelists/index.md
@@ -111,6 +112,8 @@ nav:
         - Land:
             - Base: code/land/base.md
             - Mountains: code/land/mountains.md
+        - Plot:
+            - Land: code/plot/land.md
         - Run:
             - Base: code/run/base.md
         - Time Series:
