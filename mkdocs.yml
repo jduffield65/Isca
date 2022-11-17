@@ -114,6 +114,7 @@ nav:
             - Mountains: code/land/mountains.md
         - Plot:
             - Land: code/plot/land.md
+            - Spin Up: code/plot/spin_up.md
         - Run:
             - Base: code/run/base.md
         - Time Series:
