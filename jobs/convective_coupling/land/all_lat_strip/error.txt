@@ -1,0 +1,274 @@
+2022-11-17 13:43:45,565 - isca - INFO - SOCRATES compilation disabled.
+2022-11-17 13:43:45,566 - isca - DEBUG - Making directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip'
+2022-11-17 13:43:45,742 - isca - WARNING - Tried to remove run directory but it doesnt exist
+2022-11-17 13:43:45,751 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run'
+2022-11-17 13:43:45,832 - isca - INFO - Writing namelist to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/input.nml'
+2022-11-17 13:43:45,834 - isca - INFO - Writing field_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/field_table'
+2022-11-17 13:43:45,844 - isca - INFO - Writing diag_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/diag_table'
+2022-11-17 13:43:45,885 - isca - INFO - Running without restart file
+2022-11-17 13:43:45,889 - isca - INFO - Beginning run 1
+2022-11-17 13:43:45,898 - isca - INFO - process running as 65150
+2022-11-17 13:43:45,899 - isca - DEBUG - Loading basic ubuntu-conda environment
+2022-11-17 13:43:46,367 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to    32768.
+2022-11-17 13:43:46,367 - isca - DEBUG - &MPP_IO_NML
+2022-11-17 13:43:46,367 - isca - DEBUG - HEADER_BUFFER_VAL=16384      ,
+2022-11-17 13:43:46,368 - isca - DEBUG - GLOBAL_FIELD_ON_ROOT_PE=T,
+2022-11-17 13:43:46,368 - isca - DEBUG - IO_CLOCKS_ON=F,
+2022-11-17 13:43:46,368 - isca - DEBUG - SHUFFLE=0          ,
+2022-11-17 13:43:46,368 - isca - DEBUG - DEFLATE_LEVEL=-1         ,
+2022-11-17 13:43:46,368 - isca - DEBUG - /
+2022-11-17 13:43:46,368 - isca - DEBUG - NOTE from PE    0: MPP_IO_SET_STACK_SIZE: stack size set to     131072.
+2022-11-17 13:43:46,376 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to   600000.
+2022-11-17 13:43:46,436 - isca - DEBUG - starting            1  OpenMP threads per MPI-task
+2022-11-17 13:43:46,447 - isca - DEBUG - ATMOS MODEL DOMAIN DECOMPOSITION
+2022-11-17 13:43:46,447 - isca - DEBUG - X-AXIS =  128
+2022-11-17 13:43:46,447 - isca - DEBUG - Y-AXIS =    2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2
+2022-11-17 13:43:46,447 - isca - DEBUG - 2   2   2   2   2   2   2   2
+2022-11-17 13:43:46,652 - isca - DEBUG - mean surface pressure=1000.0000 mb
+2022-11-17 13:43:46,703 - isca - DEBUG - NOTE from PE    0: idealized_moist_phys: Using Frierson Quasi-Equilibrium convection scheme.
+2022-11-17 13:43:46,780 - isca - DEBUG - NOTE from PE    0: two_stream_gray_rad: Using Frierson (2006) radiation scheme.
+2022-11-17 13:43:48,698 - isca - DEBUG - Integration completed through    1 Jan  2   0: 0: 0
+2022-11-17 13:43:50,554 - isca - DEBUG - Integration completed through    1 Jan  3   0: 0: 0
+2022-11-17 13:43:52,408 - isca - DEBUG - Integration completed through    1 Jan  4   0: 0: 0
+2022-11-17 13:43:54,246 - isca - DEBUG - Integration completed through    1 Jan  5   0: 0: 0
+2022-11-17 13:43:56,093 - isca - DEBUG - Integration completed through    1 Jan  6   0: 0: 0
+2022-11-17 13:43:58,086 - isca - DEBUG - Integration completed through    1 Jan  7   0: 0: 0
+2022-11-17 13:44:00,033 - isca - DEBUG - Integration completed through    1 Jan  8   0: 0: 0
+2022-11-17 13:44:01,900 - isca - DEBUG - Integration completed through    1 Jan  9   0: 0: 0
+2022-11-17 13:44:03,751 - isca - DEBUG - Integration completed through    1 Jan 10   0: 0: 0
+2022-11-17 13:44:05,602 - isca - DEBUG - Integration completed through    1 Jan 11   0: 0: 0
+2022-11-17 13:44:07,471 - isca - DEBUG - Integration completed through    1 Jan 12   0: 0: 0
+2022-11-17 13:44:09,348 - isca - DEBUG - Integration completed through    1 Jan 13   0: 0: 0
+2022-11-17 13:44:11,228 - isca - DEBUG - Integration completed through    1 Jan 14   0: 0: 0
+2022-11-17 13:44:13,117 - isca - DEBUG - Integration completed through    1 Jan 15   0: 0: 0
+2022-11-17 13:44:15,013 - isca - DEBUG - Integration completed through    1 Jan 16   0: 0: 0
+2022-11-17 13:44:16,897 - isca - DEBUG - Integration completed through    1 Jan 17   0: 0: 0
+2022-11-17 13:44:18,788 - isca - DEBUG - Integration completed through    1 Jan 18   0: 0: 0
+2022-11-17 13:44:20,681 - isca - DEBUG - Integration completed through    1 Jan 19   0: 0: 0
+2022-11-17 13:44:22,570 - isca - DEBUG - Integration completed through    1 Jan 20   0: 0: 0
+2022-11-17 13:44:24,457 - isca - DEBUG - Integration completed through    1 Jan 21   0: 0: 0
+2022-11-17 13:44:26,352 - isca - DEBUG - Integration completed through    1 Jan 22   0: 0: 0
+2022-11-17 13:44:28,307 - isca - DEBUG - Integration completed through    1 Jan 23   0: 0: 0
+2022-11-17 13:44:30,201 - isca - DEBUG - Integration completed through    1 Jan 24   0: 0: 0
+2022-11-17 13:44:32,094 - isca - DEBUG - Integration completed through    1 Jan 25   0: 0: 0
+2022-11-17 13:44:33,989 - isca - DEBUG - Integration completed through    1 Jan 26   0: 0: 0
+2022-11-17 13:44:35,889 - isca - DEBUG - Integration completed through    1 Jan 27   0: 0: 0
+2022-11-17 13:44:37,790 - isca - DEBUG - Integration completed through    1 Jan 28   0: 0: 0
+2022-11-17 13:44:39,691 - isca - DEBUG - Integration completed through    1 Jan 29   0: 0: 0
+2022-11-17 13:44:41,584 - isca - DEBUG - Integration completed through    1 Jan 30   0: 0: 0
+2022-11-17 13:44:43,489 - isca - DEBUG - Integration completed through    1 Feb  1   0: 0: 0
+2022-11-17 13:44:43,569 - isca - DEBUG - NOTE from PE    0: MPP_IO_SET_STACK_SIZE: stack size set to     204800.
+2022-11-17 13:44:43,653 - isca - DEBUG - MPP_DOMAINS_STACK high water mark=       25600
+2022-11-17 13:44:43,657 - isca - DEBUG - 
+2022-11-17 13:44:43,657 - isca - DEBUG - Tabulating mpp_clock statistics across     32 PEs...
+2022-11-17 13:44:43,657 - isca - DEBUG - 
+2022-11-17 13:44:43,658 - isca - DEBUG - tmin          tmax          tavg          tstd  tfrac grain pemin pemax
+2022-11-17 13:44:43,669 - isca - DEBUG - Total runtime                        57.322646     57.322665     57.322658      0.000005  1.000     0     0    31
+2022-11-17 13:44:43,669 - isca - DEBUG - MPP_STACK high water mark=           0
+2022-11-17 13:44:43,848 - isca - INFO - Run 1 complete
+2022-11-17 13:44:43,957 - isca - DEBUG - atmos_monthly.nc combined and copied to data directory
+2022-11-17 13:44:48,108 - isca - INFO - Restart archive created at /gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/restarts/res0001.tar.gz
+2022-11-17 13:44:48,120 - isca - INFO - Writing namelist to '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/run0001/input.nml'
+2022-11-17 13:44:48,123 - isca - INFO - Writing field_table to '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/run0001/field_table'
+2022-11-17 13:44:48,131 - isca - INFO - Writing diag_table to '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/run0001/diag_table'
+2022-11-17 13:44:48,202 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run'
+2022-11-17 13:44:48,220 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run'
+2022-11-17 13:44:48,281 - isca - INFO - Writing namelist to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/input.nml'
+2022-11-17 13:44:48,283 - isca - INFO - Writing field_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/field_table'
+2022-11-17 13:44:48,291 - isca - INFO - Writing diag_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/diag_table'
+2022-11-17 13:44:48,318 - isca - INFO - Using restart file '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/restarts/res0001.tar.gz'
+2022-11-17 13:44:48,620 - isca - INFO - Restart /gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/restarts/res0001.tar.gz extracted to /gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/INPUT
+2022-11-17 13:44:48,621 - isca - INFO - Beginning run 2
+2022-11-17 13:44:48,634 - isca - INFO - process running as 356
+2022-11-17 13:44:48,635 - isca - DEBUG - Loading basic ubuntu-conda environment
+2022-11-17 13:44:48,931 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to    32768.
+2022-11-17 13:44:48,931 - isca - DEBUG - &MPP_IO_NML
+2022-11-17 13:44:48,931 - isca - DEBUG - HEADER_BUFFER_VAL=16384      ,
+2022-11-17 13:44:48,931 - isca - DEBUG - GLOBAL_FIELD_ON_ROOT_PE=T,
+2022-11-17 13:44:48,931 - isca - DEBUG - IO_CLOCKS_ON=F,
+2022-11-17 13:44:48,931 - isca - DEBUG - SHUFFLE=0          ,
+2022-11-17 13:44:48,932 - isca - DEBUG - DEFLATE_LEVEL=-1         ,
+2022-11-17 13:44:48,932 - isca - DEBUG - /
+2022-11-17 13:44:48,932 - isca - DEBUG - NOTE from PE    0: MPP_IO_SET_STACK_SIZE: stack size set to     131072.
+2022-11-17 13:44:48,935 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to   600000.
+2022-11-17 13:44:48,948 - isca - DEBUG - starting            1  OpenMP threads per MPI-task
+2022-11-17 13:44:48,955 - isca - DEBUG - ATMOS MODEL DOMAIN DECOMPOSITION
+2022-11-17 13:44:48,955 - isca - DEBUG - X-AXIS =  128
+2022-11-17 13:44:48,955 - isca - DEBUG - Y-AXIS =    2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2
+2022-11-17 13:44:48,955 - isca - DEBUG - 2   2   2   2   2   2   2   2
+2022-11-17 13:44:49,066 - isca - DEBUG - NOTE from PE    0: idealized_moist_phys: Using Frierson Quasi-Equilibrium convection scheme.
+2022-11-17 13:44:49,069 - isca - DEBUG - NOTE from PE    0: two_stream_gray_rad: Using Frierson (2006) radiation scheme.
+2022-11-17 13:44:50,956 - isca - DEBUG - Integration completed through    1 Feb  2   0: 0: 0
+2022-11-17 13:44:52,797 - isca - DEBUG - Integration completed through    1 Feb  3   0: 0: 0
+2022-11-17 13:44:54,651 - isca - DEBUG - Integration completed through    1 Feb  4   0: 0: 0
+2022-11-17 13:44:56,502 - isca - DEBUG - Integration completed through    1 Feb  5   0: 0: 0
+2022-11-17 13:44:58,414 - isca - DEBUG - Integration completed through    1 Feb  6   0: 0: 0
+2022-11-17 13:45:00,286 - isca - DEBUG - Integration completed through    1 Feb  7   0: 0: 0
+2022-11-17 13:45:02,161 - isca - DEBUG - Integration completed through    1 Feb  8   0: 0: 0
+2022-11-17 13:45:04,042 - isca - DEBUG - Integration completed through    1 Feb  9   0: 0: 0
+2022-11-17 13:45:05,906 - isca - DEBUG - Integration completed through    1 Feb 10   0: 0: 0
+2022-11-17 13:45:07,778 - isca - DEBUG - Integration completed through    1 Feb 11   0: 0: 0
+2022-11-17 13:45:09,648 - isca - DEBUG - Integration completed through    1 Feb 12   0: 0: 0
+2022-11-17 13:45:11,520 - isca - DEBUG - Integration completed through    1 Feb 13   0: 0: 0
+2022-11-17 13:45:13,392 - isca - DEBUG - Integration completed through    1 Feb 14   0: 0: 0
+2022-11-17 13:45:15,288 - isca - DEBUG - Integration completed through    1 Feb 15   0: 0: 0
+2022-11-17 13:45:17,181 - isca - DEBUG - Integration completed through    1 Feb 16   0: 0: 0
+2022-11-17 13:45:19,111 - isca - DEBUG - Integration completed through    1 Feb 17   0: 0: 0
+2022-11-17 13:45:20,980 - isca - DEBUG - Integration completed through    1 Feb 18   0: 0: 0
+2022-11-17 13:45:22,850 - isca - DEBUG - Integration completed through    1 Feb 19   0: 0: 0
+2022-11-17 13:45:24,720 - isca - DEBUG - Integration completed through    1 Feb 20   0: 0: 0
+2022-11-17 13:45:26,632 - isca - DEBUG - Integration completed through    1 Feb 21   0: 0: 0
+2022-11-17 13:45:28,501 - isca - DEBUG - Integration completed through    1 Feb 22   0: 0: 0
+2022-11-17 13:45:30,369 - isca - DEBUG - Integration completed through    1 Feb 23   0: 0: 0
+2022-11-17 13:45:32,239 - isca - DEBUG - Integration completed through    1 Feb 24   0: 0: 0
+2022-11-17 13:45:34,102 - isca - DEBUG - Integration completed through    1 Feb 25   0: 0: 0
+2022-11-17 13:45:35,971 - isca - DEBUG - Integration completed through    1 Feb 26   0: 0: 0
+2022-11-17 13:45:37,837 - isca - DEBUG - Integration completed through    1 Feb 27   0: 0: 0
+2022-11-17 13:45:39,706 - isca - DEBUG - Integration completed through    1 Feb 28   0: 0: 0
+2022-11-17 13:45:41,575 - isca - DEBUG - Integration completed through    1 Feb 29   0: 0: 0
+2022-11-17 13:45:43,444 - isca - DEBUG - Integration completed through    1 Feb 30   0: 0: 0
+2022-11-17 13:45:45,327 - isca - DEBUG - Integration completed through    1 Mar  1   0: 0: 0
+2022-11-17 13:45:45,347 - isca - DEBUG - NOTE from PE    0: MPP_IO_SET_STACK_SIZE: stack size set to     204800.
+2022-11-17 13:45:45,439 - isca - DEBUG - MPP_DOMAINS_STACK high water mark=       25600
+2022-11-17 13:45:45,439 - isca - DEBUG - 
+2022-11-17 13:45:45,439 - isca - DEBUG - Tabulating mpp_clock statistics across     32 PEs...
+2022-11-17 13:45:45,439 - isca - DEBUG - 
+2022-11-17 13:45:45,439 - isca - DEBUG - tmin          tmax          tavg          tstd  tfrac grain pemin pemax
+2022-11-17 13:45:45,453 - isca - DEBUG - Total runtime                        56.512133     56.512155     56.512145      0.000008  1.000     0     0    31
+2022-11-17 13:45:45,453 - isca - DEBUG - MPP_STACK high water mark=           0
+2022-11-17 13:45:45,563 - isca - INFO - Run 2 complete
+2022-11-17 13:45:45,655 - isca - DEBUG - atmos_monthly.nc combined and copied to data directory
+2022-11-17 13:45:49,251 - isca - INFO - Restart archive created at /gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/restarts/res0002.tar.gz
+2022-11-17 13:45:49,264 - isca - INFO - Writing namelist to '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/run0002/input.nml'
+2022-11-17 13:45:49,267 - isca - INFO - Writing field_table to '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/run0002/field_table'
+2022-11-17 13:45:49,276 - isca - INFO - Writing diag_table to '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/run0002/diag_table'
+2022-11-17 13:45:49,349 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run'
+2022-11-17 13:45:49,367 - isca - INFO - Emptied run directory '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run'
+2022-11-17 13:45:49,428 - isca - INFO - Writing namelist to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/input.nml'
+2022-11-17 13:45:49,430 - isca - INFO - Writing field_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/field_table'
+2022-11-17 13:45:49,438 - isca - INFO - Writing diag_table to '/gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/diag_table'
+2022-11-17 13:45:49,465 - isca - INFO - Using restart file '/gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/restarts/res0002.tar.gz'
+2022-11-17 13:45:49,999 - isca - INFO - Restart /gpfs1/scratch/other/jamd1/isca_output/convective_coupling/land/all_lat_strip/restarts/res0002.tar.gz extracted to /gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/INPUT
+2022-11-17 13:45:50,000 - isca - INFO - Beginning run 3
+2022-11-17 13:45:50,012 - isca - INFO - process running as 782
+2022-11-17 13:45:50,012 - isca - DEBUG - Loading basic ubuntu-conda environment
+2022-11-17 13:45:50,349 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to    32768.
+2022-11-17 13:45:50,349 - isca - DEBUG - &MPP_IO_NML
+2022-11-17 13:45:50,349 - isca - DEBUG - HEADER_BUFFER_VAL=16384      ,
+2022-11-17 13:45:50,349 - isca - DEBUG - GLOBAL_FIELD_ON_ROOT_PE=T,
+2022-11-17 13:45:50,349 - isca - DEBUG - IO_CLOCKS_ON=F,
+2022-11-17 13:45:50,349 - isca - DEBUG - SHUFFLE=0          ,
+2022-11-17 13:45:50,349 - isca - DEBUG - DEFLATE_LEVEL=-1         ,
+2022-11-17 13:45:50,349 - isca - DEBUG - /
+2022-11-17 13:45:50,349 - isca - DEBUG - NOTE from PE    0: MPP_IO_SET_STACK_SIZE: stack size set to     131072.
+2022-11-17 13:45:50,350 - isca - DEBUG - NOTE from PE    0: MPP_DOMAINS_SET_STACK_SIZE: stack size set to   600000.
+2022-11-17 13:45:50,362 - isca - DEBUG - starting            1  OpenMP threads per MPI-task
+2022-11-17 13:45:50,362 - isca - DEBUG - ATMOS MODEL DOMAIN DECOMPOSITION
+2022-11-17 13:45:50,362 - isca - DEBUG - X-AXIS =  128
+2022-11-17 13:45:50,362 - isca - DEBUG - Y-AXIS =    2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2   2
+2022-11-17 13:45:50,362 - isca - DEBUG - 2   2   2   2   2   2   2   2
+2022-11-17 13:45:50,457 - isca - DEBUG - NOTE from PE    0: idealized_moist_phys: Using Frierson Quasi-Equilibrium convection scheme.
+2022-11-17 13:45:50,465 - isca - DEBUG - NOTE from PE    0: two_stream_gray_rad: Using Frierson (2006) radiation scheme.
+2022-11-17 13:45:52,408 - isca - DEBUG - Integration completed through    1 Mar  2   0: 0: 0
+2022-11-17 13:45:54,246 - isca - DEBUG - Integration completed through    1 Mar  3   0: 0: 0
+2022-11-17 13:45:56,106 - isca - DEBUG - Integration completed through    1 Mar  4   0: 0: 0
+2022-11-17 13:45:58,051 - isca - DEBUG - Integration completed through    1 Mar  5   0: 0: 0
+2022-11-17 13:45:59,903 - isca - DEBUG - Integration completed through    1 Mar  6   0: 0: 0
+2022-11-17 13:46:01,751 - isca - DEBUG - Integration completed through    1 Mar  7   0: 0: 0
+2022-11-17 13:46:03,602 - isca - DEBUG - Integration completed through    1 Mar  8   0: 0: 0
+2022-11-17 13:46:05,460 - isca - DEBUG - Integration completed through    1 Mar  9   0: 0: 0
+2022-11-17 13:46:07,302 - isca - DEBUG - Integration completed through    1 Mar 10   0: 0: 0
+2022-11-17 13:46:09,144 - isca - DEBUG - Integration completed through    1 Mar 11   0: 0: 0
+2022-11-17 13:46:10,986 - isca - DEBUG - Integration completed through    1 Mar 12   0: 0: 0
+2022-11-17 13:46:12,828 - isca - DEBUG - Integration completed through    1 Mar 13   0: 0: 0
+2022-11-17 13:46:14,694 - isca - DEBUG - Integration completed through    1 Mar 14   0: 0: 0
+2022-11-17 13:46:16,537 - isca - DEBUG - Integration completed through    1 Mar 15   0: 0: 0
+2022-11-17 13:46:18,393 - isca - DEBUG - Integration completed through    1 Mar 16   0: 0: 0
+2022-11-17 13:46:20,222 - isca - DEBUG - Integration completed through    1 Mar 17   0: 0: 0
+2022-11-17 13:46:22,069 - isca - DEBUG - Integration completed through    1 Mar 18   0: 0: 0
+2022-11-17 13:46:23,910 - isca - DEBUG - Integration completed through    1 Mar 19   0: 0: 0
+2022-11-17 13:46:25,753 - isca - DEBUG - Integration completed through    1 Mar 20   0: 0: 0
+2022-11-17 13:46:27,641 - isca - DEBUG - Integration completed through    1 Mar 21   0: 0: 0
+2022-11-17 13:46:29,479 - isca - DEBUG - Integration completed through    1 Mar 22   0: 0: 0
+2022-11-17 13:46:31,320 - isca - DEBUG - Integration completed through    1 Mar 23   0: 0: 0
+2022-11-17 13:46:33,161 - isca - DEBUG - Integration completed through    1 Mar 24   0: 0: 0
+2022-11-17 13:46:35,005 - isca - DEBUG - Integration completed through    1 Mar 25   0: 0: 0
+2022-11-17 13:46:36,850 - isca - DEBUG - Integration completed through    1 Mar 26   0: 0: 0
+2022-11-17 13:46:38,692 - isca - DEBUG - Integration completed through    1 Mar 27   0: 0: 0
+2022-11-17 13:46:40,539 - isca - DEBUG - Integration completed through    1 Mar 28   0: 0: 0
+2022-11-17 13:46:42,386 - isca - DEBUG - Integration completed through    1 Mar 29   0: 0: 0
+2022-11-17 13:46:42,731 - isca - DEBUG - 
+2022-11-17 13:46:42,731 - isca - DEBUG - Program received signal SIGSEGV: Segmentation fault - invalid memory reference.
+2022-11-17 13:46:42,732 - isca - DEBUG - 
+2022-11-17 13:46:42,732 - isca - DEBUG - Backtrace for this error:
+2022-11-17 13:46:42,982 - isca - DEBUG - #0  0x2ad1b61d93ff in ???
+2022-11-17 13:46:42,982 - isca - DEBUG - #1  0x2ad1b622412a in ???
+2022-11-17 13:46:42,982 - isca - DEBUG - #2  0x55e541073a1b in ???
+2022-11-17 13:46:42,982 - isca - DEBUG - #3  0x55e540fb0961 in ???
+2022-11-17 13:46:42,982 - isca - DEBUG - #4  0x55e54188e8be in ???
+2022-11-17 13:46:42,982 - isca - DEBUG - #5  0x55e540fa5b6e in ???
+2022-11-17 13:46:42,983 - isca - DEBUG - #6  0x2ad1b61c5554 in ???
+2022-11-17 13:46:42,983 - isca - DEBUG - #7  0x55e540fa5ba0 in ???
+2022-11-17 13:46:43,119 - isca - DEBUG - --------------------------------------------------------------------------
+2022-11-17 13:46:43,120 - isca - DEBUG - Primary job  terminated normally, but 1 process returned
+2022-11-17 13:46:43,120 - isca - DEBUG - a non-zero exit code. Per user-direction, the job has been aborted.
+2022-11-17 13:46:43,120 - isca - DEBUG - --------------------------------------------------------------------------
+2022-11-17 13:46:43,137 - isca - DEBUG - --------------------------------------------------------------------------
+2022-11-17 13:46:43,137 - isca - DEBUG - mpirun noticed that process rank 10 with PID 806 on node kennedy20 exited on signal 11 (Segmentation fault).
+2022-11-17 13:46:43,137 - isca - DEBUG - --------------------------------------------------------------------------
+Exception in thread background thread for pid 782:
+Traceback (most recent call last):
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/threading.py", line 980, in _bootstrap_inner
+    self.run()
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/threading.py", line 917, in run
+    self._target(*self._args, **self._kwargs)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 1683, in wrap
+    fn(*rgs, **kwargs)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 2662, in background_thread
+    handle_exit_code(exit_code)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 2349, in fn
+    return self.command.handle_command_exit_code(exit_code)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 905, in handle_command_exit_code
+    raise exc
+sh.ErrorReturnCode_139: 
+
+  RAN: /usr/bin/bash /gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/run.sh
+
+  STDOUT:
+
+
+  STDERR:
+
+2022-11-17 13:46:45,218 - isca - ERROR - Run 3 failed. See log for details.
+2022-11-17 13:46:45,218 - isca - ERROR - Error: ErrorReturnCode_139('\n\n  RAN: /usr/bin/bash /gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/run.sh\n\n  STDOUT:\n\n\n  STDERR:\n')
+Traceback (most recent call last):
+  File "/gpfs1/home/jamd1/Isca/isca_source/src/extra/python/isca/experiment.py", line 285, in run
+    proc.wait()
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 879, in wait
+    self.handle_command_exit_code(exit_code)
+  File "/gpfs1/apps/conda/jamd1/conda/envs/isca_env/lib/python3.9/site-packages/sh.py", line 905, in handle_command_exit_code
+    raise exc
+sh.ErrorReturnCode_139: 
+
+  RAN: /usr/bin/bash /gpfs1/scratch/other/jamd1/isca_work/experiment/convective_coupling/land/all_lat_strip/run/run.sh
+
+  STDOUT:
+
+
+  STDERR:
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/gpfs1/home/jamd1/Isca/run_script.py", line 39, in <module>
+    run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+  File "/gpfs1/home/jamd1/Isca/isca_tools/run/base.py", line 137, in run_job
+    exp.run(i, num_cores=exp_details['n_cores'], overwrite_data=exp_details['overwrite_data'])
+  File "/gpfs1/home/jamd1/Isca/isca_source/src/extra/python/isca/helpers.py", line 22, in _destructive
+    return fn(*args, **kwargs)
+  File "/gpfs1/home/jamd1/Isca/isca_source/src/extra/python/isca/helpers.py", line 38, in _useworkdir
+    return fn(*args, **kwargs)
+  File "/gpfs1/home/jamd1/Isca/isca_source/src/extra/python/isca/experiment.py", line 299, in run
+    raise FailedRunError()
+isca.experiment.FailedRunError
