@@ -20,9 +20,9 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
 
     Args:
         ds: Dataset for particular experiment.
-        include_months: `int [n_months]`
+        include_months: `int [n_months]`</br>
             Months to keep (1 refers to January).
-        include_days: `int [n_days]`
+        include_days: `int [n_days]`</br>
             Days to keep (1 refers to 1st January).
             If `include_months` is provided, this will be ignored.
         month_days: Number of days in each month used for the simulation.
@@ -37,9 +37,10 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
 
     """
     year_days = year_months * month_days    # number of days in a year
-    ds_days = (first_day - 1 + ds.time) % year_days    # day in a given year that each value in ds.time refers to
+    # ceil to deal with daily output data when 1st day is 0.5, 2nd day is 1.5 etc
+    ds_days = (first_day - 1 + np.ceil(ds.time)) % year_days  # day in a given year that each value in ds.time refers to
     if include_months is not None:
-        include_days = [np.arange(30) + 30 * (month-1) for month in include_months]
+        include_days = [np.arange(1, month_days+1) + month_days * (month-1) for month in include_months]
         include_days = np.concatenate(include_days)
     elif include_days is None:
         raise ValueError("Either include_months or include_days need to be specified but both are None.")
