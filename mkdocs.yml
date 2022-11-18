@@ -122,5 +122,6 @@ nav:
             - Cmip Time: code/time_series/cmip_time.md
         - Utils:
             - Base: code/utils/base.md
+            - Dataset Slicing: code/utils/ds_slicing.md
             - Land: code/utils/land.md
             - Load: code/utils/load.md
