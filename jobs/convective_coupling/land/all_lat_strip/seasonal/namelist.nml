@@ -1,0 +1,152 @@
+! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
+! in the mixed_layer_nml namelist.
+! It is also run for 10 years.
+
+! This section gives info to give to Slurm when running experiment
+&experiment_details
+   name = 'convective_coupling/land/all_lat_strip/seasonal'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/convective_coupling/land/all_lat_strip/seasonal'
+   n_months_total = 120           ! Total duration of simulation in months.
+   n_months_job = 24             ! Approximate duration of each job of the simulation in months.
+                                ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
+   n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
+   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
+   resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
+   partition = 'debug'          ! Queue to submit job to (Slurm info).
+   overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
+   compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
+   max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
+   delete_restart_files = .true.        ! Only need final restart file.
+/
+
+&main_nml
+    calendar = 'thirty_day'
+    current_date = 1, 1, 1, 0, 0, 0
+    days = 30
+    dt_atmos = 720
+    hours = 0
+    minutes = 0
+    seconds = 0
+/
+
+&idealized_moist_phys_nml
+    do_damping = .true.
+    turb = .true.
+    mixed_layer_bc = .true.
+    do_virtual = .false.
+    do_simple = .true.
+    roughness_heat = 3.21e-05
+    roughness_moist = 3.21e-05
+    roughness_mom = 3.21e-05
+    two_stream_gray = .true.
+    convection_scheme = 'SIMPLE_BETTS_MILLER'
+    land_option = 'input'                           ! LAND OPTION
+    land_file_name = 'INPUT/land.nc'                ! LAND OPTION
+    land_roughness_prefactor = 10                   ! LAND OPTION
+/
+
+&vert_turb_driver_nml
+    do_mellor_yamada = .false.      ! default is True
+    do_diffusivity = .true.         ! default is False
+    do_simple = .true.              ! default is False
+    constant_gust = 0.0             ! default is 1.0
+    use_tau = .false.
+/
+
+&diffusivity_nml
+    do_entrain = .false.
+    do_simple = .true.
+/
+
+&surface_flux_nml
+    do_simple = .true.
+    old_dtaudv = .true.
+    use_virtual_temp = .false.
+    land_humidity_prefactor = 0.7                   ! LAND OPTION
+    land_evap_prefactor = 0.7                       ! LAND OPTION
+/
+
+&atmosphere_nml
+    idealized_moist_model = .true.
+/
+
+&mixed_layer_nml
+    albedo_value = 0.46
+    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    evaporation = .true.
+    prescribe_initial_dist = .true.
+    tconst = 285.0
+    land_option = 'input'                           ! LAND OPTION
+    land_h_capacity_prefactor = 0.1                 ! LAND OPTION
+    land_albedo_prefactor = 1.3                     ! LAND OPTION
+/
+
+&qe_moist_convection_nml
+    tmax = 350.0
+    tmin = 160.0
+    rhbm = 0.7
+/
+
+! Not sure why we need this namelist as we are doing simple betts miller which uses qe_moist_convection_nml
+&betts_miller_nml
+    rhbm = 0.7
+    do_simp = .false.
+    do_shallower = .true.
+/
+
+&lscale_cond_nml
+    do_evap = .true.
+    do_simple = .true.
+/
+
+&sat_vapor_pres_nml
+    do_simple = .true.
+/
+
+&damping_driver_nml
+    do_conserve_energy = .true.
+    do_rayleigh = .true.
+    sponge_pbottom = 5000.0         ! Bottom of the model's sponge down to 50hPa (units are Pa)
+    trayfric = -0.25
+/
+
+&two_stream_gray_rad_nml
+    rad_scheme = 'frierson'
+    do_seasonal = .true.
+    equinox_day =  0.75
+    atm_abs = 0.2                   ! default is 0.0
+/
+
+&diag_manager_nml
+    mix_snapshot_average_fields = .false.       ! time avg fields are labelled with time in middle of window
+/
+
+
+&fms_io_nml
+    fileset_write = 'single'        ! default is multi
+    threading_write = 'single'      ! default is multi
+/
+
+&fms_nml
+    domains_stack_size = 600000     ! default is 0
+/
+
+&spectral_dynamics_nml
+    damping_order = 4
+    water_correction_limit = 200.e2
+    reference_sea_level_press = 1.0e5
+    num_levels = 25                         ! How many pressure levels to use
+    valid_range_t = 100.0, 800.0
+    initial_sphum = 2e-06
+    vert_coord_option = 'input'             ! Use the vertical levels from Frierson 2006
+    surf_res = 0.5
+    scale_heights = 11.0
+    exponent = 7.0
+    robert_coeff = 0.03
+/
+
+! Specify vertical levels from Frierson 2006
+&vert_coordinate_nml
+    bk = 0.000000, 0.0117665, 0.0196679, 0.0315244, 0.0485411, 0.0719344, 0.1027829, 0.1418581, 0.1894648, 0.2453219, 0.3085103, 0.3775033, 0.4502789, 0.5244989, 0.5977253, 0.6676441, 0.7322627, 0.7900587, 0.8400683, 0.8819111, 0.9157609, 0.9422770, 0.9625127, 0.9778177, 0.9897489, 1.0000000
+    pk = 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000
+/
