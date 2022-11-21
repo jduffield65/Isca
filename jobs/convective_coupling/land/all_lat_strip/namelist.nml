@@ -71,7 +71,7 @@
 /
 
 &mixed_layer_nml
-    albedo_value = 0.31
+    albedo_value = 0.4
     depth = 5.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
