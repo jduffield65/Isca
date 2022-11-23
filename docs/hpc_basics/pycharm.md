@@ -134,8 +134,17 @@ can drop in and out of it and leave it running for ages:</br>
 * If you keep the *screen* session going, you should only have to re-run the line </br>
 `ssh -N -f -L localhost:1111:localhost:1111 jamd1@kennedy.st-andrews.ac.uk`</br> 
 everytime you want to use the notebook again.
-* You may need to restart the screen session every now and again with a new port number. I had to do this 
-because I recieved an error: Run error - connection reset.
+
+???+ error " Error - `Could not request local forwarding`"
+    You may need to restart the screen session every now and again with a new port number. I had to do this 
+    because I recieved the following error:
+
+    ![image.png](../images/hpc_basics/pycharm/jupyter_error.png){width="700"}
+    
+    If you get this error, just terminal the screen session (`pkill screen` kills all screen sessions
+    and `screen -S 13780 -X quit` kills screen session with number `13780`) and then follow the above
+    instructions again with a new port number.
+    
 
 ??? warning "Changes to jupyter notebook files do not sync to remote computer"
     To upload the changes you made to the jupyter notebook file locally, you can use:</br>

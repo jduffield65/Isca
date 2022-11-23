@@ -125,3 +125,4 @@ nav:
             - Dataset Slicing: code/utils/ds_slicing.md
             - Land: code/utils/land.md
             - Load: code/utils/load.md
+            - Moist Physics: code/utils/moist_physics.md
