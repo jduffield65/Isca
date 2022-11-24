@@ -12,12 +12,12 @@ def lcl_temp(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
 
     Args:
         temp_surf: Surface temperature in *Kelvin*.
-        rh_surf: Surface Relative Humidity ($0 < RH < 1$).
+        rh_surf: Percentage surface relative humidity ($0 < rh < 100$).
 
     Returns:
         Temperature of *LCL* in *Kelvin*.
     """
-    return 1 / (1/(temp_surf-55) - np.log(rh_surf)/2840) + 55
+    return 1 / (1/(temp_surf-55) - np.log(rh_surf/100)/2840) + 55
 
 
 def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -40,11 +40,11 @@ def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np
 
 
 def mixing_ratio_from_partial_pressure(partial_pressure: Union[float, np.ndarray],
-                                       total_pressure: float) -> Union[float, np.ndarray]:
+                                       total_pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """
-    Computes the mixing ratio, $q$, from partial pressure, $e$, and total atmospheric pressure, $p$, according to:
+    Computes the mixing ratio, $w$, from partial pressure, $e$, and total atmospheric pressure, $p$, according to:
 
-    $q = \epsilon \\frac{e}{p-e}$
+    $w = \epsilon \\frac{e}{p-e}$
 
     Where $\epsilon = R_d/R_v = 0.622$ is the ratio of molecular weight of water to that of dry air.
 
@@ -56,9 +56,46 @@ def mixing_ratio_from_partial_pressure(partial_pressure: Union[float, np.ndarray
         total_pressure: Total or surface pressure, $p$, in *Pa*.
 
     Returns:
-        Mixing ratio in units of $kg/kg$.
+        Mixing ratio, $w$, in units of $kg/kg$.
     """
     return epsilon * partial_pressure / (total_pressure - partial_pressure)
+
+
+def mixing_ratio_from_sphum(sphum: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Computes the mixing ratio, $w$, from specific humidity, $q$, according to:
+
+    $w = q/(1-q)$
+
+    Args:
+        sphum: Specific humidity, $q$, in units of $kg/kg$.
+
+    Returns:
+        Mixing ratio, $w$, in units of $kg/kg$.
+    """
+    return sphum / (1-sphum)
+
+
+def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray],
+                  total_pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Relative humidity, $rh$, is computed from specific humidity, $q$ according to:
+
+    $rh = w / w_s$
+
+    Where, $w= q/(1-q)$, is the mixing ratio and $w_s$ is the saturation mixing ratio.
+
+    Args:
+        sphum: Specific humidity, $q$, in units of $kg/kg$.
+        temp: Temperature to compute relative humidity at. Units: *Kelvin*.
+        total_pressure: Total or surface pressure, $p$, in *Pa*.
+
+    Returns:
+        Percentage relative humidity ($0 < rh < 100$).
+    """
+    sat_mix_ratio = mixing_ratio_from_partial_pressure(saturation_vapor_pressure(temp), total_pressure)
+    mix_ratio = mixing_ratio_from_sphum(sphum)
+    return 100 * mix_ratio / sat_mix_ratio
 
 
 def lapse_moist(temp: Union[float, np.ndarray], total_pressure: float) -> Union[float, np.ndarray]:
