@@ -4,14 +4,14 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'play/rh_calc'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/rh_calc'
-   n_months_total = 12           ! Total duration of simulation in months.
-   n_months_job = 12             ! Approximate duration of each job of the simulation in months.
+   name = 'convective_coupling/aquaplanet/d5_2'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/convective_coupling/aquaplanet/d5_2'
+   n_months_total = 120           ! Total duration of simulation in months.
+   n_months_job = 24             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info).
-   resolution = 'T21'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
+   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
+   resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.

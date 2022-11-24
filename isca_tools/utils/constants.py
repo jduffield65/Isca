@@ -29,4 +29,4 @@ L_v = 2.5e6
 lapse_dry = g / c_p
 
 # Add this to temperature in Celsius to give temperature in Kelvin
-temp_kelvin = 273.15
+temp_kelvin_to_celsius = 273.15

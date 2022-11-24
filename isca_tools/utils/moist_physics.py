@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Union
-from .constants import lapse_dry, L_v, R, R_v, epsilon, c_p, temp_kelvin
+from .constants import lapse_dry, L_v, R, R_v, epsilon, c_p, temp_kelvin_to_celsius
 
 
 def lcl_temp(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
@@ -33,10 +33,10 @@ def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np
         Saturation vapor pressure, $e_s(T)$, in units of *Pa*.
     """
     # Alternative equation from MATLAB exercise M9.2 in Holdon 2004
-    # return 611 * np.exp(L_v/R_v * (1/temp_kelvin - 1/temp))
-    temp = temp - temp_kelvin       # Convert temperature in kelvin to celsius, as celsius used for this formula.
+    # return 611 * np.exp(L_v/R_v * (1/temp_kelvin_to_celsius - 1/temp))
+    temp = temp - temp_kelvin_to_celsius       # Convert temperature in kelvin to celsius, as celsius used for this formula.
     # Muliply by 100 below to convert from hPa to Pa.
-    return 6.112 * np.exp(17.67 * temp / (temp + 243.5)) * 100
+    return 611.2 * np.exp(17.67 * temp / (temp + 243.5))
 
 
 def mixing_ratio_from_partial_pressure(partial_pressure: Union[float, np.ndarray],
