@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Union
-from .constants import lapse_dry, L_v, R, R_v, epsilon, c_p, temp_kelvin_to_celsius
+from .constants import lapse_dry, L_v, R, R_v, epsilon, c_p, temp_kelvin_to_celsius, kappa, g
 
 
 def lcl_temp(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
@@ -98,16 +98,89 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     return 100 * mix_ratio / sat_mix_ratio
 
 
-def lapse_moist(temp: Union[float, np.ndarray], total_pressure: float) -> Union[float, np.ndarray]:
+def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray],
+                pressure_coords: bool = False) -> Union[float, np.ndarray]:
     """
     Returns the saturated moist adiabatic lapse rate, $\Gamma_s = -dT/dz$, at a given temperature.
+
+    Comes from equation D.10 in Holton 2004.
 
     Args:
         temp: Temperature to compute lapse rate at. Units: *Kelvin*.
         total_pressure: Atmospheric pressure at altitude considered, $p$, in *Pa*.
+        pressure_coords: If `True`, will return $dT/dp$, otherwise will return $-dT/dz$.
     Returns:
         Saturated moist adiabatic lapse rate. Units: $Km^{-1}$.
     """
     e_s = saturation_vapor_pressure(temp)
-    q_s = mixing_ratio_from_partial_pressure(e_s, total_pressure)   # saturation mixing ratio
-    return lapse_dry * (1 + L_v*q_s / (R * temp)) / (1 + epsilon * L_v**2*q_s/(c_p * R * temp**2))
+    w_s = mixing_ratio_from_partial_pressure(e_s, total_pressure)   # saturation mixing ratio
+    neg_dT_dz = lapse_dry * (1 + L_v*w_s / (R * temp)) / (1 + epsilon * L_v**2*w_s/(c_p * R * temp**2))
+    if pressure_coords:
+        return R * temp * neg_dT_dz / (total_pressure * g)
+    else:
+        return neg_dT_dz
+
+
+def dry_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
+    """
+    Returns the temperature of an air parcel at the given pressure levels, assuming it follows the dry adiabat.
+
+    Args:
+        temp_start: Starting temperature of parcel. Units: *Kelvin*.
+        p_start: Starting pressure of parcel. Units: *Pa*.
+        p_levels: `float [n_p_levels]`.</br>
+            Pressure levels to find the temperature of the parcel at. Units: *Pa*.
+
+    Returns:
+        `float [n_p_levels]`.</br>
+        Temperature at each pressure level indicated by `p_levels`.
+    """
+    return temp_start * (p_levels/p_start)**kappa
+
+
+def moist_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
+    """
+    Returns the temperature of an air parcel at the given pressure levels, assuming it follows the saturated moist
+    adiabat.
+
+    Args:
+        temp_start: Starting temperature of parcel. Units: *Kelvin*.
+        p_start: Starting pressure of parcel. Units: *Pa*.
+        p_levels: `float [n_p_levels]`.</br>
+            Pressure levels to find the temperature of the parcel at. Units: *Pa*.
+
+    Returns:
+        `float [n_p_levels]`.</br>
+        Temperature at each pressure level indicated by `p_levels`.
+    """
+    p_done = np.asarray([p_start]).reshape(-1, 1)
+    p_todo = p_levels
+    temp_levels = np.zeros_like(p_levels)
+    # For each pressure level, compute lapse rate based on pressure level closest to it and then update
+    # temperature of that level assuming lapse rate stays constant between the levels.
+    while len(p_todo) > 0:
+        # Find the two pressure levels with the minimum distance between them such that on is in the set p_done
+        # and one is in the set p_todo.
+        # Want two closest as assuming lapse rate is constant between the levels
+        diff = np.abs(p_done - p_todo)
+        done_ind, todo_ind = np.argwhere(diff == np.min(diff))[0]
+        if done_ind == 0:
+            # First index is the inputted start values
+            p_ref = p_start
+            temp_ref = temp_start
+        else:
+            p_ind = np.where(p_levels == p_done[done_ind])[0]
+            p_ref = p_levels[p_ind]
+            temp_ref = temp_levels[p_ind]
+
+        # Compute lapse rate based on temperature and pressure of level in the done set.
+        dT_dp = lapse_moist(temp_ref, p_ref, True)
+        temp_level_ind = np.where(p_levels == p_todo[todo_ind])[0]
+
+        # Update temperature at level considering - assume constant lapse rate between levels.
+        temp_levels[temp_level_ind] = temp_ref + (p_levels[temp_level_ind]-p_ref) * dT_dp
+
+        # Transfer pressure level from p_todo to p_done for next iteration
+        p_done = np.append(p_done, np.asarray(p_todo[todo_ind]).reshape(-1, 1), axis=0)
+        p_todo = np.delete(p_todo, todo_ind)
+    return temp_levels
