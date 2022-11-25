@@ -28,5 +28,9 @@ L_v = 2.5e6
 # Dry lapse rate, -dT/dz. Units: Km^{-1}
 lapse_dry = g / c_p
 
+# kappa is related to the ratio between heat capacity at constant volume to that at constant pressure through:
+# kappa = 1 - c_v/c_p
+kappa = R/c_p
+
 # Add this to temperature in Celsius to give temperature in Kelvin
 temp_kelvin_to_celsius = 273.15

@@ -35,7 +35,7 @@ def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np
     # Alternative equation from MATLAB exercise M9.2 in Holdon 2004
     # return 611 * np.exp(L_v/R_v * (1/temp_kelvin_to_celsius - 1/temp))
     temp = temp - temp_kelvin_to_celsius       # Convert temperature in kelvin to celsius, as celsius used for this formula.
-    # Muliply by 100 below to convert from hPa to Pa.
+    # Multiply by 100 below to convert from hPa to Pa.
     return 611.2 * np.exp(17.67 * temp / (temp + 243.5))
 
 
@@ -53,7 +53,7 @@ def mixing_ratio_from_partial_pressure(partial_pressure: Union[float, np.ndarray
 
     Args:
         partial_pressure: Partial pressure, $e$, in *Pa*.
-        total_pressure: Total or surface pressure, $p$, in *Pa*.
+        total_pressure: Atmospheric pressure at altitude considered, $p$, in *Pa*.
 
     Returns:
         Mixing ratio, $w$, in units of $kg/kg$.
@@ -88,7 +88,7 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     Args:
         sphum: Specific humidity, $q$, in units of $kg/kg$.
         temp: Temperature to compute relative humidity at. Units: *Kelvin*.
-        total_pressure: Total or surface pressure, $p$, in *Pa*.
+        total_pressure: Atmospheric pressure at altitude considered, $p$, in *Pa*.
 
     Returns:
         Percentage relative humidity ($0 < rh < 100$).
@@ -104,7 +104,7 @@ def lapse_moist(temp: Union[float, np.ndarray], total_pressure: float) -> Union[
 
     Args:
         temp: Temperature to compute lapse rate at. Units: *Kelvin*.
-        total_pressure: Total or surface pressure of the atmosphere. Units: *Pa*.
+        total_pressure: Atmospheric pressure at altitude considered, $p$, in *Pa*.
     Returns:
         Saturated moist adiabatic lapse rate. Units: $Km^{-1}$.
     """
