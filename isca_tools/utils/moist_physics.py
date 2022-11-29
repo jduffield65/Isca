@@ -54,8 +54,8 @@ def mixing_ratio_from_partial_pressure(partial_pressure: Union[float, np.ndarray
     [MetPy](https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.mixing_ratio.html).
 
     Args:
-        partial_pressure: Partial pressure, $e$, in *Pa*.
-        total_pressure: Atmospheric pressure at altitude considered, $p$, in *Pa*.
+        partial_pressure: `float [n_levels]`. Partial pressure at each level, $e$, in *Pa*.
+        total_pressure: `float [n_levels]`. Atmospheric pressure at each level, $p$, in *Pa*.
 
     Returns:
         Mixing ratio, $w$, in units of $kg/kg$.
@@ -88,9 +88,9 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     Where, $w= q/(1-q)$, is the mixing ratio and $w_s$ is the saturation mixing ratio.
 
     Args:
-        sphum: Specific humidity, $q$, in units of $kg/kg$.
-        temp: Temperature to compute relative humidity at. Units: *Kelvin*.
-        total_pressure: Atmospheric pressure at altitude considered, $p$, in *Pa*.
+        sphum: `float [n_levels]`. Specific humidity, $q$, at each level considered, in units of $kg/kg$.
+        temp: `float [n_levels]`. Temperature at each level considered. Units: *Kelvin*.
+        total_pressure: `float [n_levels]`. Atmospheric pressure, $p$, at each level considered in *Pa*.
 
     Returns:
         Percentage relative humidity ($0 < rh < 100$).
@@ -228,3 +228,19 @@ def moist_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.
     #     p_done = np.append(p_done, np.asarray(p_todo[todo_ind]).reshape(-1, 1), axis=0)
     #     p_todo = np.delete(p_todo, todo_ind)
     return temp_final
+
+
+def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.ndarray, float]) -> np.ndarray:
+    """
+    Returns the moist static energy.
+
+    Args:
+        temp: `float [n_lat, n_p_levels]`. Temperature at each coordinate considered. Units: *Kelvin*.
+        sphum: `float [n_lat, n_p_levels]`. Specific humidity at each coordinate considered. Units: *kg/kg*.
+        height: `float [n_lat, n_p_levels]` or `float`. Geopotential height of each level considered.
+        Just a `float` if only one pressure level considered for each latitude e.g. common to use 2m values. Units: *m*.
+
+    Returns:
+        Moist static energy at each coordinate given
+    """
+    return L_v * sphum + c_p * temp + g * height
