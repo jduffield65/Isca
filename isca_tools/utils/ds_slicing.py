@@ -2,6 +2,7 @@ from netCDF4 import Dataset
 from typing import List, Optional
 import numpy as np
 import xarray as xr
+from .base import area_weighting
 
 
 def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, include_days: Optional[List[int]] = None,
@@ -72,3 +73,22 @@ def lat_lon_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Dataset:
     lat_xr = xr.DataArray(lat, dims=['location'])
     lon_xr = xr.DataArray(lon, dims=['location'])
     return ds.sel(lat=lat_xr, lon=lon_xr, method="nearest")
+
+
+def area_weight_mean_lat(ds: Dataset) -> Dataset:
+    """
+    For all variables in `ds`, an area weighted mean is taken over all latitudes in the dataset.
+
+    Args:
+        ds: Dataset for particular experiment.
+
+    Returns:
+        Dataset containing averaged variables with no latitude dependence.
+    """
+    var_averaged = []
+    for var in ds.keys():
+        if 'lat' in list(ds[var].coords):
+            ds[var] = area_weighting(ds[var]).mean(dim='lat')
+            var_averaged += [var]
+    print(f"Variables Averaged: {var_averaged}")
+    return ds
