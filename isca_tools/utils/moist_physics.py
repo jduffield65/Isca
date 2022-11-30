@@ -2,10 +2,11 @@ import numpy as np
 from typing import Union
 from .constants import lapse_dry, L_v, R, R_v, epsilon, c_p, temp_kelvin_to_celsius, kappa, g
 from scipy.integrate import odeint
+from scipy import optimize
 import numpy_indexed
 
 
-def lcl_temp(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
+def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
     """
     Returns the temperature of the lifting condensation level, *LCL*, given the surface
     temperature and relative humidity.
@@ -20,6 +21,60 @@ def lcl_temp(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
         Temperature of *LCL* in *Kelvin*.
     """
     return 1 / (1/(temp_surf-55) - np.log(rh_surf/100)/2840) + 55
+
+
+def lcl_temp(temp_start: float, p_start: float, sphum_start: float) -> float:
+    """
+    Function to replicate the way
+    [LCL temperature is computed](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/
+    atmos_param/qe_moist_convection/qe_moist_convection.F90#L1092-L1130)
+    in *Isca* with the
+    [Simple Betts-Miller](https://jduffield65.github.io/Isca/namelists/convection/qe_moist_convection/)
+    convection scheme.
+
+    It is based on two properties of dry ascent:
+
+    Potential temperature is conserved so surface potential temperature = potential temperature at the $LCL$:
+
+    $$\\theta = \\theta_{start}(T_{start}, p_{start}) = T_{start}\\bigg(\\frac{p_{ref}}{p_{start}}\\bigg)^{\kappa} =
+    \\theta_{LCL}(T_{LCL}, p_{LCL}) = T_{LCL}\\bigg(\\frac{p_{ref}}{p_{LCL}}\\bigg)^{\kappa}$$
+
+    Mixing ratio, $w$, is conserved in unsaturated adiabatic ascent because there is no precipitation,
+    and at the $LCL$, $w_{LCL} = w_{sat}$ because by definition at the $LCL$, the air is saturated:
+
+    $$w = w_{start} = \\frac{q_{start}}{1-q_{start}} = w_{sat} = \\frac{\epsilon e_s(T_{LCL})}{p_{LCL}-e_s(T_{LCL})}$$
+
+    $q$ is specific humidity, $\epsilon = R_{dry}/R_v$ is the ratio of gas constant for dry air to vapour and
+    $\kappa = R_{dry}/c_p$. $p_{ref}$ is taken to be $100,000 Pa$ to be consistent with the
+    [value used in Isca](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/
+    atmos_param/qe_moist_convection/qe_moist_convection.F90#L74-L75).
+
+    So we have two equations for two unknowns, $T_{LCL}$ and $p_{LCL}$. By eliminating $p_{LCL}$,
+    we can get an equation where RHS is just a function of $T_{LCL}$ and the LHS consists only of known quantities:
+
+    $$\\theta(T_{start})^{\kappa}p_{ref} \\frac{w(q_{start})}{w(q_{start}) + \epsilon} =
+    T_{LCL}^{-1/\kappa}e_s(T_{LCL})$$
+
+    This can then be solved using Newton iteration to get the value of $T_{LCL}$.
+
+    Args:
+        temp_start: Starting temperature of parcel, $T_{start}$. Units: *Kelvin*.
+        p_start: Pressure, $p_{start}$, in *Pa* corresponding to starting point of dry ascent i.e. near surface
+            pressure.
+        sphum_start: Starting specific humidity of parcel, $q_{start}$. Units: *kg/kg*.
+
+    Returns:
+        Temperature of *LCL* in *Kelvin*.
+    """
+    def lcl_opt_func(temp_lcl, p_start, temp_start, sphum_start):
+        # Function to optimize
+        p_ref = 1e5
+        r = mixing_ratio_from_sphum(sphum_start)
+        theta = temp_start * (p_ref / p_start) ** kappa  # potential temperature
+        value = theta ** (-1 / kappa) * p_ref * r / (epsilon + r)
+
+        return value - saturation_vapor_pressure(temp_lcl) / temp_lcl ** (1 / kappa)
+    return optimize.newton(lcl_opt_func, 270, args=(p_start, temp_start, sphum_start))
 
 
 def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -123,7 +178,7 @@ def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.
         return neg_dT_dz
 
 
-def dry_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
+def dry_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
     """
     Returns the temperature of an air parcel at the given pressure levels, assuming it follows the dry adiabat.
 
@@ -140,7 +195,7 @@ def dry_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.nd
     return temp_start * (p_levels/p_start)**kappa
 
 
-def moist_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
+def moist_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
     """
     Returns the temperature of an air parcel at the given pressure levels, assuming it follows the saturated moist
     adiabat.
@@ -230,9 +285,35 @@ def moist_profile(temp_start:float, p_start: float, p_levels: np.ndarray) -> np.
     return temp_final
 
 
+def convection_neutral_profile(temp_start: float, p_start: float, sphum_start: float,
+                               p_levels: np.ndarray) -> np.ndarray:
+    """
+    This returns the temperature of an air parcel at the given pressure levels, assuming it follows the
+    `dry_profile` up until the `lcl_temp` has been reached, followed by the `moist_profile`.
+
+    Args:
+        temp_start: Starting temperature of parcel. Units: *Kelvin*.
+        p_start: Starting pressure of parcel. Units: *Pa*.
+        sphum_start: Specific humidity, $q_{start}$, in *kg/kg* at $p_{start}$.
+        p_levels: `float [n_p_levels]`.</br>
+            Pressure levels to find the temperature of the parcel at. Units: *Pa*.
+
+    Returns:
+        `float [n_p_levels]`.</br>
+        Temperature at each pressure level indicated by `p_levels`.
+
+    """
+    temp_lcl = lcl_temp(temp_start, p_start, sphum_start)
+    p_lcl = p_start * (temp_lcl/temp_start)**(1/kappa)      # Pressure corresponding to LCL from dry adiabat equation
+    temp_dry = dry_profile(temp_start, p_start, p_levels)       # Compute dry profile for all pressure values
+    temp_moist = moist_profile(temp_lcl, p_lcl, p_levels[p_levels < p_lcl])
+    temp_dry[p_levels < p_lcl] = temp_moist     # Replace dry temperature with moist for pressure below p_lcl
+    return temp_dry
+
+
 def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.ndarray, float]) -> np.ndarray:
     """
-    Returns the moist static energy.
+    Returns the moist static energy in units of *kJ/kg*.
 
     Args:
         temp: `float [n_lat, n_p_levels]`. Temperature at each coordinate considered. Units: *Kelvin*.
@@ -243,4 +324,4 @@ def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.nd
     Returns:
         Moist static energy at each coordinate given
     """
-    return L_v * sphum + c_p * temp + g * height
+    return (L_v * sphum + c_p * temp + g * height) / 1000
