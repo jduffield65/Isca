@@ -1,11 +1,11 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 1m rather 2.5m
+! This experiment is the same as frierson_test_case but with a mixed layer depth of 10m rather 2.5m
 ! in the mixed_layer_nml namelist.
-! It is also run for 10 years and has seasons as specified in the gray radiation namelist.
+! It is also run for 10 years.
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'convective_coupling/land/all_lat_strip/evap/seasonal'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/convective_coupling/land/all_lat_strip/evap/seasonal'
+   name = 'convective_coupling/aquaplanet/d10'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/convective_coupling/aquaplanet/d10'
    n_months_total = 96           ! Total duration of simulation in months.
    n_months_job = 24             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -40,8 +40,6 @@
     roughness_mom = 3.21e-05
     two_stream_gray = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
-    land_option = 'input'                           ! LAND OPTION
-    land_file_name = 'INPUT/land.nc'                ! LAND OPTION
 /
 
 &vert_turb_driver_nml
@@ -61,7 +59,6 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    land_evap_prefactor = 0.5                       ! LAND OPTION
 /
 
 &atmosphere_nml
@@ -70,7 +67,7 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 10.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
@@ -107,8 +104,7 @@
 
 &two_stream_gray_rad_nml
     rad_scheme = 'frierson'
-    do_seasonal = .true.            ! SEASONS
-    equinox_day =  0.75             ! SEASONS
+    do_seasonal = .false.
     atm_abs = 0.2                   ! default is 0.0
 /
 
