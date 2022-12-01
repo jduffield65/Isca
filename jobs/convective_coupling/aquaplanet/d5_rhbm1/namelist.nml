@@ -1,12 +1,12 @@
 ! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
-! in the mixed_layer_nml namelist and with critical relative humidity, rhbm = 1.
+! in the mixed_layer_nml namelist. Also has critical relative humidity of 1 not 0.7.
 ! It is also run for 10 years.
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
    name = 'convective_coupling/aquaplanet/d5_rhbm1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    input_dir = '/gpfs1/home/jamd1/Isca/jobs/convective_coupling/aquaplanet/d5_rhbm1'
-   n_months_total = 120           ! Total duration of simulation in months.
+   n_months_total = 72           ! Total duration of simulation in months.
    n_months_job = 24             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
@@ -76,7 +76,7 @@
 &qe_moist_convection_nml
     tmax = 350.0
     tmin = 160.0
-    rhbm = 1                            ! different from default frierson which is 0.7
+    rhbm = 1.0
 /
 
 ! Not sure why we need this namelist as we are doing simple betts miller which uses qe_moist_convection_nml
