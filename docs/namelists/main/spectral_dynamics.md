@@ -84,6 +84,11 @@ Meridional component of the horizontal winds.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $ms^{-1}$*
 
+### `omega`
+Vertical velocity.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $Pas^{-1}$*
+
 ### `vor`
 Vorticity.</br>
 *Dimensions: time, lat, lon, pressure*</br>

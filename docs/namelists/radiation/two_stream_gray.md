@@ -49,6 +49,14 @@ Changing the [$CO_2$](#do_read_co2) concentration does not affect this scheme.
 </br>
 </br>
 
+### **Longwave Radiation**
+#### `odp`
+*float*</br>
+Frierson longwave optical depth scaling parameter, $\kappa$.</br>
+I.e. larger `opd` is used as a proxy for more $CO_2$ in the `FRIERSON` radiation scheme.</br>
+Only ever required if [`rad_scheme = FRIERSON`](#rad_scheme).</br>
+**Default:** `1.0`
+
 ### **Incoming Solar Radiation**
 There is a specific section on 
 [Isca's website](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#incoming-solar-radiation)
