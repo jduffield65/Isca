@@ -7,7 +7,7 @@ sbatch <<EOT
 #SBATCH --time=$9 # maximum walltime for the job
 #SBATCH --nodes=$5 # specify number of nodes
 #SBATCH --ntasks-per-node=$6 # specify number of processors per node
-#SBATCH --mail-type=END # send email at job completion
+#SBATCH --mail-type=FAIL # send email if job fails
 #SBATCH --mail-user=$USER@st-andrews.ac.uk # email address
 #SBATCH --partition=$4 # queue to run on
 

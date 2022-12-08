@@ -35,7 +35,7 @@ modify a [*.sh* script](shell_scripting.md) with [some headers](#sbatch) indicat
       - **debug** </br> Small and short jobs, usually meant for tests or debugging. 
       This partition is limited to one node and a maximum of two hours run-time. </br>
       *I would use this one for starting off with and running short scripts*.
-- `#SBATCH --mail-type=` - indicates when you would like to receive email notifications, `ALL` or `END`.  
+- `#SBATCH --mail-type=` - indicates when you would like to receive email notifications, `NONE`, `FAIL`, `ALL` or `END`.  
 - `#SBATCH --mail-user=` - email address e.g. `jamd1@st-andrews.ac.uk`  
 
 ## Submitting a job
