@@ -4,6 +4,7 @@ from .constants import lapse_dry, L_v, R, R_v, epsilon, c_p, temp_kelvin_to_cels
 from scipy.integrate import odeint
 from scipy import optimize
 import numpy_indexed
+import warnings
 
 
 def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
@@ -92,6 +93,9 @@ def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np
     # Alternative equation from MATLAB exercise M9.2 in Holdon 2004
     # return 611 * np.exp(L_v/R_v * (1/temp_kelvin_to_celsius - 1/temp))
     temp = temp - temp_kelvin_to_celsius       # Convert temperature in kelvin to celsius, as celsius used for this formula.
+    # if np.abs(np.asarray(temp)).max() > 35:
+    #     warnings.warn('This formula is only valid for $-35^\circ C < T < 35^\circ C$\n'
+    #                   'At least one temperature given is outside this range.')
     # Multiply by 100 below to convert from hPa to Pa.
     return 611.2 * np.exp(17.67 * temp / (temp + 243.5))
 
