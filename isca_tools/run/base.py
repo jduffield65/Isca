@@ -2,9 +2,31 @@ import os
 import sys
 from isca import Experiment, IscaCodeBase, GFDL_BASE, SocratesCodeBase
 from isca.diagtable import DiagTable
-from ..utils.load import get_file_suffix
 import f90nml
 import numpy as np
+import datetime
+from typing import List
+
+
+def get_file_suffix(dir: str, suffix: str) -> List[str]:
+    """
+    Returns a list of all files in `dir` which end in `suffix`.
+
+    This is the same function that is in `utils.load` but cannot do a relative import due to slurm job submission
+    stuff.
+
+    Args:
+        dir: Directory of interest.
+        suffix: Usually the file type of interest e.g. `.nml` or `.txt`.
+
+    Returns:
+        List of all files with the correct `suffix`.
+    """
+    file_name = []
+    for file in os.listdir(dir):
+        if file.endswith(suffix):
+            file_name += [file]
+    return file_name
 
 
 def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False):
@@ -52,6 +74,9 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     month_jobs = np.array_split(np.arange(1, exp_details['n_months_total'] + 1), n_jobs)
 
     slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm.sh')
+    # Run this base.py script aas main if using slurm
+    # Because doing this, cannot have any relative imports in this file
+    run_job_script = os.path.realpath(__file__)     # run this script as main if using slurm
     # Iterate over all jobs
     for month_job in month_jobs:
         if slurm:
@@ -59,7 +84,7 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             # We now call it again but with input arguments so that it runs the job on slurm.
             os.system(f"bash {slurm_script} {exp_details['name']} {month_job[0]} {len(month_job)} "
                       f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {sys.argv[0]}")
+                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script}")
         else:
             run_job(namelist_file, diag_table_file, month_job[0], len(month_job))
 
@@ -141,9 +166,34 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
                                         'res%04d.tar.gz' % (i - 1))
             if os.path.exists(restart_file):
                 os.remove(restart_file)
-            if i == month_start+1 and use_restart:
+            if i == month_start + 1 and use_restart:
                 # If not the first job, delete the last restart file of the last job
                 restart_file = os.path.join(os.environ['GFDL_DATA'], exp_details['name'], 'restarts',
                                             'res%04d.tar.gz' % (i - 2))
                 if os.path.exists(restart_file):
                     os.remove(restart_file)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 5:
+        # This is when calling the script from the isca_tools/run/run_slurm.sh shell script
+        # Cannot include in isca_tools package due to relative import issues.
+        start_time = datetime.datetime.utcnow()
+        run_job(sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+        end_time = datetime.datetime.utcnow()
+        # Print out how long it takes, so saves when running with slurm, to output txt file
+        print(f"Simulation Start Month: {int(sys.argv[3])}")
+        print(f"Simulation Length/Months: {int(sys.argv[4])}")
+        print(f"Start Time: {start_time.strftime('%B %d %Y - %H:%M:%S')}")
+        print(f"End Time: {end_time.strftime('%B %d %Y - %H:%M:%S')}")
+        print(f"Duration/Seconds: {int(np.round((end_time - start_time).total_seconds()))}")
+
+    elif sys.argv[1] in ["--help", "-h"]:
+        print('To run_experiment, provide no arguments, just specify namelist and diag_table files in script.\n'
+              'To run_job, need to provide 4 arguments:\n'
+              'namelist_file - File that indicates physical parameters used in simulation.\n'
+              'diag_table_file - File that specifies the outputs of the experiment.\n'
+              'month_start - Index of month at which this job starts the simulation (starting with 1).\n'
+              'month_duration - How many months to run simulation for in this job.')
+    else:
+        raise ValueError(f"{len(sys.argv) - 1} parameters provided but 4 expected.")
