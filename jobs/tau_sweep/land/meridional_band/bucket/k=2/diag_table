@@ -25,3 +25,6 @@
 "mixed_layer", "flux_lhe", "flux_lhe", "atmos_daily", "all", .true., "none", 2,
 "mixed_layer", "t_surf", "t_surf", "atmos_daily", "all", .true., "none", 2,
 "atmosphere", "precipitation", "precipitation", "atmos_daily", "all", .true., "none", 2,
+"atmosphere", "bucket_depth", "bucket_depth", "atmos_daily", "all", .true., "none", 2,
+"atmosphere", "cape", "cape", "atmos_daily", "all", .true., "none", 2,
+"atmosphere", "cin", "cin", "atmos_daily", "all", .true., "none", 2,

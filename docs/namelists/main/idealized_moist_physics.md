@@ -249,12 +249,12 @@ Temperature tendency from convection.</br>
 #### `cape`
 Convective Available Potential Energy.</br>
 *Dimensions: time, lat, lon*</br>
-*Units: $JK^{-1}$*
+*Units: $Jkg^{-1}$*
 
 #### `cin`
 Convective Inhibition.</br>
 *Dimensions: time, lat, lon*</br>
-*Units: $JK^{-1}$*
+*Units: $Jkg^{-1}$*
 
 ### **Near Surface Variables**
 #### `temp_2m`
