@@ -35,4 +35,13 @@ The evaporative flux formula is given on [Isca's website](https://execlim.github
 ??? note "Stability"
     This formulation avoids sign changes in the evaporative flux and remains stable over very 
     shallow mixed layer depths.
+
+???+ note "Using with [bucket model](../main/idealized_moist_physics.md#bucket)"
+    With my 
+    [adjustment](https://github.com/jduffield65/Isca/blob/644d8f49114908d44b004597b23bc87d427eba37/modified_source_code/surface_flux.F90#L606) 
+    to the `surface_flux.F90` source code, you can use this prefactor when using the 
+    [bucket model](../main/idealized_moist_physics.md#bucket).
+
+    It acts like the vegetation prefactor, $C_V$ in 
+    [*pietschnig_2021*](https://journals.ametsoc.org/view/journals/clim/34/23/JCLI-D-21-0195.1.xml).
 **Default:** `1.0`
