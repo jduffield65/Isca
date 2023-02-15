@@ -38,7 +38,7 @@ The evaporative flux formula is given on [Isca's website](https://execlim.github
 
 ???+ note "Using with [bucket model](../main/idealized_moist_physics.md#bucket)"
     With my 
-    [adjustment](https://github.com/jduffield65/Isca/blob/644d8f49114908d44b004597b23bc87d427eba37/modified_source_code/surface_flux.F90#L606) 
+    [adjustment](https://github.com/jduffield65/Isca/blob/feb64ca8ace641746c4734d58739bc170e3c8711/modified_source_code/surface_flux.F90#L602) 
     to the `surface_flux.F90` source code, you can use this prefactor when using the 
     [bucket model](../main/idealized_moist_physics.md#bucket).
 
