@@ -4,13 +4,13 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'play/bucket/evap=0_01'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/bucket/evap=0_01'
-   n_months_total = 3           ! Total duration of simulation in months.
-   n_months_job = 3             ! Approximate duration of each job of the simulation in months.
+   name = 'tau_sweep/land/meridional_band/bucket_evap/evap=0_1/k=1_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/bucket_evap/evap=0_1/k=1_5'
+   n_months_total = 84           ! Total duration of simulation in months.
+   n_months_job = 21             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info).
+   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
@@ -64,7 +64,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    land_evap_prefactor = 0.01                       ! LAND OPTION
+    land_evap_prefactor = 0.1                       ! LAND OPTION
 /
 
 &atmosphere_nml
@@ -113,7 +113,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 1                         ! FRIERSON kappa optical depth parameter
+    odp = 1.5                         ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
