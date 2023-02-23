@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'tau_sweep/land/meridional_band/bucket_evap/k=1/evap=0_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/bucket_evap/k=1/evap=0_5'
+   name = 'tau_sweep/land/meridional_band/bucket_evap/evap=0_1/k=1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/bucket_evap/evap=0_1/k=1'
    n_months_total = 84           ! Total duration of simulation in months.
    n_months_job = 21             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -64,7 +64,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    land_evap_prefactor = 0.5                       ! LAND OPTION
+    land_evap_prefactor = 0.1                       ! LAND OPTION
 /
 
 &atmosphere_nml
