@@ -142,9 +142,10 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     """
     Relative humidity, $rh$, is computed from specific humidity, $q$ according to:
 
-    $rh = w / w_s$
+    $rh = e / e_s$
 
-    Where, $w= q/(1-q)$, is the mixing ratio and $w_s$ is the saturation mixing ratio.
+    Where, $e = pw/(\epsilon + w)$, is the partial pressure, $e_s$ is the saturation partial pressure and
+     $w$ is the mixing ratio.
 
     Args:
         sphum: `float [n_levels]`. Specific humidity, $q$, at each level considered, in units of $kg/kg$.
@@ -156,7 +157,8 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     """
     sat_mix_ratio = mixing_ratio_from_partial_pressure(saturation_vapor_pressure(temp), total_pressure)
     mix_ratio = mixing_ratio_from_sphum(sphum)
-    return 100 * mix_ratio / sat_mix_ratio
+    # return 100 * mix_ratio / sat_mix_ratio
+    return 100 * mix_ratio/(epsilon+mix_ratio) * (epsilon+sat_mix_ratio)/sat_mix_ratio
 
 
 def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray],
