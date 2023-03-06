@@ -34,3 +34,6 @@ kappa = R/c_p
 
 # Add this to temperature in Celsius to give temperature in Kelvin
 temp_kelvin_to_celsius = 273.15
+
+# Radius of the earth in meters
+radius_earth = 6.3781e6
