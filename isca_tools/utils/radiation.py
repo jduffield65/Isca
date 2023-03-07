@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+from netCDF4 import Dataset
 
 
 def frierson_sw_optical_depth(surface_pressure: xr.DataArray, tau_equator: float = 0, tau_lat_var: float = 0,
@@ -72,3 +73,42 @@ def frierson_net_toa_sw_dwn(insolation: xr.DataArray, surface_pressure: xr.DataA
     """
     tau = frierson_sw_optical_depth(surface_pressure, tau_equator, tau_lat_var, pressure_exponent, ref_pressure)
     return insolation*(1-albedo*np.exp(-tau))
+
+
+def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray:
+    """
+    Returns the atmospheric radiative heating rate from the surface and top of atmosphere energy fluxes. A negative
+    value indicates that the atmosphere is cooling.
+
+    This takes into account any radiation that is absorbed by the atmosphere on its way down from space to the surface,
+    as specified through `tau_equator` and the amount reflected at the surface through the `albedo`.
+
+    In *Isca*, there is no absorption of the shortwave radiation as it moves back up through the atmosphere to space
+    after being reflected at the surface.
+
+    Args:
+        ds: Dataset for particular experiment, must contain:
+
+            * `swdn_toa` - Incident shortwave radiation at the top of atmosphere.
+                This is saved by *Isca* if the variable `swdn_toa` in the `two_stream` module is specified in the
+                diagnostic table.
+            * `swdn_sfc` - Net shortwave radiation absorbed at the surface i.e. incident - reflected.
+                This is saved by *Isca* if the variable `swdn_sfc` in the `two_stream` module is specified in the
+                diagnostic table.
+            * `lwup_sfc` - Upward longwave flux at the surface.
+                This is saved by *Isca* if the variable `lwdn_sfc` in the `two_stream` module is specified in the
+                diagnostic table.
+            * `lwdn_sfc` - Downward longwave flux at the surface.
+                This is saved by *Isca* if the variable `lwdn_sfc` in the `two_stream` module is specified in the
+                diagnostic table.
+            * `olr` - Outgoing longwave radiation at the top of atmosphere.
+                This is saved by *Isca* if the variable `lwdn_sfc` in the `two_stream` module is specified in the
+                diagnostic table.
+        albedo: Fraction of incident shortwave radiation reflected by the surface.
+            It is specified through the option `albedo_value` in the `mixed_layer_nml` namelist.
+
+    Returns:
+        Atmospheric radiative heating rate in $W/m^2$.
+
+    """
+    return ds.swdn_toa - ds.swdn_sfc / (1 - albedo) + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
