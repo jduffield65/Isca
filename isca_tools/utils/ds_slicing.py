@@ -48,6 +48,29 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
     return ds.where(ds_days.isin(include_days), drop=True)
 
 
+def annual_mean(ds: Dataset, month_days: int = 30, year_months: int = 12, first_day: int = 1) -> Dataset:
+    """
+    Returns dataset `ds` with variables being the average over all years i.e. time dimension of `ds` will now be from
+    0.5 to 359.5 if a year has 360 days.
+
+    Args:
+        ds: Dataset for particular experiment.
+        month_days: Number of days in each month used for the simulation.
+            This depends on the `calendar` option in the `main_nml` namelist.
+        year_months: Number of months in a year. I think this is always likely to be `12`.
+        first_day: Day used in starting date for the simulation.
+            It is equal to the third number in the `current_date` option in the `main_nml` namelist.
+            `1` refers to January 1st.
+
+    Returns:
+        Dataset containing the annual average of each variable
+
+    """
+    year_days = year_months * month_days    # number of days in a year
+    ds_days = (first_day - 1 + ds.time) % year_days  # day in a given year that each value in ds.time refers to
+    return ds.groupby(ds_days).mean(dim='time')
+
+
 def lat_lon_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Dataset:
     """
     Returns dataset, `ds`, keeping only data at the coordinate indicated by `(lat[i], lon[i])` for all `i`.
