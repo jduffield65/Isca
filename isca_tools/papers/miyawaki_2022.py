@@ -8,7 +8,8 @@ from scipy.interpolate import UnivariateSpline
 
 
 def get_dmse_dt(temp: xr.DataArray, sphum: xr.DataArray, height: xr.DataArray, p_levels: xr.DataArray,
-                time: xr.DataArray, spline_smoothing_factor: float = 0) -> Tuple[xr.DataArray, xr.DataArray]:
+                time: xr.DataArray, zonal_mean: bool = True,
+                spline_smoothing_factor: float = 0) -> Tuple[xr.DataArray, xr.DataArray]:
     """
     For a given latitude, this computes the time derivative of the mass weighted vertical integral of the zonal mean
     moist static energy, $<[\\partial_t m]>$, used in the paper to compute the parameter $R_1$.
@@ -25,22 +26,29 @@ def get_dmse_dt(temp: xr.DataArray, sphum: xr.DataArray, height: xr.DataArray, p
             Units: *Pa*.
         time: `float [n_time]`.</br>
             Time at which data recorded. Units: *second*.
+        zonal_mean: `bool`.</br>
+            Whether to take zonal average or not. If `False`, returned arrays will have size `[n_time x n_lon]`
         spline_smoothing_factor: `float`.</br>
             If positive, a spline will be fit to smooth `mse_integ` and compute `dmse_dt`. *Typical: 0.001*.</br>
             If 0, the deriviative will be computed using `np.gradient`, but in general I recommend using the spline.
 
     Returns:
-        `mse_integ`: `float [n_time]`</br>
-            The mass weighted vertical integral of the zonal mean moist static energy at each time i.e. $<[m]>$.
+        `mse_integ`: `float [n_time]` or `float [n_time x n_lon]`</br>
+            The mass weighted vertical integral of the (zonal mean) moist static energy at each time i.e. $<[m]>$.
             Units: $J/m^2$.
-        `dmse_dt`: `float [n_time]`</br>
-            The time derivative of the mass weighted vertical integral of the zonal mean moist static energy at
+        `dmse_dt`: `float [n_time]` or `float [n_time x n_lon]`</br>
+            The time derivative of the mass weighted vertical integral of the (zonal mean) moist static energy at
             each time i.e. $<[\\partial_t m]>$. Units: $W/m^2$.
     """
     # compute zonal mean mse in units of J/kg
-    mse = moist_static_energy(temp, sphum, height).mean(dim='lon') * 1000
-    mse_integ = integrate.simpson(mse / g, p_levels)    # do mass weighted integral over atmosphere
+    mse = moist_static_energy(temp, sphum, height) * 1000
+    if 'lon' in list(temp.coords.keys()) and zonal_mean:
+        # Take zonal mean if longitude is a coordinate
+        mse = mse.mean(dim='lon')
+    mse_integ = integrate.simpson(mse / g, p_levels, axis=1)    # do mass weighted integral over atmosphere
     if spline_smoothing_factor > 0:
+        if not zonal_mean:
+            raise ValueError('Can only use spline if taking the zonal mean')
         # Divide by mean to fit spline as otherwise numbers too large to fit properly
         spl = UnivariateSpline(time, mse_integ / np.mean(mse_integ), s=spline_smoothing_factor)
         dmse_dt = spl.derivative()(time) * np.mean(mse_integ)      # compute derivative direct from spline fit

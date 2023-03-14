@@ -63,6 +63,7 @@ Typically set to `False`. </br>
 *bool*</br>
 If `True`, it will recompile the codebase before running the experiment.</br>
 Typically set to `False`. </br>
+Set this to `True` if you have made any changes to the underlying source code of Isca.</br>
 **Default:** N/A
 
 ### `max_walltime`
