@@ -202,10 +202,10 @@ Only ever required if [`bucket = .true.`](#bucket).</br>
 
 ## Diagnostics
 The diagnostics for 
-[this module](https://execlim.github.io/Isca/modules/idealised_moist_phys.html#diagnostics) 
+[this module](https://github.com/ExeClim/Isca/blob/master/src/atmos_spectral/driver/solo/idealized_moist_phys.F90) 
 can be specified using the `module_name` of `atmosphere` in the 
 diagnostic table file. The list of available diagnostics is available on 
-[Isca's website](https://execlim.github.io/Isca/modules/mixedlayer.html#diagnostics). 
+[Isca's website](https://execlim.github.io/Isca/modules/idealised_moist_phys.html#diagnostics). 
 Some are also given below:
 
 ### `precipitation`
