@@ -113,7 +113,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 1.5                         ! FRIERSON kappa optical depth parameter
+    odp = 6                         ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
