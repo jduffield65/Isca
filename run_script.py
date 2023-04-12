@@ -3,8 +3,8 @@ import os
 
 # When calling the script with no arguments, it just runs the experiment.
 jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved here - CHANGE FOR EACH EXPERIMENT
-# exp_dir = os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/evap/k=2')  # specific experiment - CHANGE FOR EACH EXPERIMENT
-exp_dir = os.path.join(jobs_dir, 'play/daily_test')
+# exp_dir = os.path.join(jobs_dir, 'tau_sweep/aquaplanet/k=6')  # specific experiment - CHANGE FOR EACH EXPERIMENT
+exp_dir = os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/width=30deg/bucket_evap/evap=0_1/k=1_5')
 
 namelist_file = os.path.join(exp_dir, 'namelist.nml')
 diag_table_file = os.path.join(exp_dir, 'diag_table')
@@ -21,10 +21,9 @@ run_experiment(namelist_file, diag_table_file, slurm=True)
 # # For creating land .nc file
 # from isca_tools.land.base import write_land
 # from isca_tools.plot import show_land
-# #write_land('land.nc', os.path.join(exp_dir, 'namelist.nml'), 'square', [-10, 10, 180-40, 180+40])
-# write_land('land.nc', os.path.join(exp_dir, 'namelist.nml'), 'square', [-90, 90, 180 - 30, 180 + 30])
+# # write_land('land.nc', namelist_file, 'square', [-90, 90, 180 - 30, 180 + 30])
+# write_land('land.nc', namelist_file, 'square', [-90, 90, 180 - 15, 180 + 15])
 # show_land(os.path.join(exp_dir, 'land.nc'))
 
 # from isca_tools.utils.land import get_ocean_coords
 # get_ocean_coords(namelist_file)
-
