@@ -43,8 +43,9 @@
     land_option = 'input'                           ! LAND OPTION
     land_file_name = 'INPUT/land.nc'                ! LAND OPTION
     bucket = .true.                                 ! LAND BUCKET OPTION
-    init_bucket_depth_land = 3.3                   ! LAND BUCKET OPTION - HUGE
-    max_bucket_depth_land = 5                    ! LAND BUCKET OPTION - HUGE
+    init_bucket_depth_land = 0.10                   ! LAND BUCKET OPTION
+    max_bucket_depth_land = 0.15                    ! LAND BUCKET OPTION - as in Manabe (1969) and Byrne & O'G (2013)
+    init_bucket_depth = 10000                       ! OCEAN BUCKET OPTION - SET TO 10X NORMAL
 /
 
 &vert_turb_driver_nml
