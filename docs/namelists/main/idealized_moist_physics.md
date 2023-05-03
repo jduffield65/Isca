@@ -208,6 +208,11 @@ diagnostic table file. The list of available diagnostics is available on
 [Isca's website](https://execlim.github.io/Isca/modules/idealised_moist_phys.html#diagnostics). 
 Some are also given below:
 
+### `rh`
+Relative humidity.</br>
+*Dimensions: time, lat, lon, pressure*</br>
+*Units: $\%$*
+
 ### `precipitation`
 Rain and Snow from resolved and parameterised condensation/convection.</br>
 *Dimensions: time, lat, lon*</br>

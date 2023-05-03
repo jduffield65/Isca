@@ -64,11 +64,6 @@ Specific humidity.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $kg/kg$*
 
-### `rh`
-Relative humidity.</br>
-*Dimensions: time, lat, lon, pressure*</br>
-*Units: $\%$*
-
 ### `temp`
 Temperature.</br>
 *Dimensions: time, lat, lon, pressure*</br>
