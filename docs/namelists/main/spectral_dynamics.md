@@ -67,7 +67,7 @@ Specific humidity.</br>
 ### `rh`
 Relative humidity.</br>
 *Dimensions: time, lat, lon, pressure*</br>
-*Units: $%$*
+*Units: $\%$*
 
 ### `temp`
 Temperature.</br>

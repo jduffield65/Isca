@@ -270,7 +270,7 @@ Specific humidity $2m$ above surface.</br>
 #### `rh_2m`
 Relative humidity $2m$ above surface.</br>
 *Dimensions: time, lat, lon*</br>
-*Units: $%$*
+*Units: $\%$*
 
 #### `u_10m`
 Zonal wind $10m$ above surface.</br>
