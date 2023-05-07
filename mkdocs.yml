@@ -113,6 +113,7 @@ nav:
             - Base: code/land/base.md
             - Mountains: code/land/mountains.md
         - Papers:
+            - Byrne 2021: code/papers/byrne_2021.md
             - Miyawaki 2022: code/papers/miyawaki_2022.md
         - Plot:
             - Land: code/plot/land.md

@@ -328,6 +328,45 @@ def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.nd
         Just a `float` if only one pressure level considered for each latitude e.g. common to use 2m values. Units: *m*.
 
     Returns:
-        Moist static energy at each coordinate given
+        Moist static energy at each coordinate given.
     """
     return (L_v * sphum + c_p * temp + g * height) / 1000
+
+
+def sphum_sat(temp: np.ndarray, pressure: Union[float, np.ndarray]) -> np.ndarray:
+    """
+    Returns the saturation specific humidity, $q^*$, in *kg/kg*.
+
+    Args:
+        temp: Temperature at each coordinate considered. Units: *Kelvin*.
+        pressure: Pressure level in *Pa*, temperature corresponds to.
+            If all `temp` are at the lowest atmospheric level, then pressure` will be the lowest level pressure i.e.
+            a `float`.
+
+    Returns:
+        Saturation specific humidity at each coordinate given.
+    """
+    # Saturation specific humidity
+    w_sat = mixing_ratio_from_partial_pressure(saturation_vapor_pressure(temp), pressure)
+    q_sat = w_sat / (1+w_sat)
+    return q_sat
+
+
+def clausius_clapeyron_factor(temp: np.ndarray, pressure: Union[float, np.ndarray]) -> np.ndarray:
+    """
+    This is the factor $\\alpha$, such that $dq^*/dT = \\alpha q^*$.
+
+    I explicitly compute alpha from the formula for `saturation_vapor_pressure` in the function here.
+
+    Args:
+        temp: Temperature at each coordinate considered. Units: *Kelvin*.
+        pressure: Pressure level in *Pa*, temperature corresponds to.
+            If all `temp` are at the lowest atmospheric level, then pressure` will be the lowest level pressure i.e.
+            a `float`.
+
+
+    Returns:
+        Clausius clapeyron factor, $\\alpha$. Units: *Kelvin$^{-1}$*
+    """
+    lambda_const = 4302.645 / (temp - 29.65)**2
+    return lambda_const * pressure / epsilon * sphum_sat(temp, pressure) / saturation_vapor_pressure(temp)
