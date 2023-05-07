@@ -45,6 +45,7 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
         px: `int [n_exp, n_quant]`</br>
             `p_x[i, j]` is the percentile of MSE corresponding to the MSE averaged over all days exceeding
             the percentile quant_use[i] of temperature in experiment `i`.
+            Note that `px` for the warmest simulation is not used.
         pressure_surface: Near surface pressure level. Units: *Pa*.
         const_rh: If `True`, will return the constant relative humidity version of the theory, i.e.
             $\gamma^{T_O} \delta T_O$. Otherwise, will return the full theory.
@@ -66,13 +67,20 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
     # Ocean constants required - these are for the percentile px which corresponds to the average above the x percentile in temperature
     p_x_ind = np.asarray([numpy_indexed.indices(quant_use, px[i]) for i in range(n_exp)])
     temp_quant_o = np.asarray([temp_quant_ocean_p[i, p_x_ind[i]] for i in range(n_exp)])
-    delta_temp_o = np.diff(temp_quant_o, axis=0)
     sphum_quant_o = np.asarray([sphum_quant_ocean_p[i, p_x_ind[i]] for i in range(n_exp)])
     sphum_quant_sat_o = sphum_sat(temp_quant_o, pressure_surface)
     r_quant_o = sphum_quant_o / sphum_quant_sat_o
-    delta_r_quant_o = np.diff(r_quant_o, axis=0)
-    alpha_o = clausius_clapeyron_factor(temp_quant_o, pressure_surface)
+    # For change in temperature, use quantile p_x from colder simulation for each set of subsequent simulations
+    # Idea is to only use information from colder simulation to predict warmer one
+    delta_temp_o = np.zeros_like(delta_r_quant_l)
+    delta_r_quant_o = np.zeros_like(delta_r_quant_l)
+    for i in range(n_exp-1):
+        delta_temp_o[i] = temp_quant_ocean_p[i+1, p_x_ind[i]] - temp_quant_ocean_p[i, p_x_ind[i]]
+        delta_r_quant_o[i] = \
+            sphum_quant_ocean_p[i+1, p_x_ind[i]]/sphum_sat(temp_quant_ocean_p[i+1, p_x_ind[i]], pressure_surface) - \
+            sphum_quant_ocean_p[i, p_x_ind[i]]/sphum_sat(temp_quant_ocean_p[i, p_x_ind[i]], pressure_surface)
 
+    alpha_o = clausius_clapeyron_factor(temp_quant_o, pressure_surface)
     e_const = L_v * alpha_l * sphum_quant_sat_l / (c_p + L_v * alpha_l * sphum_quant_land_x)
     nabla = sphum_mean_sat_l / sphum_quant_sat_l * e_const / alpha_l
     gamma_t = (c_p + L_v * alpha_o * sphum_quant_o) / (c_p + L_v * alpha_l * sphum_quant_land_x)
@@ -81,8 +89,8 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
     if const_rh:
         delta_temp_quant_theory = gamma_t[:-1] * delta_temp_o
     else:
-        delta_temp_quant_theory = (gamma_t[:-1] * delta_temp_o + gamma_r_o[:-1] * delta_r_quant_o - nabla[:-1] * delta_r_mean_l
-                                   ) / (1 + e_const[:-1] * delta_r_quant_l)
+        delta_temp_quant_theory = (gamma_t[:-1] * delta_temp_o + gamma_r_o[:-1] * delta_r_quant_o -
+                                   nabla[:-1] * delta_r_mean_l) / (1 + e_const[:-1] * delta_r_quant_l)
     return delta_temp_quant_theory
 
 
@@ -92,6 +100,7 @@ def get_px(ds: List[xr.Dataset], mse_quant_x: np.ndarray, quant_use: np.ndarray,
     Args:
         ds: `[n_exp]`.
             ds[i] is the dataset for experiment `i` containing only variables at the lowest pressure level.
+            Also, the `lon`, `lat`, `time` coordinates must be collapsed into a single coordinate.
             It must include `temp`, `sphum` and `height`.
         mse_quant_x: `[n_exp, n_quant]`.</br>
             `mse_quant_x[i, j]` is the near MSE of experiment `i`, averaged over all days
@@ -107,7 +116,14 @@ def get_px(ds: List[xr.Dataset], mse_quant_x: np.ndarray, quant_use: np.ndarray,
     n_exp = len(ds)
     px = np.zeros((n_exp, len(quant_use)))
     for i in range(n_exp):
-        mse_all = moist_static_energy(ds[i].temp, ds[i].sphum, ds[i].height)
+        if 'pfull' in ds[i]:
+            # get rid of pressure coordinate if exists
+            ds_use = ds[i].sel(pfull=np.inf, method='nearest', drop=True)
+            mse_all = moist_static_energy(ds_use.temp, ds_use.sphum, ds_use.height)
+        elif len(ds[i].temp.shape) != 1:
+            raise ValueError(f'Dataset has coordinates:\n{ds[i].coords}\nbut should only have 1')
+        else:
+            mse_all = moist_static_energy(ds[i].temp, ds[i].sphum, ds[i].height)
         for j, quant in enumerate(quant_use):
             px[i, j] = percentileofscore(mse_all, mse_quant_x[i, j])
     if as_int:
