@@ -120,6 +120,8 @@ nav:
             - Spin Up: code/plot/spin_up.md
         - Run:
             - Base: code/run/base.md
+        - Thesis:
+            - Aquaplanet Theory: code/thesis/aquaplanet_theory.md
         - Time Series:
             - Base: code/time_series/base.md
             - Cmip Time: code/time_series/cmip_time.md
