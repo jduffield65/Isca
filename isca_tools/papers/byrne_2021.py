@@ -159,7 +159,13 @@ def get_quant_ind(var: xr.DataArray, percentile: int, range_below: float = 0,
     """
     quant_min = np.clip(percentile-range_below, 0, 100)
     quant_max = np.clip(percentile+range_above, 0, 100)
-    quantile_thresh_min = var.quantile(quant_min / 100, dim='lon_lat_time', keep_attrs=True)
-    quantile_thresh_max = var.quantile(quant_max / 100, dim='lon_lat_time', keep_attrs=True)
+    if 'lon_lat_time' in var.dims:
+        av_dim = 'lon_lat_time'
+    elif 'lon_time' in var.dims:
+        av_dim = 'lon_time'
+    else:
+        raise ValueError('No suitable dimension to average over')
+    quantile_thresh_min = var.quantile(quant_min / 100, dim=av_dim, keep_attrs=True)
+    quantile_thresh_max = var.quantile(quant_max / 100, dim=av_dim, keep_attrs=True)
     quant_ind = np.where(np.logical_and(var > quantile_thresh_min, var <= quantile_thresh_max))[0]
     return quant_ind
