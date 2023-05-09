@@ -3,7 +3,7 @@ import numpy_indexed
 import xarray as xr
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 from ..utils.constants import c_p, L_v
-from typing import List
+from typing import List, Tuple
 from scipy.stats import percentileofscore
 
 
@@ -45,7 +45,7 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
         px: `int [n_exp, n_quant]`</br>
             `p_x[i, j]` is the percentile of MSE corresponding to the MSE averaged over all days exceeding
             the percentile quant_use[i] of temperature in experiment `i`.
-            Note that `px` for the warmest simulation is not used.
+            Note that `px` for the warmest simulation is not used but makes sense to have same shape as other variables.
         pressure_surface: Near surface pressure level. Units: *Pa*.
         const_rh: If `True`, will return the constant relative humidity version of the theory, i.e.
             $\gamma^{T_O} \delta T_O$. Otherwise, will return the full theory.
@@ -56,7 +56,6 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
             `i+1` for percentile `quant_use[j]`.
     """
     n_exp = temp_mean_land.shape[0]
-    alpha_l = clausius_clapeyron_factor(temp_quant_land_x, pressure_surface)
     sphum_quant_sat_l = sphum_sat(temp_quant_land_x, pressure_surface)
     sphum_mean_sat_l = np.expand_dims(sphum_sat(temp_mean_land, pressure_surface), axis=-1)
     r_quant_l = sphum_quant_land_x / sphum_quant_sat_l
@@ -67,9 +66,6 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
     # Ocean constants required - these are for the percentile px which corresponds
     # to the average above the x percentile in temperature
     p_x_ind = np.asarray([numpy_indexed.indices(quant_use, px[i]) for i in range(n_exp)])
-    temp_quant_o = np.asarray([temp_quant_ocean_p[i, p_x_ind[i]] for i in range(n_exp)])
-    sphum_quant_o = np.asarray([sphum_quant_ocean_p[i, p_x_ind[i]] for i in range(n_exp)])
-    sphum_quant_sat_o = sphum_sat(temp_quant_o, pressure_surface)
 
     # For change in ocean variables, use quantile p_x from colder simulation for each set of subsequent simulations
     # Idea is to only use information from colder simulation to predict warmer one
@@ -81,18 +77,94 @@ def get_delta_temp_quant_theory(temp_mean_land: np.ndarray, sphum_mean_land: np.
             sphum_quant_ocean_p[i+1, p_x_ind[i]]/sphum_sat(temp_quant_ocean_p[i+1, p_x_ind[i]], pressure_surface) - \
             sphum_quant_ocean_p[i, p_x_ind[i]]/sphum_sat(temp_quant_ocean_p[i, p_x_ind[i]], pressure_surface)
 
-    alpha_o = clausius_clapeyron_factor(temp_quant_o, pressure_surface)
-    e_const = L_v * alpha_l * sphum_quant_sat_l / (c_p + L_v * alpha_l * sphum_quant_land_x)
-    nabla = sphum_mean_sat_l / sphum_quant_sat_l * e_const / alpha_l
-    gamma_t = (c_p + L_v * alpha_o * sphum_quant_o) / (c_p + L_v * alpha_l * sphum_quant_land_x)
-    gamma_r_o = L_v * sphum_quant_sat_o / (c_p + L_v * alpha_l * sphum_quant_land_x)
+    gamma_t, gamma_r_o, e_param, eta_param = get_gamma(temp_mean_land, temp_quant_land_x, temp_quant_ocean_p,
+                                                   sphum_quant_land_x, sphum_quant_ocean_p, quant_use, px,
+                                                   pressure_surface)
 
     if const_rh:
         delta_temp_quant_theory = gamma_t[:-1] * delta_temp_o
     else:
         delta_temp_quant_theory = (gamma_t[:-1] * delta_temp_o + gamma_r_o[:-1] * delta_r_quant_o -
-                                   nabla[:-1] * delta_r_mean_l) / (1 + e_const[:-1] * delta_r_quant_l)
+                                   eta_param[:-1] * delta_r_mean_l) / (1 + e_param[:-1] * delta_r_quant_l)
     return delta_temp_quant_theory
+
+
+def get_gamma(temp_mean_land: np.ndarray, temp_quant_land_x: np.ndarray, temp_quant_ocean_p: np.ndarray,
+              sphum_quant_land_x: np.ndarray, sphum_quant_ocean_p: np.ndarray, quant_use: np.ndarray, px: np.ndarray,
+              pressure_surface: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    This function returns the sensitivity parameters in the theory.
+    One for changes in ocean temperature, $\\delta T_O$, and one for ocean relative humidity,
+    $\delta r_O$:
+
+    $$\gamma^{T_O} = \\frac{c_p + L_v \\alpha_O q_O}{c_p + L_v \\alpha_L q_L^x};\quad
+    \gamma^{r_O} = \\frac{L_v q_{O, sat}}{c_p + L_v \\alpha_L q^x_L}$$
+
+    Two more parameters are also returned:
+
+    $$\\epsilon = \\frac{L_v \\alpha_L q^x_{L,sat}}{c_p + L_v \\alpha_L q^x_L};\quad
+    \\eta = \\frac{\\epsilon}{\\alpha_L}\\frac{\overline{q_{L,sat}}}{q^x_{L,sat}}$$
+
+    These can then be combined to give the sensitivity parameter to a 1% change in mean land relative humidity,
+    $\delta \overline{r_L}$:
+
+    $$\gamma^{r_L} = -\\frac{\eta}{100 + \\epsilon}$$
+
+    Args:
+        temp_mean_land: `float [n_exp]`</br>
+            Average near surface land temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*.
+        temp_quant_land_x: `float [n_exp, n_quant]`</br>
+            `temp_quant_land_x[i, j]` is the near surface land temperature of experiment `i`, averaged over all days
+            exceeding the percentile `quant_use[j]` of temperature
+            ($x$ means averaged over the temperature percentile $x$). Units: *K*.
+        temp_quant_ocean_p: `float [n_exp, n_quant]`</br>
+            `temp_quant_ocean_p[i, j]` is the percentile `quant_use[j]` of near surface ocean temperature of
+            experiment `i` ($p$ means at percentile $p$ of given quantity). Units: *K*.
+        sphum_quant_land_x: `float [n_exp, n_quant]`</br>
+            `sphum_quant_land_x[i, j]` is the near surface land specific humidity of experiment `i`, averaged over
+            all days exceeding the percentile `quant_use[j]` of temperature. Units: *kg/kg*.
+        sphum_quant_ocean_p: `float [n_exp, n_quant]`</br>
+            `sphum_quant_ocean_p[i, j]` is the percentile `quant_use[j]` of near surface ocean specific humidity of
+            experiment `i`. Units: *kg/kg*.
+        quant_use: `int [n_quant]`. This contains the percentiles, that the above variables correspond to. It must
+            contain all values of `p_x` in it.
+        px: `int [n_exp, n_quant]`</br>
+            `p_x[i, j]` is the percentile of MSE corresponding to the MSE averaged over all days exceeding
+            the percentile quant_use[i] of temperature in experiment `i`.
+            Note that `px` for the warmest simulation is not used but makes sense to have same shape as other variables.
+        pressure_surface: Near surface pressure level. Units: *Pa*.
+
+    Returns:
+        `gamma_t`: `float [n_exp, n_quant]`</br>
+            The sensitivity to change in ocean temperature for each experiment and quantile.
+        `gamma_r_o`: `float [n_exp, n_quant]`</br>
+            The sensitivity to change in ocean relative humidity difference from the mean for each experiment and
+            quantile.
+        `e_param`: `float [n_exp, n_quant]`</br>
+            The $\\epsilon = \\frac{L_v \\alpha_L q^x_{L,sat}}{c_p + L_v \\alpha_L q^x_L}$ parameter.
+        `eta_param`: `float [n_exp, n_quant]`</br>
+            The $\\eta = \\frac{\\epsilon}{\\alpha_L}\\frac{\overline{q_{L,sat}}}{q^x_{L,sat}}$ parameter.
+
+    """
+    n_exp = temp_mean_land.shape[0]
+    alpha_l = clausius_clapeyron_factor(temp_quant_land_x, pressure_surface)
+    sphum_quant_sat_l = sphum_sat(temp_quant_land_x, pressure_surface)
+    sphum_mean_sat_l = np.expand_dims(sphum_sat(temp_mean_land, pressure_surface), axis=-1)
+
+    # Ocean constants required - these are for the percentile px which corresponds
+    # to the average above the x percentile in temperature
+    p_x_ind = np.asarray([numpy_indexed.indices(quant_use, px[i]) for i in range(n_exp)])
+    temp_quant_o = np.asarray([temp_quant_ocean_p[i, p_x_ind[i]] for i in range(n_exp)])
+    sphum_quant_o = np.asarray([sphum_quant_ocean_p[i, p_x_ind[i]] for i in range(n_exp)])
+    sphum_quant_sat_o = sphum_sat(temp_quant_o, pressure_surface)
+
+    alpha_o = clausius_clapeyron_factor(temp_quant_o, pressure_surface)
+    e_param = L_v * alpha_l * sphum_quant_sat_l / (c_p + L_v * alpha_l * sphum_quant_land_x)
+    eta_param = sphum_mean_sat_l / sphum_quant_sat_l * e_param / alpha_l
+    gamma_t = (c_p + L_v * alpha_o * sphum_quant_o) / (c_p + L_v * alpha_l * sphum_quant_land_x)
+    gamma_r_o = L_v * sphum_quant_sat_o / (c_p + L_v * alpha_l * sphum_quant_land_x)
+    return gamma_t, gamma_r_o, e_param, eta_param
 
 
 def get_px(ds: List[xr.Dataset], mse_quant_x: np.ndarray, quant_use: np.ndarray, as_int: bool = False) -> np.ndarray:
@@ -119,7 +191,7 @@ def get_px(ds: List[xr.Dataset], mse_quant_x: np.ndarray, quant_use: np.ndarray,
     n_exp = len(ds)
     px = np.zeros((n_exp, len(quant_use)))
     for i in range(n_exp):
-        if 'pfull' in ds[i]:
+        if 'pfull' in ds[i].dims:
             # get rid of pressure coordinate if exists
             ds_use = ds[i].sel(pfull=np.inf, method='nearest', drop=True)
             mse_all = moist_static_energy(ds_use.temp, ds_use.sphum, ds_use.height)
