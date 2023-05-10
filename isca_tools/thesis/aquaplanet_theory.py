@@ -1,17 +1,22 @@
 import numpy as np
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat
 from ..utils.constants import c_p, L_v
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 def get_delta_temp_quant_theory(temp_mean: np.ndarray, sphum_mean: np.ndarray, temp_quant: np.ndarray,
-                                sphum_quant: np.ndarray, pressure_surface: float, const_rh: bool = False) -> np.ndarray:
+                                sphum_quant: np.ndarray, pressure_surface: float, const_rh: bool = False,
+                                delta_mse_ratio: Optional[np.ndarray] = None,
+                                taylor_level: str = 'linear_rh_diff') -> np.ndarray:
     """
     Computes the theoretical temperature difference between simulations of neighbouring optical depth values for each
     percentile, $\delta T(x)$, according to the assumption that changes in MSE are equal to the change in mean MSE,
     $\delta h(x) = \delta \overline{h}$:
 
     $$\delta T(x) = \gamma^T \delta \overline{T} + \gamma^{\Delta r} \delta (\overline{r} - r(x))$$
+
+    This above equation is for the default settings, but a more accurate equation can be used with the `delta_mse_ratio`
+    and `taylor_level` arguments.
 
     If data from `n_exp` optical depth values provided, `n_exp-1` theoretical temperature differences will be returned
     for each percentile.
@@ -34,26 +39,86 @@ def get_delta_temp_quant_theory(temp_mean: np.ndarray, sphum_mean: np.ndarray, t
         pressure_surface: Near surface pressure level. Units: *Pa*.
         const_rh: If `True`, will return the constant relative humidity version of the theory, i.e.
             $\gamma^T \delta \overline{T}$. Otherwise, will return the full theory.
+        delta_mse_ratio: `float [n_exp-1, n_quant]`</br>
+            `delta_mse_ratio[i]` is the change in $x$ percentile of MSE divided by the change in the mean MSE
+            between experiment `i` and `i+1`: $\delta h(x)/\delta \overline{h}$.
+            If not given, it is assumed to be equal to 1 for all $x$.
+        taylor_level: This specifies the level of approximation that goes into the taylor series for $\delta q(x)$
+            and $\delta \overline{q}$:
+
+            - `squared`: Includes squared, $\delta T^2$, nonlinear, $\delta T \delta r$, and linear terms.
+            - `nonlinear`: Includes nonlinear, $\delta T \delta r$, and linear terms.
+            - `linear`: Includes just linear terms so $\delta T(x) = \\gamma^T \delta \\overline{T} +
+                \\gamma^{\\bar{r}} \delta \\overline{r} +\\gamma^{r} \\delta r(x)$
+            - `linear_rh_diff`: Same as `linear`, but does another approximation to combine relative humidity
+                contributions so: $\delta T(x) = \gamma^T \delta \overline{T} +
+                \gamma^{\Delta r} \delta (\overline{r} - r(x))$
 
     Returns:
         `float [n_exp-1, n_quant]`.</br>
             `delta_temp_quant_theory[i, j]` refers to the theoretical temperature difference between experiment `i` and
             `i+1` for percentile `quant_use[j]`.
     """
+    n_exp, n_quant = temp_quant.shape
+    alpha_quant = clausius_clapeyron_factor(temp_quant, pressure_surface)
+    alpha_mean = clausius_clapeyron_factor(temp_mean, pressure_surface)
     sphum_quant_sat = sphum_sat(temp_quant, pressure_surface)
     sphum_mean_sat = sphum_sat(temp_mean, pressure_surface)
     r_quant = sphum_quant / sphum_quant_sat
     r_mean = sphum_mean / sphum_mean_sat
-    delta_temp_mean = np.expand_dims(np.diff(temp_mean), axis=-1)
-    delta_r_mean = np.expand_dims(np.diff(r_mean), axis=-1)
+    delta_temp_mean = np.diff(temp_mean)
+
+    delta_r_mean = np.diff(r_mean)
     delta_r_quant = np.diff(r_quant, axis=0)
-
-    gamma_t, gamma_rdiff = get_gamma(temp_mean, sphum_mean, temp_quant, sphum_quant, pressure_surface)
-
     if const_rh:
-        delta_temp_quant_theory = gamma_t[:-1] * delta_temp_mean
+        # get rid of relative humidity contribution if constant rh
+        delta_r_mean = 0 * delta_r_mean
+        delta_r_quant = 0 * delta_r_quant
+
+    # Pad all delta variables so same size as temp_quant - will not use this in calculation but just makes it easier
+    pad_array = ((0, 1), (0, 0))
+    if delta_mse_ratio is None:
+        delta_mse_ratio = np.ones_like(temp_quant)
     else:
-        delta_temp_quant_theory = gamma_t[:-1] * delta_temp_mean + gamma_rdiff[:-1] * (delta_r_mean - delta_r_quant)
+        # make delta_mse_ratio the same size as all other quant variables
+        delta_mse_ratio = np.pad(delta_mse_ratio, pad_width=pad_array)
+    delta_temp_mean = np.pad(delta_temp_mean, pad_width=pad_array[0])
+    delta_r_mean = np.pad(delta_r_mean, pad_width=pad_array[0])
+    delta_r_quant = np.pad(delta_r_quant, pad_width=pad_array)
+
+    if taylor_level == 'squared':
+        # Keep squared, linear and non-linear terms in taylor expansion of delta_sphum_quant
+        coef_a = 0.5 * L_v * alpha_quant * sphum_quant * (alpha_quant - 2 / temp_quant[0])
+        coef_b = c_p + L_v * alpha_quant * (sphum_quant + sphum_quant_sat * delta_r_quant)
+        coef_c = L_v * sphum_quant_sat * delta_r_quant - delta_mse_ratio * np.expand_dims(
+                0.5 * L_v * alpha_mean * sphum_mean * (alpha_mean - 2 / temp_mean) * delta_temp_mean ** 2 +
+                (c_p + L_v * alpha_mean * (sphum_mean + sphum_mean_sat * delta_r_mean)) * delta_temp_mean +
+                L_v * sphum_mean_sat * delta_r_mean, axis=-1)
+        delta_temp_quant_theory = np.asarray([[np.roots([coef_a[i, j], coef_b[i, j], coef_c[i, j]])[1]
+                                               for j in range(n_quant)] for i in range(n_exp - 1)])
+    elif taylor_level in ['nonlinear', 'non-linear']:
+        # Keep linear and non-linear terms in taylor expansion of delta_sphum_quant
+        coef_b = c_p + L_v * alpha_quant * (sphum_quant + sphum_quant_sat * delta_r_quant)
+        coef_c = L_v * sphum_quant_sat * delta_r_quant - delta_mse_ratio * np.expand_dims(
+                (c_p + L_v * alpha_mean * (sphum_mean + sphum_mean_sat * delta_r_mean)) * delta_temp_mean +
+                L_v * sphum_mean_sat * delta_r_mean, axis=-1)
+        delta_temp_quant_theory = -coef_c[:-1] / coef_b[:-1]
+    elif taylor_level == 'linear':
+        # Only keep linear terms in taylor expansion of delta_sphum_quant
+        coef_b = c_p + L_v * alpha_quant * sphum_quant
+        coef_c = L_v * sphum_quant_sat * delta_r_quant - delta_mse_ratio * np.expand_dims(
+                (c_p + L_v * alpha_mean * sphum_mean) * delta_temp_mean + L_v * sphum_mean_sat * delta_r_mean, axis=-1)
+        delta_temp_quant_theory = -coef_c[:-1] / coef_b[:-1]
+    elif taylor_level == 'linear_rh_diff':
+        # combine mean and quantile RH changes with same prefactor
+        # This is a further taylor expansion of sphum_quant_sat around sphum_quant_mean
+        gamma_t, gamma_rdiff = get_gamma(temp_mean, sphum_mean, temp_quant, sphum_quant, pressure_surface)
+        delta_temp_quant_theory = (gamma_t * delta_mse_ratio * np.expand_dims(delta_temp_mean, axis=-1) +
+                                   gamma_rdiff * (delta_mse_ratio * np.expand_dims(delta_r_mean, axis=-1) -
+                                                  delta_r_quant))[:-1]
+    else:
+        raise ValueError(f"taylor_level given is {taylor_level}. This is not valid, it must be either: 'squared', "
+                         f"'nonlinear', 'linear' or 'linear_rh_diff'")
     return delta_temp_quant_theory
 
 
