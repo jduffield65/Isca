@@ -232,10 +232,10 @@ There are [4 ways that land is implemented in Isca](../main/idealized_moist_phys
 
 #### `land_option`
 *string*</br>
-There are 4 choices of the land mask in *Isca* given below. I think this parameter should be set to the same value
+There are 4 choices of the land mask in *Isca* given below. This parameter should be set to the same value
 as [`land_option`](../main/idealized_moist_physics.md#land_option) in the 
-[`idealized_moist_phys_nml`](../main/idealized_moist_physics.md) namelist. The `lonlat` option is not valid
-in that namelist though, so I am not sure what to do in that case.
+[`idealized_moist_phys_nml`](../main/idealized_moist_physics.md) namelist. **If it is not specified here but is 
+elsewhere, then none of the land parameters set in this module will be used.**
 
 ??? note "Heat capacity calculation"
     The heat capacity calculation is different over land for the different options of `land_option`.
