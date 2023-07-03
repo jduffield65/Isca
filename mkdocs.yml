@@ -122,6 +122,7 @@ nav:
             - Base: code/run/base.md
         - Thesis:
             - Aquaplanet Theory: code/thesis/aquaplanet_theory.md
+            - Extratropics Land Theory: code/thesis/extrop_land_theory.md
         - Time Series:
             - Base: code/time_series/base.md
             - Cmip Time: code/time_series/cmip_time.md
