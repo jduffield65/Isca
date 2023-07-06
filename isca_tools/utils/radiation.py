@@ -112,3 +112,21 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
 
     """
     return ds.swdn_toa - ds.swdn_sfc / (1 - albedo) + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
+
+
+def get_heat_capacity(c_p: float, density: float, layer_depth: float):
+    """
+    Given heat capacity un units of $JK^{-1}kg^{-1}$, this returns heat capacity in units of $JK^{-1}m^{-2}$.
+
+    Args:
+        c_p: Specific heat at constant pressure.</br>
+            Units: $JK^{-1}kg^{-1}$
+        density: Density of substance (usually air or water).</br>
+            Units: $kgm^{-3}$
+        layer_depth: Depth of layer.</br>
+            Units: $m$
+
+    Returns:
+        Heat capacity in units of $JK^{-1}m^{-2}$.
+    """
+    return c_p * density * layer_depth

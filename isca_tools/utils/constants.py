@@ -16,6 +16,12 @@ R_v = R / epsilon
 # Specific heat of dry air at constant pressure. Units: JK^{-1}kg^{-1}
 c_p = 1004
 
+# Specific heat of water at constant pressure. Units: JK^{-1}kg^{-1}
+c_p_water = 4184
+
+# density of water. Units: kgm^{-3}
+rho_water = 1000
+
 # Molecular weight of water. Units: kgkmol^{-1} or equally gmol^{-1}
 m_v = 18.016
 
