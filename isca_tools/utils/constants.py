@@ -1,3 +1,5 @@
+from scipy.constants import Stefan_Boltzmann
+
 ### The constants below are from Holton 2004 Appendix A
 
 # Gravity at sea level. Units: ms^{-2}
