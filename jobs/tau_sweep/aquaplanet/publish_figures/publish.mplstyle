@@ -1,0 +1,13 @@
+axes.spines.top : False
+axes.spines.right : False
+axes.labelsize : 4
+axes.linewidth : 0.3
+lines.linewidth : 0.8
+lines.markersize : 10
+xtick.labelsize : 4
+ytick.labelsize : 4
+xtick.major.width : 0.3
+ytick.major.width : 0.3
+legend.frameon : False
+legend.fontsize : 4
+legend.title_fontsize : 5
