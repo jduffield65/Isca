@@ -1,5 +1,3 @@
-!! JOSH INTRODUCED LINE 602 TO MAKE IT HARDER TO EVAPORATE FROM LAND WITH BUCKET MODEL
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!                                                                   !!
 !!                   GNU General Public License                      !!
@@ -599,11 +597,9 @@ subroutine surface_flux_1d (                                           &
 			elsewhere	
                 flux_q    =  bucket_depth/(max_bucket_depth_land*0.75) * rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 			end where
-            flux_q = land_evap_prefactor * flux_q       ! JOSH CHANGE TO ADD ANOTHER LIMITING FACTOR TO LAND EVAP WITH BUCKET
 		elsewhere
 	        flux_q    =  rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 		end where
-
 	    depth_change_lh_1d  = flux_q * dt/dens_h2o 
 	    where (flux_q > 0.0 .and. bucket_depth < depth_change_lh_1d) ! where more evaporation than what's in bucket, empty bucket
 	        flux_q = bucket_depth * dens_h2o / dt
