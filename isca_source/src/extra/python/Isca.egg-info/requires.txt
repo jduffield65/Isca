@@ -1,0 +1,6 @@
+sh
+jinja2
+f90nml
+numpy
+pandas
+xarray
