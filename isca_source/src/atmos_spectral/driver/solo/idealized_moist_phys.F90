@@ -273,6 +273,7 @@ integer ::           &
      id_bucket_depth_conv, &   ! bucket depth variation induced by convection
      id_bucket_depth_cond, &   ! bucket depth variation induced by condensation
      id_bucket_depth_lh,   &   ! bucket depth variation induced by LH
+     id_w_atm,    &  ! wind speed - JD, add to see wind used in LH and SH computation
      id_rh,           & ! Relative humidity
      id_diss_heat_ray,&  ! Heat dissipated by rayleigh bottom drag if gp_surface=.True.
      id_z_tg,        &   ! Relative humidity
@@ -648,6 +649,11 @@ id_flux_u = register_diag_field(mod_name, 'flux_u', &
      axes(1:2), Time, 'Zonal momentum flux', 'Pa')
 id_flux_v = register_diag_field(mod_name, 'flux_v', &
      axes(1:2), Time, 'Meridional momentum flux', 'Pa')
+
+if(.not.gp_surface) then
+    id_w_atm = register_diag_field(mod_name, 'wind_speed',          &     ! JD Add wind used for LH/SH flux
+    	axes(1:2), Time, 'Lowest level wind speed','m/s')
+endif
 
 if(bucket) then
   id_bucket_depth = register_diag_field(mod_name, 'bucket_depth',            &
@@ -1079,6 +1085,7 @@ if(.not.gp_surface) then
   if(id_v_10m > 0) used = send_data(id_v_10m, v_10m, Time)
   if(id_q_2m > 0) used = send_data(id_q_2m, q_2m, Time)
   if(id_rh_2m > 0) used = send_data(id_rh_2m, rh_2m*1e2, Time)
+  if(id_w_atm > 0) used = send_data(id_w_atm, w_atm, Time)    ! JD Add wind used for LH/SH flux
 
 endif
 
