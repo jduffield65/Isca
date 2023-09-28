@@ -186,6 +186,7 @@ real, allocatable, dimension(:,:)   ::                                        &
      drag_m,               &   ! momentum drag coefficient
      drag_t,               &   ! heat drag coefficient
      drag_q,               &   ! moisture drag coefficient
+     rho,                  &   ! JD - air density at surface
      w_atm,                &   ! wind speed
      ustar,                &   ! friction velocity
      bstar,                &   ! buoyancy scale
@@ -273,9 +274,14 @@ integer ::           &
      id_bucket_depth_conv, &   ! bucket depth variation induced by convection
      id_bucket_depth_cond, &   ! bucket depth variation induced by condensation
      id_bucket_depth_lh,   &   ! bucket depth variation induced by LH
-     id_w_atm,    &  ! wind speed - JD, add to see wind used in LH and SH computation
-     id_rh,           & ! Relative humidity
-     id_diss_heat_ray,&  ! Heat dissipated by rayleigh bottom drag if gp_surface=.True.
+     id_w_atm,             &   ! wind speed - JD, add to see wind used in LH and SH computation
+     id_drag_q,            &   ! moisture drag coefficient  - JD Add lh flux breakdown
+     id_drag_t,            &   ! heat drag coefficient  - JD Add sh flux breakdown
+     id_rho,               &   ! density at surface  - JD Add lh flux breakdown
+     id_q_atm,             &   ! lowest level specific humidity  - JD Add lh flux breakdown
+     id_q_surf,            &   ! surface humidity - JD Add lh flux breakdown
+     id_rh,                & ! Relative humidity
+     id_diss_heat_ray,     &  ! Heat dissipated by rayleigh bottom drag if gp_surface=.True.
      id_z_tg,        &   ! Relative humidity
      id_cape,        &
      id_cin,         &      
@@ -466,6 +472,7 @@ allocate(drag_m      (is:ie, js:je))
 allocate(drag_t      (is:ie, js:je))
 allocate(drag_q      (is:ie, js:je))
 allocate(w_atm       (is:ie, js:je))
+allocate(rho         (is:ie, js:je))
 allocate(ustar       (is:ie, js:je))
 allocate(bstar       (is:ie, js:je))
 allocate(qstar       (is:ie, js:je))
@@ -651,8 +658,18 @@ id_flux_v = register_diag_field(mod_name, 'flux_v', &
      axes(1:2), Time, 'Meridional momentum flux', 'Pa')
 
 if(.not.gp_surface) then
-    id_w_atm = register_diag_field(mod_name, 'wind_speed',          &     ! JD Add wind used for LH/SH flux
+    id_w_atm = register_diag_field(mod_name, 'w_atm',          &     ! JD Add wind used for LH/SH flux
     	axes(1:2), Time, 'Lowest level wind speed','m/s')
+    id_drag_q = register_diag_field(mod_name, 'drag_q',          &      ! JD Add lh flux breakdown
+ 	    axes(1:2), Time, 'Moisture drag coefficient','none')
+    id_drag_t = register_diag_field(mod_name, 'drag_t',          &      ! JD Add sh flux breakdown
+ 	    axes(1:2), Time, 'Heat drag coefficient','none')
+    id_rho = register_diag_field(mod_name, 'rho',          &      ! JD Add lh flux breakdown
+ 	    axes(1:2), Time, 'Air density at lowest level','kg/m/m/m')
+    id_q_atm = register_diag_field(mod_name, 'q_atm',          &     ! JD Add lh flux breakdown
+  	    axes(1:2), Time, 'Lowest level specific humidity','kg/kg')
+    id_q_surf = register_diag_field(mod_name, 'q_surf',          &     ! JD Add lh flux breakdown
+ 	    axes(1:2), Time, 'Surface specific humidity','kg/kg')
 endif
 
 if(bucket) then
@@ -1053,6 +1070,7 @@ if(.not.gp_surface) then
                                   drag_m(:,:),                              &
                                   drag_t(:,:),                              &
                                   drag_q(:,:),                              &
+                                     rho(:,:),                              & ! is intent(out)
                                    w_atm(:,:),                              &
                                    ustar(:,:),                              &
                                    bstar(:,:),                              &
@@ -1086,6 +1104,11 @@ if(.not.gp_surface) then
   if(id_q_2m > 0) used = send_data(id_q_2m, q_2m, Time)
   if(id_rh_2m > 0) used = send_data(id_rh_2m, rh_2m*1e2, Time)
   if(id_w_atm > 0) used = send_data(id_w_atm, w_atm, Time)    ! JD Add wind used for LH/SH flux
+  if(id_drag_q > 0) used = send_data(id_drag_q, drag_q, Time)    ! JD Add lh flux breakdown
+  if(id_drag_t > 0) used = send_data(id_drag_t, drag_t, Time)    ! JD Add sh flux breakdown
+  if(id_rho > 0) used = send_data(id_rho, rho, Time)    ! JD Add lh flux breakdown
+  if(id_q_atm > 0) used = send_data(id_q_atm, grid_tracers(:,:,num_levels,previous,nsphum), Time)    ! JD Add lh flux breakdown
+  if(id_q_surf > 0) used = send_data(id_q_surf, q_surf, Time)    ! JD Add lh flux breakdown
 
 endif
 
