@@ -258,6 +258,7 @@ logical :: old_dtaudv            = .false.
 logical :: use_mixing_ratio      = .false.
 real    :: gust_const            =  1.0
 real    :: gust_min              =  0.0
+real    :: w_atm_const           =  0.0
 logical :: ncar_ocean_flux       = .false.
 logical :: ncar_ocean_flux_orig  = .false. ! for backwards compatibility
 logical :: raoult_sat_vap        = .false.
@@ -275,6 +276,7 @@ namelist /surface_flux_nml/ no_neg_q,             &
                             alt_gustiness,        &
                             gust_const,           &
                             gust_min,             &
+                            w_atm_const,          &
                             old_dtaudv,           &
                             use_mixing_ratio,     &
                             ncar_ocean_flux,      &
@@ -395,7 +397,8 @@ subroutine surface_flux_1d (                                           &
        t_surf0,  t_surf1,  u_dif,     v_dif,               &
        rho_drag, drag_t,    drag_m,   drag_q,              &
        q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
-       e_sat_2m, q_sat_2m
+       e_sat_2m, q_sat_2m, cd_t_ignored, cd_q_ignored,     &
+       cd_m_ignored, u_star_ignored, b_star_ignored
 
   integer :: i, nbad
 
@@ -502,10 +505,34 @@ subroutine surface_flux_1d (                                           &
      endwhere
   endif
 
-  !  monin-obukhov similarity theory
-  call mo_drag (thv_atm, thv_surf, z_atm,                  &
-       rough_mom, rough_heat, rough_moist, w_atm,          &
-       cd_m, cd_t, cd_q, u_star, b_star, avail             )
+  ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
+  ! drag coefficients cd_t and cd_q depend on wind so need to compute differently
+  ! if using w_atm_const.
+  if (w_atm_const > 0.0) then
+  ! Start by calling with constant wind speed
+  ! variables with ignored suffix are not used after this if statement
+      ! Initiaze ignore variables to be same as actual variables
+      cd_q_ignored = cd_q
+      cd_t_ignored = cd_t
+      cd_m_ignored = cd_m
+      u_star_ignored = u_star
+      b_star_ignored = b_star
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm * 0 + w_atm_const,    &
+           cd_m_ignored, cd_t, cd_q, u_star_ignored, b_star_ignored, avail             )
+  ! JD Call again using actual wind speed to set cd_m, u_star and b_star to correct values
+  ! cd_t and cd_q will remain at values computed using constant wind speed.
+  ! Do this because worried it may muck up the momentum transfer stuff if use constant
+  ! rather than actual wind
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm,    &
+           cd_m, cd_t_ignored, cd_q_ignored, u_star, b_star, avail             )
+  else
+   !  monin-obukhov similarity theory
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm,          &
+           cd_m, cd_t, cd_q, u_star, b_star, avail             )
+  end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!! added by mp586 for 10m winds and 2m temperature add mo_profile()!!!!!!!!
@@ -568,25 +595,46 @@ subroutine surface_flux_1d (                                           &
   end if
 
   where (avail)
-     ! scale momentum drag coefficient on orographic roughness
-     cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
-     ! surface layer drag coefficients
-     drag_t = cd_t * w_atm
-     drag_q = cd_q * w_atm
-     drag_m = cd_m * w_atm
+      ! scale momentum drag coefficient on orographic roughness
+      cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
+      ! surface layer drag coefficients
+      drag_m = cd_m * w_atm
+      ! density
+      rho = p_atm / (rdgas * tv_atm)
+  end where
 
-     ! density
-     rho = p_atm / (rdgas * tv_atm)
+  ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
+  if (w_atm_const > 0.0) then
+      where (avail)
+         ! surface layer drag coefficients
+         drag_t = cd_t * w_atm_const
+         drag_q = cd_q * w_atm_const
 
-     ! sensible heat flux
-     rho_drag = cp_air * drag_t * rho
-     flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
-     dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
-     dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
 
-     ! evaporation
-     rho_drag  =  drag_q * rho
-  end where  
+         ! evaporation
+         rho_drag  =  drag_q * rho
+      end where
+  else
+      where (avail)
+         ! surface layer drag coefficients
+         drag_t = cd_t * w_atm
+         drag_q = cd_q * w_atm
+
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho
+      end where
+  end if
 
 !RG Add bucket - if bucket is on evaluate fluxes based on moisture availability.
 !RG Note changes to avail statements to allow bucket to be switched on or off	  
@@ -649,13 +697,22 @@ subroutine surface_flux_1d (                                           &
    end where
   endif
 
+  ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
+  if (w_atm_const > 0.0) then
+      where (avail)
+          q_surf = q_atm + flux_q / (rho*cd_q*w_atm_const)   ! surface specific humidity
+      end where
+  else
+      where (avail)
+          q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
+      end where
+  end if
+
 !RG end Add bucket changes
 
   where (avail)
 
      q_star = flux_q / (u_star * rho)             ! moisture scale
-     ! ask Chris and Steve K if we still want to keep this for diagnostics
-     q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
 
      ! upward long wave radiation
      flux_r    =   stefan*t_surf**4               ! (W/m**2)
