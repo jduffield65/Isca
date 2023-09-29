@@ -280,6 +280,8 @@ integer ::           &
      id_rho,               &   ! density at surface  - JD Add lh flux breakdown
      id_q_atm,             &   ! lowest level specific humidity  - JD Add lh flux breakdown
      id_q_surf,            &   ! surface humidity - JD Add lh flux breakdown
+     id_t_atm,             &   ! lowest level temperature - JD Add sh flux breakdown
+     id_p_atm,             &   ! lowest pressure level - JD Add sh flux breakdown
      id_rh,                & ! Relative humidity
      id_diss_heat_ray,     &  ! Heat dissipated by rayleigh bottom drag if gp_surface=.True.
      id_z_tg,        &   ! Relative humidity
@@ -670,6 +672,10 @@ if(.not.gp_surface) then
   	    axes(1:2), Time, 'Lowest level specific humidity','kg/kg')
     id_q_surf = register_diag_field(mod_name, 'q_surf',          &     ! JD Add lh flux breakdown
  	    axes(1:2), Time, 'Surface specific humidity','kg/kg')
+    id_t_atm = register_diag_field(mod_name, 't_atm',          &     ! JD Add sh flux breakdown
+ 	    axes(1:2), Time, 'Lowest level temperature','K')
+    id_p_atm = register_diag_field(mod_name, 'p_atm',          &     ! JD Add sh flux breakdown
+ 	    axes(1:2), Time, 'Lowest level pressure','Pa')
 endif
 
 if(bucket) then
@@ -1109,6 +1115,8 @@ if(.not.gp_surface) then
   if(id_rho > 0) used = send_data(id_rho, rho, Time)    ! JD Add lh flux breakdown
   if(id_q_atm > 0) used = send_data(id_q_atm, grid_tracers(:,:,num_levels,previous,nsphum), Time)    ! JD Add lh flux breakdown
   if(id_q_surf > 0) used = send_data(id_q_surf, q_surf, Time)    ! JD Add lh flux breakdown
+  if(id_t_atm > 0) used = send_data(id_t_atm, tg(:,:,num_levels,previous), Time)    ! JD Add sh flux breakdown
+  if(id_p_atm > 0) used = send_data(id_p_atm, p_full(:,:,num_levels,current), Time)    ! JD Add sh flux breakdown
 
 endif
 
