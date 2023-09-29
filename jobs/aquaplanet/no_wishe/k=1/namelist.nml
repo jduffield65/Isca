@@ -6,8 +6,8 @@
 &experiment_details
    name = 'aquaplanet/no_wishe/k=1/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/no_wishe/k=1/'
-   n_months_total = 84           ! Total duration of simulation in months.
-   n_months_job = 84             ! Approximate duration of each job of the simulation in months.
+   n_months_total = 72           ! Total duration of simulation in months.
+   n_months_job = 72             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).

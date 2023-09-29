@@ -59,6 +59,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
+    w_atm_const = 0.0              ! this is 0 to include WISHE
 /
 
 &atmosphere_nml
