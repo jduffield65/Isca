@@ -4,10 +4,10 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/no_wishe/k=1/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/no_wishe/k=1/'
+   name = 'aquaplanet/no_wishe/normal_wind/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/no_wishe/normal_wind/'
    n_months_total = 84           ! Total duration of simulation in months.
-   n_months_job = 42             ! Approximate duration of each job of the simulation in months.
+   n_months_job = 42            ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 2                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
@@ -59,7 +59,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    w_atm_const = 10.0              ! this is for no-WISHE
+    w_atm_const = 0.0              ! set this to 0 so WISHE is included
 /
 
 &atmosphere_nml
