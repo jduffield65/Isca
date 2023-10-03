@@ -251,18 +251,19 @@ real :: d622, d378, hlars, gcp, kappa, d608
 !   </DATA>
 ! </NAMELIST>
 
-logical :: no_neg_q              = .false.  ! for backwards compatibility
-logical :: use_virtual_temp      = .true.
-logical :: alt_gustiness         = .false.
-logical :: old_dtaudv            = .false.
-logical :: use_mixing_ratio      = .false.
-real    :: gust_const            =  1.0
-real    :: gust_min              =  0.0
-real    :: w_atm_const           =  0.0
-logical :: ncar_ocean_flux       = .false.
-logical :: ncar_ocean_flux_orig  = .false. ! for backwards compatibility
-logical :: raoult_sat_vap        = .false.
-logical :: do_simple             = .false.
+logical :: no_neg_q                = .false.  ! for backwards compatibility
+logical :: use_virtual_temp        = .true.
+logical :: alt_gustiness           = .false.
+logical :: old_dtaudv              = .false.
+logical :: use_mixing_ratio        = .false.
+real    :: gust_const              =  1.0
+real    :: gust_min                =  0.0
+real    :: w_atm_const             =  0.0    ! JD - option for no-WISHE
+logical :: mo_drag_use_w_atm_const = .false. ! JD - option to use constant wind to compute drag coeffs if no-WISHE
+logical :: ncar_ocean_flux         = .false.
+logical :: ncar_ocean_flux_orig    = .false. ! for backwards compatibility
+logical :: raoult_sat_vap          = .false.
+logical :: do_simple               = .false.
 
 real    :: land_humidity_prefactor  =  1.0    !s Default is that land makes no difference to evaporative fluxes
 real    :: land_evap_prefactor  =  1.0    !s Default is that land makes no difference to evaporative fluxes
@@ -271,21 +272,22 @@ real    :: flux_heat_gp  =  5.7    !s Default value for Jupiter of 5.7 Wm^-2
 real    :: diabatic_acce =  1.0    !s Diabatic acceleration??
 
 
-namelist /surface_flux_nml/ no_neg_q,             &
-                            use_virtual_temp,     &
-                            alt_gustiness,        &
-                            gust_const,           &
-                            gust_min,             &
-                            w_atm_const,          &
-                            old_dtaudv,           &
-                            use_mixing_ratio,     &
-                            ncar_ocean_flux,      &
-                            ncar_ocean_flux_orig, &
-                            raoult_sat_vap,       &
-                            do_simple,            &
+namelist /surface_flux_nml/ no_neg_q,                &
+                            use_virtual_temp,        &
+                            alt_gustiness,           &
+                            gust_const,              &
+                            gust_min,                &
+                            w_atm_const,             &
+                            mo_drag_use_w_atm_const, &
+                            old_dtaudv,              &
+                            use_mixing_ratio,        &
+                            ncar_ocean_flux,         &
+                            ncar_ocean_flux_orig,    &
+                            raoult_sat_vap,          &
+                            do_simple,               &
                             land_humidity_prefactor, & !s Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
-                            land_evap_prefactor, & !s Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
-                            flux_heat_gp,         &    !s prescribed lower boundary heat flux on a giant planet
+                            land_evap_prefactor,     & !s Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
+                            flux_heat_gp,            & !s prescribed lower boundary heat flux on a giant planet
 			    diabatic_acce
 
 
@@ -508,7 +510,7 @@ subroutine surface_flux_1d (                                           &
   ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
   ! drag coefficients cd_t and cd_q depend on wind so need to compute differently
   ! if using w_atm_const.
-  if (w_atm_const > 0.0) then
+  if (w_atm_const > 0.0 .and. mo_drag_use_w_atm_const) then
   ! Start by calling with constant wind speed
   ! variables with ignored suffix are not used after this if statement
       ! Initiaze ignore variables to be same as actual variables
