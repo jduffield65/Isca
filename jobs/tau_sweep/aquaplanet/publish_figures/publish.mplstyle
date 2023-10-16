@@ -11,5 +11,5 @@ ytick.labelsize : 7
 xtick.major.width : 0.25
 ytick.major.width : 0.25
 legend.frameon : False
-legend.fontsize : 8
+legend.fontsize : 7
 legend.title_fontsize : 8
