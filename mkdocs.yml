@@ -130,6 +130,7 @@ nav:
         - Utils:
             - Base: code/utils/base.md
             - Dataset Slicing: code/utils/ds_slicing.md
+            - Fourier: code/utils/fourier.md
             - Land: code/utils/land.md
             - Load: code/utils/load.md
             - Moist Physics: code/utils/moist_physics.md
