@@ -116,6 +116,7 @@ nav:
             - Byrne 2021: code/papers/byrne_2021.md
             - Miyawaki 2022: code/papers/miyawaki_2022.md
         - Plot:
+            - Base: code/plot/base.md
             - Land: code/plot/land.md
             - Spin Up: code/plot/spin_up.md
         - Run:
