@@ -109,6 +109,9 @@ nav:
             - Vertical Turbulence Driver: namelists/turbulence/vert_turb_driver.md
             - Diffusivity: namelists/turbulence/diffusivity.md
     - Code:
+        - Convection:
+            - Base: code/convection/base.md
+            - Simple Betts-Miller: code/convection/simple_betts_miller.md
         - Land:
             - Base: code/land/base.md
             - Mountains: code/land/mountains.md
