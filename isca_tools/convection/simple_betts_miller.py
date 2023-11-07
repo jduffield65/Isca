@@ -1,7 +1,9 @@
 import numpy as np
 from scipy import optimize
+from typing import Union
 from ..utils.constants import kappa, epsilon, L_v, c_p, R_v
-from ..utils.moist_physics import mixing_ratio_from_sphum, saturation_vapor_pressure, mixing_ratio_from_partial_pressure
+from ..utils.moist_physics import (mixing_ratio_from_sphum, saturation_vapor_pressure,
+                                   mixing_ratio_from_partial_pressure, potential_temp)
 
 
 def lcl_temp(temp_start: float, p_start: float, sphum_start: float, p_ref: float = 1e5) -> float:
@@ -51,11 +53,26 @@ def lcl_temp(temp_start: float, p_start: float, sphum_start: float, p_ref: float
     def lcl_opt_func(temp_lcl, p_start, temp_start, sphum_start, p_ref):
         # Function to optimize
         r = mixing_ratio_from_sphum(sphum_start)
-        theta = temp_start * (p_ref / p_start) ** kappa  # potential temperature
+        theta = potential_temp(temp_start, p_start, p_ref)
+        # theta = temp_start * (p_ref / p_start) ** kappa
         value = theta ** (-1 / kappa) * p_ref * r / (epsilon + r)
 
         return value - saturation_vapor_pressure(temp_lcl) / temp_lcl ** (1 / kappa)
     return optimize.newton(lcl_opt_func, 270, args=(p_start, temp_start, sphum_start, p_ref))
+
+
+def lcl_p(temp_lcl: Union[float, np.ndarray], temp_start: Union[float, np.ndarray], p_start: Union[float, np.ndarray]):
+    """
+
+    Args:
+        temp_lcl:
+        temp_start:
+        p_start:
+
+    Returns:
+        Pressure corresponding to potential temperature
+    """
+    return p_start * (temp_lcl / temp_start) ** (1/kappa)
 
 
 def ref_temp_above_lcl(temp_lcl: float, p_lcl: float, p_full: np.ndarray) -> np.ndarray:
@@ -107,7 +124,7 @@ def ref_temp_above_lcl(temp_lcl: float, p_lcl: float, p_full: np.ndarray) -> np.
         a = kappa * temp_half + L_v/c_p * mix_ratio_half
         b = L_v**2 * mix_ratio_half / (c_p * R_v * temp_half**2)
         dtlnp = a/(1+b)
-        temp_ref[k] = temp_ref[k+1] + dtlnp * np.log(p_full[k + 1] / p_full[k])
+        temp_ref[k] = temp_ref[k+1] + dtlnp * np.log(p_full[k] / p_full[k+1])
 
         # Use temperature at smaller pressure to compute mixing ratio at smaller pressure
         mix_ratio_ref[k] = mixing_ratio_from_partial_pressure(temp_ref[k], p_full[k])

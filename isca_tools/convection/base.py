@@ -48,7 +48,7 @@ def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.
         return neg_dT_dz
 
 
-def dry_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
+def dry_profile_temp(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
     """
     Returns the temperature of an air parcel at the given pressure levels, assuming it follows the dry adiabat.
 
@@ -63,6 +63,26 @@ def dry_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.n
         Temperature at each pressure level indicated by `p_levels`.
     """
     return temp_start * (p_levels/p_start)**kappa
+
+
+def dry_profile_pressure(temp_start: float, p_start: float, temp_levels: Union[float, np.ndarray]) -> np.ndarray:
+    """
+    Given a series of `temp_levels`, this function returns the pressure corresponding to each temperature, assuming
+    it follows a dry adiabat.
+
+    Can also use the pressure of the LCL if the LCL temperature is given as `temp_levels`.
+
+    Args:
+        temp_start: Starting temperature of parcel. Units: *Kelvin*.
+        p_start: Starting pressure of parcel. Units: *Pa*.
+        temp_levels: `float [n_p_levels]`.</br>
+            Temperatures of parcel where we want to findthe corresponding pressure. Units: *K*.
+
+    Returns:
+        `float [n_p_levels]`.</br>
+        Pressure at each temperature indicated by `temp_levels`.
+    """
+    return p_start * (temp_levels / temp_start) ** (1/kappa)
 
 
 def moist_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
@@ -175,7 +195,7 @@ def convection_neutral_profile(temp_start: float, p_start: float, sphum_start: f
     """
     temp_lcl = lcl_temp(temp_start, p_start, sphum_start)
     p_lcl = p_start * (temp_lcl/temp_start)**(1/kappa)      # Pressure corresponding to LCL from dry adiabat equation
-    temp_dry = dry_profile(temp_start, p_start, p_levels)       # Compute dry profile for all pressure values
+    temp_dry = dry_profile_temp(temp_start, p_start, p_levels)       # Compute dry profile for all pressure values
     temp_moist = moist_profile(temp_lcl, p_lcl, p_levels[p_levels < p_lcl])
     temp_dry[p_levels < p_lcl] = temp_moist     # Replace dry temperature with moist for pressure below p_lcl
     return temp_dry
