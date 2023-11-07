@@ -267,9 +267,10 @@ integer ::           &
      id_cond_rain,   &   ! rain from condensation
      id_precip,      &   ! rain and snow from condensation and convection
      id_conv_dt_tg,  &   ! temperature tendency from convection
-     id_conv_dt_qg,  &   ! temperature tendency from convection
+     id_conv_dt_qg,  &   ! moisture tendency from convection
      id_cond_dt_tg,  &   ! temperature tendency from condensation
-     id_cond_dt_qg,  &   ! temperature tendency from condensation
+     id_cond_dt_qg,  &   ! moisture tendency from condensation
+     id_t_ref,       &   ! relaxation temperature for bettsmiller scheme ! JOSH ADDITION to save ref temp
      id_bucket_depth,      &   ! bucket depth variable for output
      id_bucket_depth_conv, &   ! bucket depth variation induced by convection
      id_bucket_depth_cond, &   ! bucket depth variation induced by condensation
@@ -763,6 +764,8 @@ end select
         axes(1:3), Time, 'Temperature tendency from convection','K/s')
    id_conv_rain = register_diag_field(mod_name, 'convection_rain',            &
         axes(1:2), Time, 'Rain from convection','kg/m/m/s')
+   id_t_ref = register_diag_field(mod_name, 't_ref',            &
+        axes(1:3), Time, 'Betts-Miller reference temperature profile','K')      ! JOSH ADDITION to save ref temp
 !endif
 
 
@@ -879,6 +882,7 @@ case(SIMPLE_BETTS_CONV)
    if(id_conv_rain  > 0) used = send_data(id_conv_rain, rain, Time)
    if(id_cape  > 0) used = send_data(id_cape, cape, Time)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
+   if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! JOSH ADDITION to save ref temp
 
 case(FULL_BETTS_MILLER_CONV)
 
@@ -908,6 +912,7 @@ case(FULL_BETTS_MILLER_CONV)
    if(id_conv_rain  > 0) used = send_data(id_conv_rain, rain, Time)
    if(id_cape  > 0) used = send_data(id_cape, cape, Time)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
+   if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! JOSH ADDITION to save ref temp
 
 case(DRY_CONV)
     call dry_convection(Time, tg(:, :, :, previous),                         &
