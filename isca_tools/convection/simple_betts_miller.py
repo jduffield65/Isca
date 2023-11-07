@@ -1,9 +1,11 @@
 import numpy as np
 from scipy import optimize
-from typing import Union
+from typing import Union, Tuple
 from ..utils.constants import kappa, epsilon, L_v, c_p, R_v
+from .base import dry_profile_pressure, dry_profile_temp
 from ..utils.moist_physics import (mixing_ratio_from_sphum, saturation_vapor_pressure,
                                    mixing_ratio_from_partial_pressure, potential_temp)
+import warnings
 
 
 def lcl_temp(temp_start: float, p_start: float, sphum_start: float, p_ref: float = 1e5) -> float:
@@ -48,7 +50,7 @@ def lcl_temp(temp_start: float, p_start: float, sphum_start: float, p_ref: float
         p_ref: Reference pressure, $p_{ref}$ in *Pa*. It is a parameter in the `qe_moist_convection` namelist.
 
     Returns:
-        Temperature of *LCL* in *Kelvin*.
+        Temperature of *LCL* in *K*.
     """
     def lcl_opt_func(temp_lcl, p_start, temp_start, sphum_start, p_ref):
         # Function to optimize
@@ -115,3 +117,56 @@ def ref_temp_above_lcl(temp_lcl: float, p_lcl: float, p_full: np.ndarray) -> np.
         # Use temperature at smaller pressure to compute mixing ratio at smaller pressure
         mix_ratio_ref[k] = mixing_ratio_from_partial_pressure(temp_ref[k], p_full[k])
     return temp_ref[:-1]        # don't return LCL value
+
+
+def get_temp_ref(temp_start: float, p_start: float, sphum_start: float,
+                 p_full: np.ndarray, p_ref: float = 1e5) -> Tuple[np.ndarray, float, float]:
+    """
+    This replicates the way the reference temperature profile is computed in Isca with the
+    [Simple Betts-Miller](https://jduffield65.github.io/Isca/namelists/convection/qe_moist_convection/)
+    convection scheme.
+
+    Below the LCL, it is set to a dry adiabat, and above it the `ref_temp_above_lcl` function is used, which is very
+    similar to the moist adiabat.
+
+    As well as the reference temperature profile, the LCL temperature and pressure are also returned.
+
+    Args:
+        temp_start: Starting temperature of parcel, $T_{start}$. Units: *Kelvin*.
+        p_start: Pressure, $p_{start}$, in *Pa* corresponding to starting point of dry ascent i.e. near surface
+            pressure.
+        sphum_start: Starting specific humidity of parcel, $q_{start}$. Units: *kg/kg*.
+        p_full: `float [n_p_levels]`.</br>
+            Full model pressure levels in ascending order. `p_full[0]` represents space and `p_full[-1]` is
+            the surface.</br>Units: *Pa*.
+        p_ref: Reference pressure, $p_{ref}$ in *Pa*. It is a parameter in the `qe_moist_convection` namelist.
+
+    Returns:
+        `temp_ref`: `float [n_p_levels]`</br>
+            The reference temperature at each pressure level in `p_full`.
+        `temp_lcl`: Temperature of *LCL* in *K*.
+        `p_lcl`: Pressure of *LCL* in *Pa*.
+    """
+    # Important that all variables are of correct datatype
+    if not isinstance(temp_start, float):
+        warnings.warn('Changing temp_start to a float')
+        temp_start = float(temp_start)
+    if not isinstance(p_start, float):
+        warnings.warn('Changing p_start to a float')
+        p_start = float(p_start)
+    if not isinstance(sphum_start, float):
+        warnings.warn('Changing sphum_start to a float')
+        sphum_start = float(sphum_start)
+    if not isinstance(p_ref, float):
+        warnings.warn('Changing p_ref to a float')
+        p_ref = float(p_ref)
+    if not isinstance(p_full, np.ndarray):
+        warnings.warn('Changing p_full to a numpy array')
+        p_full = np.asarray(p_full)
+
+    temp_lcl = lcl_temp(temp_start, p_start, sphum_start, p_ref)
+    p_lcl = dry_profile_pressure(temp_start, p_start, temp_lcl)
+    temp_ref = np.zeros(len(p_full))
+    temp_ref[p_full >= p_lcl] = dry_profile_temp(temp_start, p_start, p_full[p_full >= p_lcl])
+    temp_ref[p_full < p_lcl] = ref_temp_above_lcl(temp_lcl, p_lcl, p_full[p_full < p_lcl])
+    return temp_ref, temp_lcl, p_lcl

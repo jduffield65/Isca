@@ -3,7 +3,6 @@ import numpy as np
 import numpy_indexed
 from scipy.integrate import odeint
 
-from .simple_betts_miller import lcl_temp
 from ..utils.constants import lapse_dry, L_v, R, epsilon, c_p, g, kappa
 from ..utils.moist_physics import saturation_vapor_pressure, mixing_ratio_from_partial_pressure
 
@@ -60,12 +59,13 @@ def dry_profile_temp(temp_start: float, p_start: float, p_levels: np.ndarray) ->
 
     Returns:
         `float [n_p_levels]`.</br>
-        Temperature at each pressure level indicated by `p_levels`.
+            Temperature at each pressure level indicated by `p_levels`.
     """
     return temp_start * (p_levels/p_start)**kappa
 
 
-def dry_profile_pressure(temp_start: float, p_start: float, temp_levels: Union[float, np.ndarray]) -> np.ndarray:
+def dry_profile_pressure(temp_start: float, p_start: float,
+                         temp_levels: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """
     Given a series of `temp_levels`, this function returns the pressure corresponding to each temperature, assuming
     it follows a dry adiabat.
@@ -80,7 +80,7 @@ def dry_profile_pressure(temp_start: float, p_start: float, temp_levels: Union[f
 
     Returns:
         `float [n_p_levels]`.</br>
-        Pressure at each temperature indicated by `temp_levels`.
+            Pressure at each temperature indicated by `temp_levels`.
     """
     return p_start * (temp_levels / temp_start) ** (1/kappa)
 
@@ -175,7 +175,7 @@ def moist_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np
     return temp_final
 
 
-def convection_neutral_profile(temp_start: float, p_start: float, sphum_start: float,
+def convection_neutral_profile(temp_start: float, p_start: float, temp_lcl: float,
                                p_levels: np.ndarray) -> np.ndarray:
     """
     This returns the temperature of an air parcel at the given pressure levels, assuming it follows the
@@ -184,17 +184,16 @@ def convection_neutral_profile(temp_start: float, p_start: float, sphum_start: f
     Args:
         temp_start: Starting temperature of parcel. Units: *Kelvin*.
         p_start: Starting pressure of parcel. Units: *Pa*.
-        sphum_start: Specific humidity, $q_{start}$, in *kg/kg* at $p_{start}$.
+        temp_lcl: Temperature of *LCL* in *K*.
         p_levels: `float [n_p_levels]`.</br>
             Pressure levels to find the temperature of the parcel at. Units: *Pa*.
 
     Returns:
         `float [n_p_levels]`.</br>
-        Temperature at each pressure level indicated by `p_levels`.
+            Temperature at each pressure level indicated by `p_levels`.
 
     """
-    temp_lcl = lcl_temp(temp_start, p_start, sphum_start)
-    p_lcl = p_start * (temp_lcl/temp_start)**(1/kappa)      # Pressure corresponding to LCL from dry adiabat equation
+    p_lcl = dry_profile_pressure(temp_start, p_start, temp_lcl)
     temp_dry = dry_profile_temp(temp_start, p_start, p_levels)       # Compute dry profile for all pressure values
     temp_moist = moist_profile(temp_lcl, p_lcl, p_levels[p_levels < p_lcl])
     temp_dry[p_levels < p_lcl] = temp_moist     # Replace dry temperature with moist for pressure below p_lcl
