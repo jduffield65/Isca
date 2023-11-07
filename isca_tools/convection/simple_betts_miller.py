@@ -61,20 +61,6 @@ def lcl_temp(temp_start: float, p_start: float, sphum_start: float, p_ref: float
     return optimize.newton(lcl_opt_func, 270, args=(p_start, temp_start, sphum_start, p_ref))
 
 
-def lcl_p(temp_lcl: Union[float, np.ndarray], temp_start: Union[float, np.ndarray], p_start: Union[float, np.ndarray]):
-    """
-
-    Args:
-        temp_lcl:
-        temp_start:
-        p_start:
-
-    Returns:
-        Pressure corresponding to potential temperature
-    """
-    return p_start * (temp_lcl / temp_start) ** (1/kappa)
-
-
 def ref_temp_above_lcl(temp_lcl: float, p_lcl: float, p_full: np.ndarray) -> np.ndarray:
     """
     Function to replicate the way the
