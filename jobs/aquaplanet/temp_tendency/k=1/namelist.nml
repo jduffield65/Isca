@@ -14,7 +14,7 @@
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
-   compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
+   compile = .true.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
 /

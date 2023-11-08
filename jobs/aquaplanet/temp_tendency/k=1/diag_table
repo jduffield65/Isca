@@ -24,3 +24,6 @@
 "atmosphere", "dt_tg_convection", "dt_tg_convection", "atmos_daily", "all", .true., "none", 2,
 "atmosphere", "dt_tg_condensation", "dt_tg_condensation", "atmos_daily", "all", .true., "none", 2,
 "atmosphere", "t_ref", "t_ref", "atmos_daily", "all", .true., "none", 2,
+"atmosphere", "klzbs", "klzbs", "atmos_daily", "all", .true., "none", 2,
+"two_stream", "tdt_rad", "tdt_rad", "atmos_daily", "all", .true., "none", 2,
+"two_stream", "tdt_solar", "tdt_solar", "atmos_daily", "all", .true., "none", 2,
