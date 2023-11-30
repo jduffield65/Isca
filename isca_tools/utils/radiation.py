@@ -93,6 +93,7 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
                 This is saved by *Isca* if the variable `swdn_toa` in the `two_stream` module is specified in the
                 diagnostic table.
             * `swdn_sfc` - Net shortwave radiation absorbed at the surface i.e. incident - reflected.
+                This is the negative of net upward shortwave radiation at the surface.
                 This is saved by *Isca* if the variable `swdn_sfc` in the `two_stream` module is specified in the
                 diagnostic table.
             * `lwup_sfc` - Upward longwave flux at the surface.
@@ -111,7 +112,9 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
         Atmospheric radiative heating rate in $W/m^2$.
 
     """
-    return ds.swdn_toa - ds.swdn_sfc / (1 - albedo) + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
+    # return ds.swdn_toa - ds.swdn_sfc / (1 - albedo) + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
+    # do not need albedo as net up - net down shortwave at surface equals -ds.swdn_sfc
+    return ds.swdn_toa - ds.swdn_sfc + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
 
 
 def get_heat_capacity(c_p: float, density: float, layer_depth: float):
