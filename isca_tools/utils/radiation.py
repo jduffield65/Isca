@@ -107,14 +107,23 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
                 diagnostic table.
         albedo: Fraction of incident shortwave radiation reflected by the surface.
             It is specified through the option `albedo_value` in the `mixed_layer_nml` namelist.
-
     Returns:
         Atmospheric radiative heating rate in $W/m^2$.
 
     """
+    # #This is the full method of doing it, but we can do it simpler without the sw absorption stuff
+    # swup_net_sfc = -ds.swdn_sfc
+    # # need to account for SW absorbed by atmosphere and reflected at surface
+    # swup_net_toa = -frierson_net_toa_sw_dwn(ds.swdn_toa, ds.ps, albedo, tau_equator, tau_lat_var, pressure_exponent,
+    #                                         ref_pressure)
+    # flux_surf = swup_net_sfc + ds.lwup_sfc - ds.lwdn_sfc
+    # flux_toa = swup_net_toa + ds.olr
     # return ds.swdn_toa - ds.swdn_sfc / (1 - albedo) + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
-    # do not need albedo as net up - net down shortwave at surface equals -ds.swdn_sfc
-    return ds.swdn_toa - ds.swdn_sfc + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
+
+    swup_toa = albedo/(1-albedo) * ds.swdn_sfc
+    flux_toa = swup_toa - ds.swdn_toa + ds.olr
+    flux_surf = -ds.swdn_sfc + ds.lwup_sfc - ds.lwdn_sfc
+    return flux_surf - flux_toa
 
 
 def get_heat_capacity(c_p: float, density: float, layer_depth: float):
