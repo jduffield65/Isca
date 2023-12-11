@@ -219,8 +219,8 @@ def potential_temp(temp: Union[float, np.ndarray], pressure: Union[float, np.nda
     return temp * (p_ref / pressure)**kappa
 
 
-def virtual_potential_temp(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
-                           sphum: Optional[float] = None, p_ref: float = 1e5) -> Union[float, np.ndarray]:
+def equivalent_potential_temp(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
+                              sphum: Optional[float] = None, p_ref: float = 1e5) -> Union[float, np.ndarray]:
     """
     Returns the virtual potential temperature using equation 9.40 of *Holton 2004* textbook.
 
