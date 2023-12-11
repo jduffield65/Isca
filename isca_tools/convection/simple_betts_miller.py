@@ -2,9 +2,9 @@ import numpy as np
 from scipy import optimize
 from typing import Union, Tuple
 from ..utils.constants import kappa, epsilon, L_v, c_p, R_v
-from .base import dry_profile_pressure, dry_profile_temp
+from .base import dry_profile_pressure, dry_profile_temp, potential_temp
 from ..utils.moist_physics import (mixing_ratio_from_sphum, saturation_vapor_pressure,
-                                   mixing_ratio_from_partial_pressure, potential_temp)
+                                   mixing_ratio_from_partial_pressure)
 import warnings
 
 

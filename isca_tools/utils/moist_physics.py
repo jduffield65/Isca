@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Union
-from .constants import L_v, epsilon, c_p, temp_kelvin_to_celsius, g, kappa
+from .constants import L_v, epsilon, c_p, temp_kelvin_to_celsius, g
 
 
 def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -102,7 +102,7 @@ def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.nd
     return (L_v * sphum + c_p * temp + g * height) / 1000
 
 
-def sphum_sat(temp: np.ndarray, pressure: Union[float, np.ndarray]) -> np.ndarray:
+def sphum_sat(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray]) -> np.ndarray:
     """
     Returns the saturation specific humidity, $q^*$, in *kg/kg*.
 
@@ -139,22 +139,3 @@ def clausius_clapeyron_factor(temp: np.ndarray, pressure: Union[float, np.ndarra
     """
     lambda_const = 4302.645 / (temp - 29.65)**2
     return lambda_const * pressure / epsilon * sphum_sat(temp, pressure) / saturation_vapor_pressure(temp)
-
-
-def potential_temp(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
-                   p_ref: float = 1e5) -> Union[float, np.ndarray]:
-    """
-    Returns the potential temperature: $\\theta = T\\left(\\frac{p_{ref}}{p}\\right)^{\\kappa}$
-
-    Args:
-        temp: `float [n_p_levels]`
-            Temperature in *K* to find potential temperature at.
-        pressure: `float [n_p_levels]`
-            Pressure levels in *Pa* corresponding to the temperatures given.
-        p_ref: Reference pressure in *Pa* used to compute the potential temperature
-
-    Returns:
-        `float [n_p_levels]`
-            Potential temperature in *K* at each pressure level.
-    """
-    return temp * (p_ref / pressure)**kappa

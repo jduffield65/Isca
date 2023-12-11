@@ -1,10 +1,10 @@
-from typing import Union
+from typing import Union, Optional
 import numpy as np
 import numpy_indexed
 from scipy.integrate import odeint
-
 from ..utils.constants import lapse_dry, L_v, R, epsilon, c_p, g, kappa
-from ..utils.moist_physics import saturation_vapor_pressure, mixing_ratio_from_partial_pressure
+from ..utils.moist_physics import saturation_vapor_pressure, mixing_ratio_from_partial_pressure, \
+    mixing_ratio_from_sphum, sphum_sat, rh_from_sphum
 
 
 def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
@@ -198,3 +198,58 @@ def convection_neutral_profile(temp_start: float, p_start: float, temp_lcl: floa
     temp_moist = moist_profile(temp_lcl, p_lcl, p_levels[p_levels < p_lcl])
     temp_dry[p_levels < p_lcl] = temp_moist     # Replace dry temperature with moist for pressure below p_lcl
     return temp_dry
+
+
+def potential_temp(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
+                   p_ref: float = 1e5) -> Union[float, np.ndarray]:
+    """
+    Returns the potential temperature: $\\theta = T\\left(\\frac{p_{ref}}{p}\\right)^{\\kappa}$
+
+    Args:
+        temp: `float [n_p_levels]`
+            Temperature in *K* to find potential temperature at.
+        pressure: `float [n_p_levels]`
+            Pressure levels in *Pa* corresponding to the temperatures given.
+        p_ref: Reference pressure in *Pa* used to compute the potential temperature
+
+    Returns:
+        `float [n_p_levels]`
+            Potential temperature in *K* at each pressure level.
+    """
+    return temp * (p_ref / pressure)**kappa
+
+
+def virtual_potential_temp(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
+                           sphum: Optional[float] = None, p_ref: float = 1e5) -> Union[float, np.ndarray]:
+    """
+    Returns the virtual potential temperature using equation 9.40 of *Holton 2004* textbook.
+
+    For a saturated parcel, this is $\\theta_e = \\theta \\exp (L_v q_s/c_pT)$.
+
+    For an unsaturated parcel (used if `sphum` given), it is $\\theta_e = \\theta \\exp (L_v q/c_pT_{LCL})$.
+
+    where $q$ ($q_s$) is the (saturation) mixing ratio, $T_{LCL}$ is the lifting condensation level temperature
+    (using equation 10 from *Bolton 1980*) and $\\theta$ is the potential temperature.
+
+    Args:
+        temp: `float [n_p_levels]`
+            Temperature in *K* to find virtual potential temperature at.
+        pressure: `float [n_p_levels]`
+            Pressure levels in *Pa* corresponding to the temperatures given.
+        sphum: `float [n_p_levels]`
+            Specific humidity of parcel at each pressure level in *kg/kg*. If not given, assumes saturated.
+        p_ref: Reference pressure in *Pa* used to compute the potential temperature
+
+    Returns:
+        `float [n_p_levels]`
+            Virtual potential temperature in *K* at given pressure levels.
+    """
+    if sphum is None:
+        mix_ratio = mixing_ratio_from_sphum(sphum_sat(temp, pressure))
+        temp_lcl = temp
+    else:
+
+        mix_ratio = mixing_ratio_from_sphum(sphum)
+        temp_lcl = lcl_temp_bolton(temp, rh_from_sphum(sphum, temp, pressure))
+    temp_pot = potential_temp(temp, pressure, p_ref)
+    return temp_pot * np.exp(L_v * mix_ratio / (c_p * temp_lcl))
