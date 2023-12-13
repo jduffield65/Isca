@@ -242,7 +242,7 @@ def equivalent_potential_temp(temp: Union[float, np.ndarray], pressure: Union[fl
 
     Returns:
         `float [n_p_levels]`
-            Virtual potential temperature in *K* at given pressure levels.
+            Equivalent potential temperature in *K* at given pressure levels.
     """
     if sphum is None:
         mix_ratio = mixing_ratio_from_sphum(sphum_sat(temp, pressure))
