@@ -139,3 +139,4 @@ nav:
             - Load: code/utils/load.md
             - Moist Physics: code/utils/moist_physics.md
             - Radiation: code/utils/radiation.md
+            - Statistics: code/utils/stats.md

@@ -248,7 +248,6 @@ def equivalent_potential_temp(temp: Union[float, np.ndarray], pressure: Union[fl
         mix_ratio = mixing_ratio_from_sphum(sphum_sat(temp, pressure))
         temp_lcl = temp
     else:
-
         mix_ratio = mixing_ratio_from_sphum(sphum)
         temp_lcl = lcl_temp_bolton(temp, rh_from_sphum(sphum, temp, pressure))
     temp_pot = potential_temp(temp, pressure, p_ref)
