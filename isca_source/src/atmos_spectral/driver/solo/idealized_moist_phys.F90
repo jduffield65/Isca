@@ -267,9 +267,10 @@ integer ::           &
      id_cond_rain,   &   ! rain from condensation
      id_precip,      &   ! rain and snow from condensation and convection
      id_conv_dt_tg,  &   ! temperature tendency from convection
-     id_conv_dt_qg,  &   ! temperature tendency from convection
+     id_conv_dt_qg,  &   ! moisture tendency from convection
      id_cond_dt_tg,  &   ! temperature tendency from condensation
-     id_cond_dt_qg,  &   ! temperature tendency from condensation
+     id_cond_dt_qg,  &   ! moisture tendency from condensation
+     id_t_ref,       &   ! relaxation temperature for bettsmiller scheme ! JOSH ADDITION to save ref temp
      id_bucket_depth,      &   ! bucket depth variable for output
      id_bucket_depth_conv, &   ! bucket depth variation induced by convection
      id_bucket_depth_cond, &   ! bucket depth variation induced by condensation
@@ -286,7 +287,9 @@ integer ::           &
      id_diss_heat_ray,     &  ! Heat dissipated by rayleigh bottom drag if gp_surface=.True.
      id_z_tg,        &   ! Relative humidity
      id_cape,        &
-     id_cin,         &      
+     id_cin,         &
+     id_klzbs,       &   ! Level of neutral buoyancy - JD add for convection ref profile info
+     id_convflag,    &   ! Which convection called - JD add for convection ref profile info
      id_flux_u,      & ! surface flux of zonal mom.
      id_flux_v,      & ! surface flux of meridional mom.
      id_temp_2m,     & ! used for 10m winds and 2m temp
@@ -654,6 +657,10 @@ id_cape = register_diag_field(mod_name, 'cape',          &
      axes(1:2), Time, 'Convective Available Potential Energy','J/kg')
 id_cin = register_diag_field(mod_name, 'cin',          &
      axes(1:2), Time, 'Convective Inhibition','J/kg')
+id_klzbs = register_diag_field(mod_name, 'klzbs',          &       ! JD add for convection ref profile info
+     axes(1:2), Time, 'Level of neutral buoyancy','none')
+id_convflag = register_diag_field(mod_name, 'convflag',          &       ! JD add for convection ref profile info
+     axes(1:2), Time, 'Integer indicating what type of convection was called','none')
 id_flux_u = register_diag_field(mod_name, 'flux_u', &
      axes(1:2), Time, 'Zonal momentum flux', 'Pa')
 id_flux_v = register_diag_field(mod_name, 'flux_v', &
@@ -763,6 +770,8 @@ end select
         axes(1:3), Time, 'Temperature tendency from convection','K/s')
    id_conv_rain = register_diag_field(mod_name, 'convection_rain',            &
         axes(1:2), Time, 'Rain from convection','kg/m/m/s')
+   id_t_ref = register_diag_field(mod_name, 't_ref',            &
+        axes(1:3), Time, 'Betts-Miller reference temperature profile','K')      ! JOSH ADDITION to save ref temp
 !endif
 
 
@@ -879,6 +888,10 @@ case(SIMPLE_BETTS_CONV)
    if(id_conv_rain  > 0) used = send_data(id_conv_rain, rain, Time)
    if(id_cape  > 0) used = send_data(id_cape, cape, Time)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
+   if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! JD ADDITION to save ref temp
+   if(id_klzbs  > 0) used = send_data(id_klzbs, klzbs, Time)    ! JD add for convection ref profile info
+   if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! JD add for convection ref profile info
+! The real() is convert from integer - diag table variables have to be real.
 
 case(FULL_BETTS_MILLER_CONV)
 
@@ -908,6 +921,10 @@ case(FULL_BETTS_MILLER_CONV)
    if(id_conv_rain  > 0) used = send_data(id_conv_rain, rain, Time)
    if(id_cape  > 0) used = send_data(id_cape, cape, Time)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
+   if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! JD ADDITION to save ref temp
+   if(id_klzbs  > 0) used = send_data(id_klzbs, klzbs, Time)    ! JD add for convection ref profile info
+   if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! JD add for convection ref profile info
+! The real() is convert from integer - diag table variables have to be real.
 
 case(DRY_CONV)
     call dry_convection(Time, tg(:, :, :, previous),                         &
