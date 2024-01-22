@@ -133,6 +133,7 @@ nav:
             - Cmip Time: code/time_series/cmip_time.md
         - Utils:
             - Base: code/utils/base.md
+            - Calculus: code/utils/calculus.md
             - Dataset Slicing: code/utils/ds_slicing.md
             - Fourier: code/utils/fourier.md
             - Land: code/utils/land.md
