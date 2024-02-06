@@ -324,13 +324,13 @@ contains
           ! Store values
           CAPE(i,j)  = cape_parcel
           CIN(i,j)   = cin_parcel
-          kLZBs(i,j) = kLZB
           
           ! If CAPE>0, set reference temperature and humidity above and below 
           ! the LZB (Level of Zero Buoyancy) 
           if (cape_parcel .gt. 0) then
              ! moist convection may occur
              convflag(i,j) = 1   ! flag for positive CAPE
+             kLZBs(i,j) = kLZB   ! JD - positive CAPE means that the LZB has been computed
              call set_reference_profiles(p_full(i,j,:), qin(i,j,:), Tin(i,j,:), &
                   T_parcel, kLZB, k_surface, r_parcel, deltaq_parcel,   & 
                   deltaT_parcel, qref_parcel, Tref_parcel)
@@ -370,6 +370,8 @@ contains
           else
              ! If CAPE < 0, do nothing, and go back to loop over latitude and longitude
              Pq_parcel     = 0.
+             kLZBs(i,j) = k_surface   ! JD - negative CAPE means that LZB has not been computed, so set to surface level
+             ! This is because, otherwise it is set to 0 which would mean highest level in atmosphere.
              call set_profiles_to_full_model_values (1, k_surface, Tin(i,j,:),&
                         qin(i,j,:), Tref_parcel, deltaT_parcel, qref_parcel, &
                         deltaq_parcel)
