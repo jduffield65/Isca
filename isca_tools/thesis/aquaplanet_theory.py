@@ -162,3 +162,74 @@ def get_gamma(temp_mean: np.ndarray, sphum_mean: np.ndarray, temp_quant: np.ndar
     gamma_t = np.expand_dims(c_p + L_v * alpha_mean * sphum_mean, axis=-1) / denom
     gamma_rdiff = L_v / denom * np.expand_dims(sphum_mean_sat, axis=-1)
     return gamma_t, gamma_rdiff
+
+
+def get_lambda_2_theory(temp_ft_quant: np.ndarray, temp_ft_mean: np.ndarray, z_quant: np.ndarray, z_mean: np.ndarray,
+                        pressure_ft: float) -> Tuple[np.ndarray, dict, dict]:
+    """
+    Compute the approximation for $\lambda_2 = \delta h^*_{FT}(x)/\delta \overline{h^*_{FT}}$ used
+    for the extratropical part of the theory between two simulations (`n_exp` should be 2):
+
+    $$\\lambda_2 \\approx (1+\\frac{\\overline{T}\\delta \\overline{\\kappa}}{\\delta \\overline{z}})
+    \\frac{c_p + L_v\\alpha(x) q^*(x)}{c_p + L_v\\overline{\\alpha} \\overline{q^*}}
+    \\frac{\\delta z(x)}{\\delta \\overline{z}} -
+    \\frac{c_p + L_v\\alpha(x) q^*(x)}{c_p + L_v\\overline{\\alpha} \\overline{q^*}}
+    \\frac{\\overline{T} \\delta \\kappa(x)}{\\delta \\overline{z}}$$
+
+    where $\kappa=z/T$ and $z$ and $T$ are the free-troposphere geopotential height and temperature.
+
+    Args:
+        temp_ft_quant: `float [n_exp, n_lat, n_quant]`</br>
+            Free troposphere temperature for each experiment, latitude and quantile.
+        temp_ft_mean: `float [n_exp, n_lat]`</br>
+            Mean free troposphere temperature for each experiment and latitude.
+        z_quant: `float [n_exp, n_lat, n_quant]`</br>
+            Free troposphere geopotential height for each experiment, latitude and quantile.
+        z_mean: `float [n_exp, n_lat]`</br>
+            Mean free troposphere geopotential height for each experiment and latitude.
+        pressure_ft: Free troposphere pressure level. Units: *Pa*.
+
+    Returns:
+        $\lambda_2$ Approximation: `float [n_lat, n_quant]`</br>
+            Approximation of $\lambda_2$ at each latitude and quantile.
+        `prefactors`: Dictionary containing the prefactors that go into the approximation. All variables are
+            evaluated at the colder simulation.
+
+            - `z1`: `float [n_exp, n_lat, 1]`</br>
+                $1+\\frac{\\overline{T}\\delta \\overline{\\kappa}}{\\delta \\overline{z}}$
+            - `z2`: `float [n_exp, n_lat, n_quant]`</br>
+                $\\frac{c_p + L_v\\alpha(x) q^*(x)}{c_p + L_v\\overline{\\alpha} \\overline{q^*}}$
+            - `kappa`: `float [n_exp, n_lat, n_quant]`</br>
+                $-\\frac{c_p + L_v\\alpha(x) q^*(x)}{c_p + L_v\\overline{\\alpha} \\overline{q^*}} \\times \\overline{T}$
+        `delta_var`: Dictionary containing the following changes between simulations.
+
+            - `z_quant`: `float [n_exp, n_lat, n_quant]`</br>
+                    $\delta z(x)$</br>
+            - `z_mean`: `float [n_exp, n_lat, 1]`</br>
+                    $\delta \overline{z}$</br>
+            - `kappa_quant`: `float [n_exp, n_lat, n_quant]`</br>
+                    $\delta \kappa(x)$</br>
+            - `kappa_mean`: `float [n_exp, n_lat, 1]`</br>
+                    $\delta \overline{\kappa}$
+    """
+    kappa_quant = z_quant / temp_ft_quant
+    kappa_mean = z_mean / temp_ft_mean
+    # Need to expand dims of mean variables so can multiply quant arrays
+    temp_ft_mean = np.expand_dims(temp_ft_mean, axis=-1)
+
+    delta_var = {'z_quant': z_quant[1] - z_quant[0], 'z_mean': np.expand_dims(z_mean[1] - z_mean[0], axis=-1),
+                 'kappa_quant': kappa_quant[1] - kappa_quant[0],
+                 'kappa_mean': np.expand_dims(kappa_mean[1] - kappa_mean[0], axis=-1)}
+
+    alpha_quant = clausius_clapeyron_factor(temp_ft_quant[0], pressure_ft)
+    alpha_mean = clausius_clapeyron_factor(temp_ft_mean[0], pressure_ft)
+    q_quant = sphum_sat(temp_ft_quant[0], pressure_ft)
+    q_mean = sphum_sat(temp_ft_mean[0], pressure_ft)
+
+    prefactors = {'z1': 1+temp_ft_mean[0] * delta_var['kappa_mean'] / delta_var['z_mean'],
+                  'z2': (c_p + L_v * alpha_quant * q_quant) / (c_p + L_v * alpha_mean * q_mean)}
+    prefactors['kappa'] = -prefactors['z2'] * temp_ft_mean[0]
+
+    lambda_2_approx = prefactors['z1'] * prefactors['z2'] * delta_var['z_quant'] / delta_var['z_mean'] + \
+        prefactors['kappa'] * delta_var['kappa_quant'] / delta_var['z_mean']
+    return lambda_2_approx, prefactors, delta_var
