@@ -278,7 +278,7 @@ dt_tracers = 0.0
 if(current == previous) then
   delta_t = dt_real
 else
-  delta_t = 2*dt_real
+  delta_t = 2*dt_real    ! JD - This is 2* because implicit leapfrog used I think. But actual time between iterations is dt_real
 endif
 
 Time_next = Time + Time_step
@@ -316,8 +316,14 @@ else
        z_full(:,:,:,future), z_half(:,:,:,future), p_full(:,:,:,future), p_half(:,:,:,future), &
                                      grid_tracers(:,:,:,future,nhum))
 endif
+! Original Code
+! call spectral_diagnostics(Time_next, psg(:,:,future), ug(:,:,:,future), vg(:,:,:,future), &
+!                          tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
 
-call spectral_diagnostics(Time_next, psg(:,:,future), ug(:,:,:,future), vg(:,:,:,future), &
+! Output temp tendency, dt_tg instead of zonal velocity, u
+! Replace v by difference between future and current temperature
+! Use dt_real as want tendency between last simulation and next
+call spectral_diagnostics(Time_next, psg(:,:,future), dt_tg, (tg(:,:,:,future) - tg(:,:,:,current))/dt_real, &
                           tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
 
 previous = current

@@ -742,7 +742,8 @@ if(id_flux_t > 0) used = send_data(id_flux_t, flux_t, Time_next)
 if(id_flux_lhe > 0) used = send_data(id_flux_lhe, HLV * flux_q_total, Time_next)
 if(id_flux_oceanq > 0)   used = send_data(id_flux_oceanq, ocean_qflux, Time_next)
 
-if(id_delta_t_surf > 0)   used = send_data(id_delta_t_surf, delta_t_surf, Time_next)
+! JD - Change units to K/s to match atmospheric temp tendency
+if(id_delta_t_surf > 0)   used = send_data(id_delta_t_surf, delta_t_surf/dt, Time_next)
 
 end subroutine mixed_layer
 

@@ -1319,11 +1319,16 @@ if(turb) then
                               albedo(:,:))
    endif
 
+   if(id_diff_dt_ug > 0) used = send_data(id_diff_dt_ug, dt_tg, Time)       ! Full tendency before vert_diff_up
+   if(id_diff_dt_vg > 0) used = send_data(id_diff_dt_vg, non_diff_dt_tg, Time)   ! Full tendency before any diffusion
+
    call gcm_vert_diff_up (1, 1, delta_t, Tri_surf, dt_tg(:,:,:), dt_tracers(:,:,:,nsphum), dt_tracers(:,:,:,:))
 
-   if(id_diff_dt_ug > 0) used = send_data(id_diff_dt_ug, dt_ug - non_diff_dt_ug, Time)
-   if(id_diff_dt_vg > 0) used = send_data(id_diff_dt_vg, dt_vg - non_diff_dt_vg, Time)
-   if(id_diff_dt_tg > 0) used = send_data(id_diff_dt_tg, dt_tg - non_diff_dt_tg, Time)
+   if(id_diff_dt_tg > 0) used = send_data(id_diff_dt_tg, dt_tg, Time)       ! Full final tendency
+   ! ORIGINAL CODE
+   ! if(id_diff_dt_ug > 0) used = send_data(id_diff_dt_ug, dt_ug - non_diff_dt_ug, Time)
+   ! if(id_diff_dt_vg > 0) used = send_data(id_diff_dt_vg, dt_vg - non_diff_dt_vg, Time)
+   ! if(id_diff_dt_tg > 0) used = send_data(id_diff_dt_tg, dt_tg - non_diff_dt_tg, Time)
    if(id_diff_dt_qg > 0) used = send_data(id_diff_dt_qg, dt_tracers(:,:,:,nsphum) - non_diff_dt_qg, Time)
 
 endif ! if(turb) then
