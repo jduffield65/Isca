@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'play/temp_tendency/k=3_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/k=3_5'
+   name = 'play/temp_tendency/k=1_taubm=400'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/k=1_taubm=400'
    n_months_total = 60           ! Total duration of simulation in months.
    n_months_job = 60             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -77,6 +77,7 @@
     tmax = 350.0
     tmin = 160.0
     rhbm = 0.7
+    tau_bm = 400                        ! default is 7200
 /
 
 ! Not sure why we need this namelist as we are doing simple betts miller which uses qe_moist_convection_nml
@@ -107,7 +108,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 3.5                         ! FRIERSON kappa optical depth parameter
+    odp = 1                         ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
