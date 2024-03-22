@@ -77,7 +77,6 @@
     tmax = 350.0
     tmin = 160.0
     rhbm = 0.7
-    tau_bm = 2000
 /
 
 ! Not sure why we need this namelist as we are doing simple betts miller which uses qe_moist_convection_nml
