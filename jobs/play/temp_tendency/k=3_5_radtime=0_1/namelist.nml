@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'play/temp_tendency/k=3_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/k=3_5'
+   name = 'play/temp_tendency/k=3_5_radtime=0_1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/k=3_5_radtime=0_1'
    n_months_total = 60           ! Total duration of simulation in months.
    n_months_job = 60             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -107,7 +107,8 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 3.5                         ! FRIERSON kappa optical depth parameter
+    odp = 3.5                       ! FRIERSON kappa optical depth parameter
+    diabatic_acce = 0.1             ! Make radiative adjustment quicker. Default is 1.
 /
 
 &diag_manager_nml

@@ -4,10 +4,10 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'play/temp_tendency/k=3_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/k=3_5'
-   n_months_total = 60           ! Total duration of simulation in months.
-   n_months_job = 60             ! Approximate duration of each job of the simulation in months.
+   name = 'play/temp_tendency/column/k=1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/column/k=1'
+   n_months_total = 1           ! Total duration of simulation in months.
+   n_months_job = 1             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
@@ -22,7 +22,7 @@
 &main_nml
     calendar = 'thirty_day'
     current_date = 1, 1, 1, 0, 0, 0
-    days = 30
+    days = 5
     dt_atmos = 720
     hours = 0
     minutes = 0
@@ -75,7 +75,7 @@
 
 &qe_moist_convection_nml
     tmax = 350.0
-    tmin = 160.0
+    tmin = 120.0                        ! different from usual value of 160, as was getting too cold.
     rhbm = 0.7
 /
 
@@ -107,7 +107,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 3.5                         ! FRIERSON kappa optical depth parameter
+    odp = 1                         ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
@@ -124,9 +124,7 @@
     domains_stack_size = 600000     ! default is 0
 /
 
-&spectral_dynamics_nml
-    damping_order = 4
-    water_correction_limit = 200.e2
+&column_nml
     reference_sea_level_press = 1.0e5
     num_levels = 25                         ! How many pressure levels to use
     valid_range_t = 100.0, 800.0
