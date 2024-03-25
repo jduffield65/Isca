@@ -1026,6 +1026,8 @@ ug_final  =  ug(:,:,:,current)
 vg_final  =  vg(:,:,:,current)
 tg_final  =  tg(:,:,:,current)
 grid_tracers_final(:,:,:,time_level_out,:) = grid_tracers(:,:,:,current,:)
+dt_tg = dt_tg_tmp    ! JD - add so can output temp tendency after advection
+wg_full = dt_grid_tmp ! JD - make vertical wind output equal to vertical advection tendency
 
 
 call complete_robert_filter(tracer_attributes, part_filt_ln_ps, part_filt_vors, part_filt_divs, part_filt_ts, part_filt_trs, part_filt_tr)

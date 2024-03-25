@@ -338,10 +338,26 @@ else
 endif
 
 #ifdef COLUMN_MODEL
-call column_diagnostics(Time_next, psg(:,:,future), ug(:,:,:,future), vg(:,:,:,future), &
-tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
+! Original code
+! call column_diagnostics(Time_next, psg(:,:,future), ug(:,:,:,future), vg(:,:,:,future), &
+! tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
+
+! Output temp tendency, dt_tg instead of zonal velocity, u
+! Replace v by difference between future and current temperature
+! Use dt_real as want tendency between last simulation and next
+! dt_tg is not altered by column function, unlike spectral_dynamics. Thus no change to column.F90 file
+! to output temp tendency
+call column_diagnostics(Time_next, psg(:,:,future), dt_tg, (tg(:,:,:,future) - tg(:,:,:,current))/dt_real, &
+     tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
 #else
-call spectral_diagnostics(Time_next, psg(:,:,future), ug(:,:,:,future), vg(:,:,:,future), &
+! Original Code
+! call spectral_diagnostics(Time_next, psg(:,:,future), ug(:,:,:,future), vg(:,:,:,future), &
+!                          tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
+
+! Output temp tendency, dt_tg instead of zonal velocity, u
+! Replace v by difference between future and current temperature
+! Use dt_real as want tendency between last simulation and next
+call spectral_diagnostics(Time_next, psg(:,:,future), dt_tg, (tg(:,:,:,future) - tg(:,:,:,current))/dt_real, &
                           tg(:,:,:,future), wg_full, grid_tracers(:,:,:,:,:), future)
 #endif
 
