@@ -4,10 +4,10 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'play/temp_tendency/k=3_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/play/temp_tendency/k=3_5'
-   n_months_total = 60          ! Total duration of simulation in months.
-   n_months_job = 60            ! Approximate duration of each job of the simulation in months.
+   name = 'tau_sweep/land/meridional_band/depth=1/bucket_evap/k=3_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/depth=1/bucket_evap/k=3_5'
+   n_months_total = 84           ! Total duration of simulation in months.
+   n_months_job = 84             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
@@ -40,6 +40,11 @@
     roughness_mom = 3.21e-05
     two_stream_gray = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
+    land_option = 'input'                           ! LAND OPTION
+    land_file_name = 'INPUT/land.nc'                ! LAND OPTION
+    bucket = .true.                                 ! LAND BUCKET OPTION
+    init_bucket_depth_land = 0.10                   ! LAND BUCKET OPTION
+    max_bucket_depth_land = 0.15                    ! LAND BUCKET OPTION - as in Manabe (1969) and Byrne & O'G (2013)
 /
 
 &vert_turb_driver_nml
@@ -59,6 +64,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
+    land_evap_prefactor = 0.1                       ! LAND OPTION
 /
 
 &atmosphere_nml
@@ -67,7 +73,7 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 1.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
@@ -107,7 +113,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 3.5                         ! FRIERSON kappa optical depth parameter
+    odp = 3.5                       ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml

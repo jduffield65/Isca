@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/vary_depth/depth=1/k=0_2'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/vary_depth/depth=1/k=0_2'
+   name = 'tau_sweep/land/meridional_band/depth=1/bucket_evap/k=2'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/depth=1/bucket_evap/k=2'
    n_months_total = 84           ! Total duration of simulation in months.
    n_months_job = 84             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -40,6 +40,11 @@
     roughness_mom = 3.21e-05
     two_stream_gray = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
+    land_option = 'input'                           ! LAND OPTION
+    land_file_name = 'INPUT/land.nc'                ! LAND OPTION
+    bucket = .true.                                 ! LAND BUCKET OPTION
+    init_bucket_depth_land = 0.10                   ! LAND BUCKET OPTION
+    max_bucket_depth_land = 0.15                    ! LAND BUCKET OPTION - as in Manabe (1969) and Byrne & O'G (2013)
 /
 
 &vert_turb_driver_nml
@@ -59,6 +64,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
+    land_evap_prefactor = 0.1                       ! LAND OPTION
 /
 
 &atmosphere_nml
@@ -107,7 +113,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 0.2                       ! FRIERSON kappa optical depth parameter
+    odp = 2                         ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
