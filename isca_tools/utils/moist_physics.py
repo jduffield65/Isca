@@ -86,7 +86,8 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     return 100 * mix_ratio/(epsilon+mix_ratio) * (epsilon+sat_mix_ratio)/sat_mix_ratio
 
 
-def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.ndarray, float]) -> np.ndarray:
+def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.ndarray, float],
+                        c_p_const: float = c_p) -> np.ndarray:
     """
     Returns the moist static energy in units of *kJ/kg*.
 
@@ -95,11 +96,13 @@ def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.nd
         sphum: `float [n_lat, n_p_levels]`. Specific humidity at each coordinate considered. Units: *kg/kg*.
         height: `float [n_lat, n_p_levels]` or `float`. Geopotential height of each level considered.
         Just a `float` if only one pressure level considered for each latitude e.g. common to use 2m values. Units: *m*.
+        c_p_const: Heat capacity constant in units of J/K/kg.
+            This gives the option to easily modify the moist static energy but almost always be kept at default `c_p`.
 
     Returns:
         Moist static energy at each coordinate given.
     """
-    return (L_v * sphum + c_p * temp + g * height) / 1000
+    return (L_v * sphum + c_p_const * temp + g * height) / 1000
 
 
 def sphum_sat(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray]) -> np.ndarray:
