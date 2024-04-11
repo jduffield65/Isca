@@ -138,7 +138,7 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
             * `full`: In addition to the terms in `squared`, we keep the usually small *LSS* and *SLS* terms.
     Returns:
         `delta_mse_mod_anomaly`: `float [n_quant]`</br>
-            $\delta \Delta h^{\dagger}$ conditioned on each quantile of near-surface temperature.
+            $\delta \Delta h^{\dagger}$ conditioned on each quantile of near-surface temperature. Units: *kJ/kg*.
         `info_dict`: Dictionary with 5 keys: `temp_adiabat_anom`, `mse_mod_mean`, `mse_mod_mean_squared`,
             `mse_mod_mean_cubed`, `non_linear`.</br>
 
@@ -149,6 +149,8 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
             and `info_dict[temp_adiabat_anom][0]`$=\\beta_1$ and `info_dict[mse_mod_mean][0]`$=
             \\frac{\\beta_2}{\\beta_1}\\frac{\\overline{T_A}}{\\Delta T_A}$ would be the only non-zero prefactors.
 
+            Units of prefactor multiplied by change is *kJ/kg*.
+
     """
     # Compute adiabatic temperatures
     n_exp, n_quant = temp_surf_quant.shape
@@ -157,7 +159,8 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     for i in range(n_exp):
         temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
         for j in range(n_quant):
-            temp_adiabat_quant[i, j] = get_temp_adiabat(temp_surf_quant[i, j], sphum_quant[i, j], pressure_surf, pressure_ft)
+            temp_adiabat_quant[i, j] = get_temp_adiabat(temp_surf_quant[i, j], sphum_quant[i, j], pressure_surf,
+                                                        pressure_ft)
     temp_adiabat_anom = temp_adiabat_quant - temp_adiabat_mean[:, np.newaxis]
     delta_temp_adiabat_anom = temp_adiabat_anom[1] - temp_adiabat_anom[0]
 
@@ -171,8 +174,8 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     beta_2 = L_v * alpha * q_sat * (alpha * temp_adiabat_mean[0] - 2)
     beta_3 = L_v * alpha * q_sat * ((alpha * temp_adiabat_mean[0]) ** 2 - 6 * alpha * temp_adiabat_mean[0] + 6)
 
-    # Compute modified MSE
-    mse_mod_mean = moist_static_energy(temp_surf_mean, sphum_mean, height=0, c_p_const=c_p - R_mod)
+    # Compute modified MSE - need in units of J/kg at the moment hence multiply by 1000
+    mse_mod_mean = moist_static_energy(temp_surf_mean, sphum_mean, height=0, c_p_const=c_p - R_mod) * 1000
     delta_mse_mod = mse_mod_mean[1] - mse_mod_mean[0]
 
     # Decompose Taylor Expansions - 3 in total
@@ -187,11 +190,13 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     term_ll = beta_1 * delta_temp_adiabat_anom
     term_lll = beta_2 / beta_1 * temp_adiabat_anom[0] / temp_adiabat_mean[0] * delta_mse_mod
     if taylor_terms != 'linear':
-        term_lls = -0.5 * beta_2 ** 2 / beta_1 ** 3 * temp_adiabat_anom[0] / temp_adiabat_mean[0] ** 2 * delta_mse_mod ** 2
+        term_lls = -0.5 * beta_2 ** 2 / beta_1 ** 3 * temp_adiabat_anom[0] / temp_adiabat_mean[
+            0] ** 2 * delta_mse_mod ** 2
         term_sll = 0.5 * beta_3 / beta_1 * (temp_adiabat_anom[0] / temp_adiabat_mean[0]) ** 2 * delta_mse_mod
         term_lsl = 0.5 * beta_3 / beta_1 ** 2 * temp_adiabat_anom[0] / temp_adiabat_mean[0] ** 2 * delta_mse_mod ** 2
         term_lnl = beta_2 / beta_1 / temp_adiabat_mean[0] * delta_temp_adiabat_anom * delta_mse_mod
-        term_snl = beta_3 / beta_1 * temp_adiabat_anom[0] / temp_adiabat_mean[0] ** 2 * delta_temp_adiabat_anom * delta_mse_mod
+        term_snl = beta_3 / beta_1 * temp_adiabat_anom[0] / temp_adiabat_mean[
+            0] ** 2 * delta_temp_adiabat_anom * delta_mse_mod
     else:
         term_lls = 0
         term_sll = 0
@@ -216,7 +221,8 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     # Have a prefactor based on current climate and a change between simulations for each factor.
     info_dict = {'temp_adiabat_anom': [term_ll / delta_temp_adiabat_anom / 1000, delta_temp_adiabat_anom],
                  'mse_mod_mean': [(term_lll + term_sll) / delta_mse_mod / 1000, delta_mse_mod],
-                 'mse_mod_mean_squared': [(term_lls + term_lsl + term_sls) / delta_mse_mod ** 2 / 1000, delta_mse_mod ** 2],
+                 'mse_mod_mean_squared': [(term_lls + term_lsl + term_sls) / delta_mse_mod ** 2 / 1000,
+                                          delta_mse_mod ** 2],
                  'mse_mod_mean_cubed': [term_lss / delta_mse_mod ** 3 / 1000, delta_mse_mod ** 3],
                  'non_linear': [(term_lnl + term_snl) / (delta_temp_adiabat_anom * delta_mse_mod) / 1000,
                                 delta_temp_adiabat_anom * delta_mse_mod]
@@ -225,3 +231,56 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     final_answer = term_ll + term_lll + term_lls + term_sll + term_lsl + term_lnl + term_snl + term_lss + term_sls
     final_answer = final_answer / 1000  # convert to units of kJ/kg
     return final_answer, info_dict
+
+
+def get_delta_temp_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
+                          sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
+                          taylor_terms_delta_mse_mod_anom: str = 'linear', taylor_terms_delta_mse_mod: str = 'linear',
+                          include_rh_temp_anomaly_terms=True, rh_anomaly_form=False):
+    R_mod = R * np.log(pressure_surf / pressure_ft) / 2
+    q_sat_surf_quant = sphum_sat(temp_surf_quant, pressure_surf)  # [n_exp, n_quant]
+    q_sat_surf_mean = sphum_sat(temp_surf_mean, pressure_surf)  # [n_exp]
+    alpha_surf_quant = clausius_clapeyron_factor(temp_surf_quant[0], pressure_surf)  # float
+    alpha_surf_mean = clausius_clapeyron_factor(temp_surf_mean[0], pressure_surf)  # float
+
+    r_quant = sphum_quant / q_sat_surf_quant  # [n_exp, n_quant]
+    r_mean = sphum_mean / q_sat_surf_mean  # [n_exp]
+
+    delta_temp_surf_mean = temp_surf_mean[1] - temp_surf_mean[0]
+    delta_r_mean = r_mean[1] - r_mean[0]
+    delta_r_quant = r_quant[1] - r_quant[0]
+
+    delta_mse_mod_mean_rh_term = L_v * q_sat_surf_mean[0] * delta_r_mean
+    delta_mse_mod_mean = (c_p - R_mod + L_v * alpha_surf_mean * sphum_mean[0]) * delta_temp_surf_mean + \
+                         delta_mse_mod_mean_rh_term
+
+    # Get coefs and terms such that LHS of equation is
+    # coef_delta_temp_quant * delta_temp_quant + coef_delta_temp_quant_squared * delta_temp_quant**2
+    # and RHS is some of all remaining variables with term prefix.
+    coef_delta_temp_quant = c_p - R_mod + L_v * alpha_surf_quant * sphum_quant[0]
+    coef_delta_temp_quant_squared = 0
+    if taylor_terms_delta_mse_mod == 'squared':
+        # Add extra term in taylor expansion of delta_mse_mod if requested
+        delta_mse_mod_mean += 0.5 * L_v * alpha_surf_mean * sphum_mean[0] * (alpha_surf_mean - 2 / temp_surf_mean[0]
+                                                                             ) * delta_temp_surf_mean ** 2
+        coef_delta_temp_quant_squared += 0.5 * L_v * alpha_surf_quant * sphum_quant[0] * (alpha_surf_quant -
+                                                                                          2 / temp_surf_quant[0])
+    info = get_delta_mse_mod_anom_theory(temp_surf_mean, temp_surf_quant, sphum_mean,
+                                         sphum_quant, pressure_surf, pressure_ft, taylor_terms_delta_mse_mod_anom)[1]
+    if rh_anomaly_form:
+        # Use mean so can easily combine relative humidity terms for quant and mean.
+        term_r_quant = -L_v * q_sat_surf_mean[0] * delta_r_quant
+    else:
+        term_r_quant = -L_v * q_sat_surf_quant[0] * delta_r_quant
+    term_temp_adiabat_anom = info['temp_adiabat_anom'][0] * info['temp_adiabat_anom'][1]
+    if include_rh_temp_anomaly_terms:
+        delta_mse_mod_mean_use = delta_mse_mod_mean
+    else:
+        # Neglect rh terms when multiplied by an info[0] term, as very small.
+        delta_mse_mod_mean_use = delta_mse_mod_mean - delta_mse_mod_mean_rh_term
+    term_mse_mod_mean = delta_mse_mod_mean + info['mse_mod_mean'][0] * delta_mse_mod_mean_use
+    term_mse_mean_squared = info['mse_mod_mean_squared'][0] * delta_mse_mod_mean_use ** 2
+    term_mse_mod_mean_cubed = info['mse_mod_mean_cubed'][0] * delta_mse_mod_mean_use ** 3
+    term_non_linear = info['non_linear'] * info['temp_adiabat_anom'][1] * delta_mse_mod_mean_use
+
+    
