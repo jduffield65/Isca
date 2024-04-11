@@ -229,7 +229,7 @@ Moisture tendency from condensation.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $kgkg^{-1}s^{-1}$*
 
-#### `dt_qg_condensation`
+#### `dt_tg_condensation`
 Temperature tendency from condensation.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $Ks^{-1}$*
@@ -246,7 +246,7 @@ Moisture tendency from convection.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $kgkg^{-1}s^{-1}$*
 
-#### `dt_qg_convection`
+#### `dt_tg_convection`
 Temperature tendency from convection.</br>
 *Dimensions: time, lat, lon, pressure*</br>
 *Units: $Ks^{-1}$*
