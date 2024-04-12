@@ -2,7 +2,7 @@ import numpy as np
 import scipy.optimize
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 from ..utils.constants import c_p, L_v, R
-from typing import Tuple
+from typing import Tuple, Union
 
 
 def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: float,
@@ -72,7 +72,7 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
 
 def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                   sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
-                                  taylor_terms: str = 'linear') -> Tuple[np.ndarray, dict]:
+                                  taylor_terms: str = 'linear') -> Tuple[np.ndarray, dict, np.ndarray]:
     """
     This function returns an approximation in the change in modified MSE anomaly,
     $\delta \Delta h^{\dagger} = \delta (h^{\dagger}(x) - \overline{h^{\dagger}})$, with warming -
@@ -86,7 +86,7 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
 
     Terms in equation:
         * $h^{\\dagger} = (c_p - R^{\\dagger})T_s + L_v q_s = (c_p + R^{\\dagger})T_A + L_vq^*(T_A, p_{FT})$ where
-        $R^{\dagger} = \\ln(p_s/p_{FT})/2$
+        $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
         * $\\Delta T_A = T_A(x) - \overline{T_A}$
         * $\\beta_1 = \\frac{d\\overline{h^{\\dagger}}}{d\\overline{T_A}} = c_p + R^{\dagger} + L_v \\alpha q^*$
         * $\\beta_2 = \\overline{T_A}\\frac{d\\beta_1}{d\\overline{T_A}} = L_v \\alpha q^*(\\alpha \\overline{T_A} - 2)$
@@ -104,6 +104,11 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     Overall, we get $\delta \Delta h^{\dagger}$ as a function of $\delta \Delta T_A$, $\delta \overline{h^{\\dagger}}$
     and quantities evaluated at the base climate. The `taylor_terms` variable can be used to specify how many terms
     we want to keep.
+
+    The simplest equation with `taylor_terms = 'linear'` is:
+
+    $$\\delta \\Delta h^{\\dagger} \\approx \\beta_1 \\delta \\Delta T_A +
+    \\frac{\\beta_2}{\\beta_1}\\frac{\\overline{T_A}}{\\Delta T_A} \\delta \\overline{h^{\\dagger}}$$
 
     Args:
         temp_surf_mean: `float [n_exp]`</br>
@@ -150,7 +155,9 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
             \\frac{\\beta_2}{\\beta_1}\\frac{\\overline{T_A}}{\\Delta T_A}$ would be the only non-zero prefactors.
 
             Units of prefactor multiplied by change is *kJ/kg*.
-
+        `temp_adiabat_anom`: `float [n_exp, n_quant]`</br>
+            The adiabatic free troposphere temperature anomaly, $\Delta T_A$ for each experiment, as may be of use.
+            Units: *Kelvin*.
     """
     # Compute adiabatic temperatures
     n_exp, n_quant = temp_surf_quant.shape
@@ -230,13 +237,97 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
 
     final_answer = term_ll + term_lll + term_lls + term_sll + term_lsl + term_lnl + term_snl + term_lss + term_sls
     final_answer = final_answer / 1000  # convert to units of kJ/kg
-    return final_answer, info_dict
+    return final_answer, info_dict, temp_adiabat_anom
 
 
 def get_delta_temp_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                           sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
                           taylor_terms_delta_mse_mod_anom: str = 'linear', taylor_terms_delta_mse_mod: str = 'linear',
-                          include_rh_temp_anomaly_terms=True, rh_anomaly_form=False):
+                          rh_option: str = 'full'
+                          ) -> Union[Tuple[np.ndarray, np.ndarray, dict], Tuple[np.ndarray, np.ndarray]]:
+    """
+    Returns a theoretical prediction for change in a given percentile, $x$, of near-surface temperature. In the simplest
+    case with `taylor_terms_delta_mse_mod_anom = 'linear'`, `taylor_terms_delta_mse_mod='linear'` and
+    `rh_option = 'approx_anomaly'`, the equation for the theory is:
+
+    $$\delta T(x) = \gamma_T \delta \overline{T} + \gamma_{\Delta r} \delta (\overline{r} - r(x)) +
+    \\frac{\\beta_1 \\delta \\Delta T_A(x)}{c_p - R^{\\dagger} + L_v \\alpha q} +
+    \\frac{\\beta_2}{\\beta_1}\\frac{\\Delta T_A(x)}{\overline{T_A}} \gamma_T \delta \overline{T}$$
+
+    A simpler theory with $\\Delta T_A = \\delta \\Delta T_A = 0$, so just including the first two terms is also
+    returned.
+
+    Terms in equation:
+        * $\gamma_T = \\frac{c_p - R^{\dagger} + L_v \\bar{\\alpha} \\bar{q}}{c_p - R^{\dagger} + L_v \\alpha q}$
+        * $\gamma_{\Delta r} = \\frac{L_v \\overline{q^*}}{c_p - R^{\dagger} + L_v \\alpha q}$
+        * $q^*$ and $\\alpha$ are evaluated at the surface i.e. $q^* = q^*(T_s, p_s)$.
+        * $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
+        * $\\Delta T_A = T_A(x) - \overline{T_A}$ where $T_A$ is the adiabatic temperature at the free troposphere
+            pressure of $p_{FT}$.
+        * $\\beta_1 = \\frac{d\\overline{h^{\\dagger}}}{d\\overline{T_A}} = c_p + R^{\dagger} + L_v \\alpha_A q_A^*$
+        * $\\beta_2 = \\overline{T_A}\\frac{d\\beta_1}{d\\overline{T_A}} = L_v \\alpha_A q^*(\\alpha_A \\overline{T_A} - 2)$
+        * All terms in $\\beta$ are evaluated at $T_A$. I.e. $q_A^* = q^*(T_A, p_{FT})$.
+
+    Args:
+        temp_surf_mean: `float [n_exp]`</br>
+            Average near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+        temp_surf_quant: `float [n_exp, n_quant]`</br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+        sphum_mean: `float [n_exp]`</br>
+            Average near surface specific humidity of each simulation. Units: *kg/kg*.
+        sphum_quant: `float [n_exp, n_quant]`</br>
+            `sphum_quant[i, j]` is near-surface specific humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+        taylor_terms_delta_mse_mod_anom:
+            How many taylor series terms to keep in the `get_delta_mse_mod_anom_theory` function to obtain approximation
+            for change in modified moist static energy anomaly: $\\delta \\Delta h^{\\dagger}$.
+        taylor_terms_delta_mse_mod:
+            How many taylor series terms to keep in the expansions for changes in modified moist static energy:
+            $\\delta h^{\\dagger}(x)$ and $\\delta \overline{h^{\\dagger}}$ ($\\alpha$ and $q^*$ are both evaluated
+            at the surface i.e. $\\alpha(T_s, p_s)$).
+
+            * `linear`: $\\delta h^{\\dagger} \\approx (c_p - R^{\\dagger} + L_v \\alpha q)\\delta T_s +
+                L_v \\alpha q^* \\delta r$
+            * `squared`: Includes the additional term $0.5 L_v \\alpha q (\\alpha - 2 / T_s) \\delta T_s^2$
+        rh_option:
+            Relative humidity changes, $\delta r$, provide a secondary effect, so we give a number of options to approximate them:
+
+            * `full`: No approximations to $\delta r$ terms.
+            * `approx`: Neglect all $\\Delta T_A \delta r$ terms, in essence non-linear terms.
+            * `none`: Set all relative humidity changes to zero.
+            * If `anomaly` is also included e.g. `full_anomaly` or `approx_anomaly`, the $\delta r(x)$ term will be
+                multiplied by $\overline{q^*}$ rather than $q^*(x)$. This then gives a $\delta (r(x) - \overline{r})$
+                term rather than two separate relative humidity terms.
+    Returns:
+        `delta_temp_quant`: `float [n_quant]`</br>
+            `delta_temp_quant[i]` refers to the theoretical temperature difference between experiments
+            for percentile `quant_use[j]`.
+        `delta_temp_quant_old`: `float [n_quant]`</br>
+            Theoretical temperature difference using old theory which assumes $\\Delta T_A = \\delta \\Delta T_A = 0$.
+        `info_dict`: Only returned if `taylor_terms_delta_mse_mod='linear'` otherwise too complicated.
+
+            Dictionary with 8 keys for each term in the theory: `temp_adiabat_anom_change`, `temp_mean_change`,
+            `r_mean_change`, `r_quant_change`, `temp_mean_squared_change`, `temp_mean_cubed_change`,
+            `non_linear_change` and `temp_adiabat_anom_0`.</br>
+
+            For each key with the `_change` suffix, a list containing a prefactor computed in the base climate and a
+            change between simulations is returned. The sum of all these prefactors multiplied by the changes equals
+            the full theory.
+
+            There is also a `temp_adiabat_anom_0` key. Here `temp_adiabat_anom_0[1]` is $\Delta T_A$ in the base climate
+            and `temp_adiabat_anom_0[0]` the prefactor which multiplies the $\Delta T_A$ term.
+            If `taylor_terms_delta_mse_mod_anom` is not `linear`, then this term is not accurate - very complicated in
+            this case and get $\Delta T_A^2$ terms.
+    """
     R_mod = R * np.log(pressure_surf / pressure_ft) / 2
     q_sat_surf_quant = sphum_sat(temp_surf_quant, pressure_surf)  # [n_exp, n_quant]
     q_sat_surf_mean = sphum_sat(temp_surf_mean, pressure_surf)  # [n_exp]
@@ -251,36 +342,96 @@ def get_delta_temp_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarra
     delta_r_quant = r_quant[1] - r_quant[0]
 
     delta_mse_mod_mean_rh_term = L_v * q_sat_surf_mean[0] * delta_r_mean
-    delta_mse_mod_mean = (c_p - R_mod + L_v * alpha_surf_mean * sphum_mean[0]) * delta_temp_surf_mean + \
-                         delta_mse_mod_mean_rh_term
+    delta_mse_mod_mean_temp_term = (c_p - R_mod + L_v * alpha_surf_mean * sphum_mean[0]) * delta_temp_surf_mean
 
     # Get coefs and terms such that LHS of equation is
     # coef_delta_temp_quant * delta_temp_quant + coef_delta_temp_quant_squared * delta_temp_quant**2
     # and RHS is some of all remaining variables with term prefix.
     coef_delta_temp_quant = c_p - R_mod + L_v * alpha_surf_quant * sphum_quant[0]
-    coef_delta_temp_quant_squared = 0
     if taylor_terms_delta_mse_mod == 'squared':
         # Add extra term in taylor expansion of delta_mse_mod if requested
-        delta_mse_mod_mean += 0.5 * L_v * alpha_surf_mean * sphum_mean[0] * (alpha_surf_mean - 2 / temp_surf_mean[0]
-                                                                             ) * delta_temp_surf_mean ** 2
-        coef_delta_temp_quant_squared += 0.5 * L_v * alpha_surf_quant * sphum_quant[0] * (alpha_surf_quant -
-                                                                                          2 / temp_surf_quant[0])
-    info = get_delta_mse_mod_anom_theory(temp_surf_mean, temp_surf_quant, sphum_mean,
-                                         sphum_quant, pressure_surf, pressure_ft, taylor_terms_delta_mse_mod_anom)[1]
-    if rh_anomaly_form:
+        delta_mse_mod_mean_temp_term += 0.5 * L_v * alpha_surf_mean * sphum_mean[0] * \
+                                        (alpha_surf_mean - 2 / temp_surf_mean[0]) * delta_temp_surf_mean ** 2
+        coef_delta_temp_quant_squared = 0.5 * L_v * alpha_surf_quant * sphum_quant[0] * (alpha_surf_quant -
+                                                                                         2 / temp_surf_quant[0])
+
+    if 'full' in rh_option:
+        delta_mse_mod_mean_use = delta_mse_mod_mean_temp_term + delta_mse_mod_mean_rh_term
+    elif 'approx' in rh_option:
+        # Neglect rh terms when multiplied by an info[0] term, as very small.
+        delta_mse_mod_mean_use = delta_mse_mod_mean_temp_term
+    elif 'none' in rh_option:
+        # Equivalent to setting both delta_r_mean and delta_r_quant to 0
+        delta_mse_mod_mean_use = delta_mse_mod_mean_temp_term
+        delta_mse_mod_mean_rh_term = 0
+        delta_r_quant = delta_r_quant * 0
+    else:
+        raise ValueError(f"rh_option given is {rh_option}, but must contain 'full', 'approx' or 'none'")
+
+    if 'anomaly' in rh_option:
         # Use mean so can easily combine relative humidity terms for quant and mean.
         term_r_quant = -L_v * q_sat_surf_mean[0] * delta_r_quant
     else:
         term_r_quant = -L_v * q_sat_surf_quant[0] * delta_r_quant
+
+    _, info, temp_adiabat_anom = get_delta_mse_mod_anom_theory(temp_surf_mean, temp_surf_quant, sphum_mean,
+                                                               sphum_quant, pressure_surf, pressure_ft,
+                                                               taylor_terms_delta_mse_mod_anom)
+    for key in info:
+        info[key][0] = info[key][0] * 1000  # turn prefactor units into J/kg
     term_temp_adiabat_anom = info['temp_adiabat_anom'][0] * info['temp_adiabat_anom'][1]
-    if include_rh_temp_anomaly_terms:
-        delta_mse_mod_mean_use = delta_mse_mod_mean
-    else:
-        # Neglect rh terms when multiplied by an info[0] term, as very small.
-        delta_mse_mod_mean_use = delta_mse_mod_mean - delta_mse_mod_mean_rh_term
-    term_mse_mod_mean = delta_mse_mod_mean + info['mse_mod_mean'][0] * delta_mse_mod_mean_use
+    term_mse_mod_mean = delta_mse_mod_mean_temp_term + delta_mse_mod_mean_rh_term + \
+                        info['mse_mod_mean'][0] * delta_mse_mod_mean_use
     term_mse_mean_squared = info['mse_mod_mean_squared'][0] * delta_mse_mod_mean_use ** 2
     term_mse_mod_mean_cubed = info['mse_mod_mean_cubed'][0] * delta_mse_mod_mean_use ** 3
-    term_non_linear = info['non_linear'] * info['temp_adiabat_anom'][1] * delta_mse_mod_mean_use
+    # Non-linear changes are $\delta \Delta T_A \delta T_s_mean$ changes
+    term_non_linear = info['non_linear'][0] * info['temp_adiabat_anom'][1] * delta_mse_mod_mean_use
 
-    
+    terms_sum = term_r_quant + term_temp_adiabat_anom + term_mse_mod_mean + term_mse_mean_squared + \
+                term_mse_mod_mean_cubed + term_non_linear
+    # Old theory is when assume Delta T_A=0 and \delta \Delta T_A=0
+    terms_sum_old = term_r_quant + delta_mse_mod_mean_temp_term + delta_mse_mod_mean_rh_term
+
+    final_answer = []
+    for coef_rhs in [terms_sum, terms_sum_old]:
+        if taylor_terms_delta_mse_mod == 'squared':
+            # Solve quadratic equation, taking the positive solution
+            final_answer += [(-coef_delta_temp_quant + np.sqrt(coef_delta_temp_quant ** 2 -
+                                                               4 * coef_delta_temp_quant_squared * (-coef_rhs))
+                              ) / (2 * coef_delta_temp_quant_squared)]
+        else:
+            final_answer += [coef_rhs / coef_delta_temp_quant]
+
+    if taylor_terms_delta_mse_mod == 'linear':
+        # There are only 4 terms which contribute to near-surface temperature change in the linear case.
+        # The sum of these 4 change terms will equal the final answer.
+        # For each change, record prefactor formed from base climate variables and the change
+        # (delta term for variable in question).
+        # As well as changes, also record terms which depend on adiabatic temp anomaly in the base climate as
+        # temp_adiabat_anom_0.
+        out_info = {'temp_adiabat_anom_change': ([info['temp_adiabat_anom'][0] / coef_delta_temp_quant,
+                                                  info['temp_adiabat_anom'][1]],),
+                    'temp_mean_change': [(1 + info['mse_mod_mean'][0]) * delta_mse_mod_mean_temp_term / (
+                            delta_temp_surf_mean * coef_delta_temp_quant), delta_temp_surf_mean],
+                    'r_mean_change': [delta_mse_mod_mean_rh_term / (delta_r_mean * coef_delta_temp_quant),
+                                      delta_r_mean],
+                    'r_quant_change': [term_r_quant / coef_delta_temp_quant, delta_r_quant],
+                    'temp_mean_squared_change': [
+                        info['mse_mod_mean_squared'][0] * delta_mse_mod_mean_temp_term ** 2 / (
+                                delta_temp_surf_mean ** 2 * coef_delta_temp_quant), delta_temp_surf_mean ** 2],
+                    'temp_mean_cubed_change': [
+                        info['mse_mod_mean_cubed'][0] * delta_mse_mod_mean_temp_term ** 3 / (
+                                delta_temp_surf_mean ** 3 * coef_delta_temp_quant), delta_temp_surf_mean ** 3],
+                    'non_linear_change': [
+                        info['non_linear'][0] * delta_mse_mod_mean_temp_term / (
+                                delta_temp_surf_mean * coef_delta_temp_quant),
+                        info['temp_adiabat_anom'][1] * delta_temp_surf_mean],
+                    'temp_adiabat_anom_0': [info['mse_mod_mean'][0] * delta_mse_mod_mean_use / temp_adiabat_anom[0],
+                                            temp_adiabat_anom[0]]}
+        if 'full' in rh_option:
+            out_info['r_mean_change'][0] += info['mse_mod_mean'][0] * delta_mse_mod_mean_rh_term / (
+                    delta_r_mean * coef_delta_temp_quant)
+
+        return final_answer[0], final_answer[1], out_info
+    else:
+        return final_answer[0], final_answer[1]
