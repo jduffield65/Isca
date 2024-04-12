@@ -70,6 +70,78 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
                                  args=(temp_surf, sphum_surf, pressure_surf, pressure_ft))
 
 
+def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
+                                   sphum_quant: np.ndarray, temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray,
+                                   pressure_surf, pressure_ft) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    The theory for $\delta T(x)$ involves the adiabatic temperature anomaly, $\Delta T_A$. This can be decomposed
+    into more physically meaningful quantities:
+
+    $$\Delta T_A(x) = T_A(x) - \overline{T_A} = \overline{T_{CE}} - T_{CE}(x) + \Delta T_{FT}(x)$$
+
+    where:
+
+    * $\overline{T_{CE}} = \overline{T_{FT}} - \overline{T_A}$ represents the deviation of the mean free tropospheric
+    temperature from the adiabatic temperature. If at convective equilibrium, this would be zero. If the mean day had
+    CAPE, this would be negative, as the lapse rate would be steeper than that expected by convection.
+    * $T_{CE}(x) = T_{FT}(x) - T_A(x)$ represents the deviation of the free tropospheric
+    temperature from the adiabatic temperature conditioned on percentile $x$ of near-surface temperature.
+    * $\Delta T_{FT}(x) = T_{FT}(x) - \overline{T_{FT}}$ represents the gradient of the free tropospheric temperature.
+    Near the tropics, we expect a weak temperature gradient (WTG) so this term would be small.
+
+    Args:
+        temp_surf_mean: `float [n_exp]`</br>
+            Average near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*.
+        temp_surf_quant: `float [n_exp, n_quant]`</br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+        sphum_mean: `float [n_exp]`</br>
+            Average near surface specific humidity of each simulation. Units: *kg/kg*.
+        sphum_quant: `float [n_exp, n_quant]`</br>
+            `sphum_quant[i, j]` is near-surface specific humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        temp_ft_mean: `float [n_exp]`</br>
+            Average temperature at `pressure_ft` in Kelvin.
+        temp_ft_quant: `float [n_exp, n_quant]`</br>
+            `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+
+    Returns:
+        `temp_adiabat_anom`: `float [n_exp, n_quant]`</br>
+            Adiabatic temperature anomaly at `pressure_ft`, $\Delta T_A(x) = T_A(x) - \overline{T_A}$.
+        `temp_ce_mean`: `float [n_exp]`</br>
+            Deviation of mean temperature at `pressure_ft` from mean adiabatic temperature:
+            $\overline{T_{CE}} = \overline{T_{FT}} - \overline{T_A}$.
+        `temp_ce_quant`: `float [n_exp, n_quant]`</br>
+            Deviation of temperature at `pressure_ft` from adiabatic temperature: $T_{CE}(x) = T_{FT}(x) - T_A(x)$.
+            Conditioned on percentile of near-surface temperature.
+        `temp_ft_anom`: `float [n_exp, n_quant]`</br>
+            Temperature anomaly at `pressure_ft`, $\Delta T_{FT}(x) = T_{FT}(x) - \overline{T_{FT}}$.
+
+    """
+    n_exp, n_quant = temp_surf_quant.shape
+    temp_adiabat_mean = np.zeros_like(temp_surf_mean)
+    temp_adiabat_quant = np.zeros_like(temp_surf_quant)
+    for i in range(n_exp):
+        temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
+        for j in range(n_quant):
+            temp_adiabat_quant[i, j] = get_temp_adiabat(temp_surf_quant[i, j], sphum_quant[i, j], pressure_surf,
+                                                        pressure_ft)
+    temp_adiabat_anom = temp_adiabat_quant - temp_adiabat_mean[:, np.newaxis]
+    temp_ce_quant = temp_ft_quant - temp_adiabat_quant
+    temp_ce_mean = temp_ft_mean - temp_adiabat_mean
+    temp_ft_anom = temp_ft_quant - temp_ft_mean
+    return temp_adiabat_anom, temp_ce_mean, temp_ce_quant, temp_ft_anom
+
+
 def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                   sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
                                   taylor_terms: str = 'linear') -> Tuple[np.ndarray, dict, np.ndarray]:
@@ -240,11 +312,12 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     return final_answer, info_dict, temp_adiabat_anom
 
 
-def get_delta_temp_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
-                          sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
-                          taylor_terms_delta_mse_mod_anom: str = 'linear', taylor_terms_delta_mse_mod: str = 'linear',
-                          rh_option: str = 'full'
-                          ) -> Union[Tuple[np.ndarray, np.ndarray, dict], Tuple[np.ndarray, np.ndarray]]:
+def get_delta_temp_quant_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
+                                sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
+                                taylor_terms_delta_mse_mod_anom: str = 'linear',
+                                taylor_terms_delta_mse_mod: str = 'linear',
+                                rh_option: str = 'full'
+                                ) -> Union[Tuple[np.ndarray, np.ndarray, dict], Tuple[np.ndarray, np.ndarray]]:
     """
     Returns a theoretical prediction for change in a given percentile, $x$, of near-surface temperature. In the simplest
     case with `taylor_terms_delta_mse_mod_anom = 'linear'`, `taylor_terms_delta_mse_mod='linear'` and
