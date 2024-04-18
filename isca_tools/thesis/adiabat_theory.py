@@ -591,7 +591,7 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     `rh_option = 'approx_anomaly'`, the equation for the theory is:
 
     $$\delta T(x) = \gamma_{T}' \delta \overline{T} + \gamma_{\Delta r}' \delta (\overline{r} - r(x)) +
-    \\frac{\\beta_1 \\delta \\Delta T_A'(x)}{c_p - R^{\\dagger} + L_v \\alpha q + \\beta_1} +
+    \\frac{\\beta_1 \\delta \\Delta T_A(x)}{c_p - R^{\\dagger} + L_v \\alpha q + \\beta_1} +
     \\frac{\\beta_2}{\\beta_1}\\frac{\\Delta T_A'(x)}{\overline{T_A}} \gamma_{T_2} \delta \overline{T}$$
 
     A simpler theory with $T_{CE} = \\overline{T_{CE}} = \\Delta z_{FT} = 0$, as well as for $\delta$ versions of these
@@ -605,7 +605,7 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
         * $\gamma_{\Delta r}' = \\frac{L_v \\overline{q^*}}{c_p - R^{\dagger} + L_v \\alpha q + \\beta_1}$
         * $q^*$ and $\\alpha$ are evaluated at the surface i.e. $q^* = q^*(T_s, p_s)$.
         * $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
-        * $\\Delta T_A' = T_{CE}(x) - \\overline{T_{CE}} + \\frac{g}{R^{\\dagger}}\\Delta z_{FT} - \\Delta T_s$ and all
+        * $\\Delta T_A = T_{CE}(x) - \\overline{T_{CE}} + \\Delta T_{FT}$ and all
         terms are evaluated in the base climate.
         * $\\delta \\Delta T_A' = \\delta T_{CE}(x) - \\delta \\overline{T_{CE}} +
         \\frac{g}{R^{\\dagger}}\\delta \\Delta z_{FT}$
@@ -713,12 +713,11 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     else:
         raise ValueError(f"rh_option given is {rh_option}, but must contain 'full', 'approx' or 'none'")
 
-    temp_adiabat_anom_wtg, temp_ce_mean, temp_ce_quant = \
+    temp_adiabat_anom, temp_ce_mean, temp_ce_quant = \
         decompose_temp_adiabat_anomaly(temp_surf_mean, temp_surf_quant, sphum_mean,
                                        sphum_quant, temp_ft_mean, temp_ft_quant, pressure_surf, pressure_ft)[:3]
     delta_temp_ce_mean = temp_ce_mean[1] - temp_ce_mean[0]
     delta_temp_ce_quant = temp_ce_quant[1] - temp_ce_quant[0]
-    temp_surf_anom0 = temp_surf_quant[0] - temp_surf_mean[0]
     z_ft_anom = z_ft_quant - z_ft_mean[:, np.newaxis]
     delta_z_ft_anom = z_ft_anom[1] - z_ft_anom[0]
 
@@ -728,7 +727,7 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
         info[key][0] = info[key][0] * 1000  # turn prefactor units into J/kg
     beta_1 = info['temp_adiabat_anom'][0]
     # get prefactor to \Delta T_A \delta h_mod_mean term which is beta_2/beta_1/temp_adiabat_mean[0]
-    term_mse_mod_mean2_prefactor = info['mse_mod_mean'][0] / temp_adiabat_anom_wtg[0]
+    term_mse_mod_mean2_prefactor = info['mse_mod_mean'][0] / temp_adiabat_anom[0]
     coef_delta_temp_quant = coef_delta_temp_quant + beta_1  # +beta_1 is a modification for z theory
 
     # Combine terms on RHS of equation, with changes due to z term.
@@ -736,14 +735,12 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
     # extra beta_1 term below is a modification for z theory
     term_mse_mod_mean1 = delta_mse_mod_mean_temp_term + delta_mse_mod_mean_rh_term + beta_1 * delta_temp_surf_mean
     # get adiabatic temp anomaly term with z_ft_anom replacing temp_ft_anom
-    temp_adiabat_anom_z0 = temp_ce_mean[0] - temp_ce_quant[0] + g / R_mod * z_ft_anom[0] - temp_surf_anom0
-    term_mse_mod_mean2 = term_mse_mod_mean2_prefactor * temp_adiabat_anom_z0 * delta_mse_mod_mean_use
+    # temp_adiabat_anom_z0 = temp_ce_mean[0] - temp_ce_quant[0] + g / R_mod * z_ft_anom[0] - temp_surf_anom0
+    term_mse_mod_mean2 = term_mse_mod_mean2_prefactor * temp_adiabat_anom[0] * delta_mse_mod_mean_use
 
     terms_sum = term_r_quant + term_temp_adiabat_anom + term_mse_mod_mean1 + term_mse_mod_mean2
-    # Old theory is when assume both T_CE=0 and z_anom=0 as well as the \delta terms.
-    # need to keep temp_surf_anom in base climate term though despite appearing in temp_adiabat_anom_z0.
-    terms_sum_old = term_r_quant + term_mse_mod_mean1 - \
-                    temp_surf_anom0 * term_mse_mod_mean2_prefactor * delta_mse_mod_mean_use
+    # Old theory is when assume both \Delta T_A=0 as well as \delta z_anom=0 as well as the \delta temp_ce terms.
+    terms_sum_old = term_r_quant + term_mse_mod_mean1
     final_answer = []
     for coef_rhs in [terms_sum, terms_sum_old]:
         if taylor_terms_delta_mse_mod == 'squared':
@@ -763,7 +760,7 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
         # temp_adiabat_anom_0.
         out_info = {'temp_adiabat_anom_change': [beta_1 / coef_delta_temp_quant, delta_temp_ce_mean -
                                                  delta_temp_ce_quant + g / R_mod * delta_z_ft_anom],
-                    'temp_mean_change': [(beta_1 + (1 + term_mse_mod_mean2_prefactor * temp_adiabat_anom_z0) *
+                    'temp_mean_change': [(beta_1 + (1 + term_mse_mod_mean2_prefactor * temp_adiabat_anom[0]) *
                                           delta_mse_mod_mean_temp_term / delta_temp_surf_mean) / coef_delta_temp_quant,
                                          delta_temp_surf_mean],
                     'r_mean_change': [0 if 'none' in rh_option else
@@ -771,12 +768,11 @@ def get_delta_temp_quant_z_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
                                       delta_r_mean],
                     'r_quant_change': [term_r_quant * 0 if 'none' in rh_option else
                                        term_r_quant / (delta_r_quant * coef_delta_temp_quant), delta_r_quant],
-                    'temp_adiabat_anom_0': [term_mse_mod_mean2 / (temp_adiabat_anom_z0 * coef_delta_temp_quant),
-                                            temp_adiabat_anom_z0]}
+                    'temp_adiabat_anom_0': [term_mse_mod_mean2 / (temp_adiabat_anom[0] * coef_delta_temp_quant),
+                                            temp_adiabat_anom[0]]}
         if 'full' in rh_option:
-            out_info['r_mean_change'][0] += term_mse_mod_mean2_prefactor * temp_adiabat_anom_z0 * \
+            out_info['r_mean_change'][0] += term_mse_mod_mean2_prefactor * temp_adiabat_anom[0] * \
                                             delta_mse_mod_mean_rh_term / (delta_r_mean * coef_delta_temp_quant)
-
         return final_answer[0], final_answer[1], out_info
     else:
         return final_answer[0], final_answer[1]
