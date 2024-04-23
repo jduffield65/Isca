@@ -147,7 +147,7 @@ def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: 
 def get_theory_prefactor_terms(temp: Union[np.ndarray, float], pressure_surf: float,
                                pressure_ft: float, sphum: Optional[Union[np.ndarray, float]] = None
                                ) -> Tuple[float, Union[float, np.ndarray], Union[float, np.ndarray],
-                                          Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
+Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
     """
     Returns prefactors to do modified moist static energy, $\delta h^{\dagger}$ taylor expansions.
 
@@ -571,7 +571,7 @@ def get_delta_temp_quant_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.
 
             This gives the prefactor for the term indicated such that `info_coef[var]` $\\times$ `info_change[var]`
             is the contribution for that term. Sum of all contributions equals `delta_temp_quant`
-            (only if `taylor_terms_delta_mse_mod='linear'`)
+            (only if `taylor_terms_delta_mse_mod='linear'`).
 
             Terms with `temp_a0` have the $\Delta T_A$ term in the prefactor. I isolate them from the terms independent
             of adiabatic temperature anomaly but `info_change['temp_s_mean'] = info_change['temp_s_mean_temp_a0']`.
@@ -695,7 +695,7 @@ def get_delta_temp_quant_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.
         # extra delta_temp_s(x) term in z form means extra term in denominator
         for var in beta_s1_use:
             beta_s1_use[var] = beta_s1_use[var] + beta_a1
-        info_coef['temp_s_mean'] += beta_a1         # extra delta_temp_s_mean term in z form
+        info_coef['temp_s_mean'] += beta_a1  # extra delta_temp_s_mean term in z form
 
     # Convert info_coef into temperature form by dividing by denominator
     if taylor_terms_delta_mse_mod == 'squared':
@@ -724,8 +724,140 @@ def get_delta_temp_quant_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.
         else:
             if key == 'old':
                 final_answer[key] = sum([info_coef[var] * info_change[var] for var in
-                                        ['temp_s_mean', 'r_mean', 'r_quant', 'temp_s_mean_squared']])
+                                         ['temp_s_mean', 'r_mean', 'r_quant', 'temp_s_mean_squared']])
             else:
                 final_answer[key] = sum([info_coef[var] * info_change[var] for var in info_coef])
 
+    return final_answer['full'], final_answer['old'], info_coef, info_change
+
+
+def get_delta_temp_quant_theory_simple(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
+                                       sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
+                                       temp_ft_mean: Optional[np.ndarray] = None,
+                                       temp_ft_quant: Optional[np.ndarray] = None,
+                                       z_ft_mean: Optional[np.ndarray] = None, z_ft_quant: Optional[np.ndarray] = None,
+                                       ignore_rh: bool = False) -> Tuple[np.ndarray, np.ndarray, dict, dict]:
+    """
+    This performs the same calculation as `get_delta_temp_quant_theory` with the following parameters, i.e. the simplest
+    form:
+
+    * `taylor_terms_delta_mse_mod_anom = 'linear'`
+    * `taylor_terms_delta_mse_mod = 'linear'`
+    * `rh_option = 'none' if ignore_rh else 'approx_anomaly'`
+    * `sphum_option = 'approx'`
+
+    Args:
+        temp_surf_mean: `float [n_exp]`</br>
+            Average near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+        temp_surf_quant: `float [n_exp, n_quant]`</br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+        sphum_mean: `float [n_exp]`</br>
+            Average near surface specific humidity of each simulation. Units: *kg/kg*.
+        sphum_quant: `float [n_exp, n_quant]`</br>
+            `sphum_quant[i, j]` is near-surface specific humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+        temp_ft_mean: ONLY NEEDED FOR $z$ THEORY</br>`float [n_exp]`</br>
+            Average temperature at `pressure_ft` in Kelvin.
+        temp_ft_quant: ONLY NEEDED FOR $z$ THEORY</br>`float [n_exp, n_quant]`</br>
+            `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        z_ft_mean: ONLY NEEDED FOR $z$ THEORY</br>`float [n_exp]`</br>
+            Average geopotential height at `pressure_ft` in *m*.
+        z_ft_quant: IF GIVEN, WILL RETURN $z$ THEORY</br>`float [n_exp, n_quant]`</br>
+            `z_ft_quant[i, j]` is geopotential height at `pressure_ft`, averaged over all days with near-surface
+            temperature corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *m*.
+        ignore_rh: If `True`, will set $\delta r_s(x) = \delta \overline{r_s} = 0$.
+    Returns:
+        `delta_temp_quant`: `float [n_quant]`</br>
+            `delta_temp_quant[i]` refers to the theoretical temperature difference between experiments
+            for percentile `quant_use[j]`.
+        `delta_temp_quant_old`: `float [n_quant]`</br>
+            Theoretical temperature difference using old theory which assumes $\Delta T_A = \delta \Delta T_A = 0$.
+        `info_coef`: Dictionary with 5 keys for each term in the simple version of the theory: `temp_s_mean`, `r_mean`,
+            `r_quant`, `temp_a` and `temp_s_mean_temp_a0`.</br>
+
+            This gives the prefactor for the term indicated such that `info_coef[var]` $\\times$ `info_change[var]`
+            is the contribution for that term. Sum of all contributions equals `delta_temp_quant`.
+
+            `temp_s_mean_temp_a0` has the $\Delta T_A$ term in the prefactor. I isolate it from the `temp_s_mean` term
+             which is independent of adiabatic temperature anomaly but
+             `info_change['temp_s_mean'] = info_change['temp_s_mean_temp_a0']`.
+
+            `temp_a` is the $\delta \Delta T_A$ term.
+        `info_change`: Complementary dictionary to `info_coef` with same keys that gives the relavent change to a
+            quantity. I.e. the $\delta$ term so
+            `info_change['r_quant']` $=\delta r_s(x)$.
+    """
+    # Compute adiabatic temperatures
+    n_exp, n_quant = temp_surf_quant.shape
+    temp_adiabat_mean = np.zeros_like(temp_surf_mean)
+    temp_adiabat_quant = np.zeros_like(temp_surf_quant)
+    for i in range(n_exp):
+        temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
+        for j in range(n_quant):
+            temp_adiabat_quant[i, j] = get_temp_adiabat(temp_surf_quant[i, j], sphum_quant[i, j], pressure_surf,
+                                                        pressure_ft)
+    temp_adiabat_anom = temp_adiabat_quant - temp_adiabat_mean[:, np.newaxis]
+
+    # Compute relative humidities
+    r_mean = sphum_mean / sphum_sat(temp_surf_mean, pressure_surf)
+    r_quant = sphum_quant / sphum_sat(temp_surf_quant, pressure_surf)
+
+    # Get parameters required for prefactors in the theory
+    R_mod, _, _, beta_a1, beta_a2, _ = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf, pressure_ft)
+    beta_s1 = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft, sphum_quant[0])[3]
+    _, q_sat_surf_mean, _, beta_s1_mean, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf,
+                                                                           pressure_ft, sphum_mean[0])
+
+    # Record numerator of coefficients
+    info_coef = {'temp_s_mean': beta_s1_mean, 'r_quant': 0 if ignore_rh else -L_v * q_sat_surf_mean,
+                 'temp_a': beta_a1,
+                 'temp_s_mean_temp_a0': beta_a2/beta_a1 * beta_s1_mean * temp_adiabat_anom[0] / temp_adiabat_mean[0]}
+    # theory has rh anomaly term so coefficient for mean is same but negative of rh_quant
+    info_coef['r_mean'] = -info_coef['r_quant']
+
+    # Record denominator of coefficients
+    beta_s1_use = {key: beta_s1_mean for key in info_coef}
+    beta_s1_use['temp_s_mean'] = beta_s1        # only keep x dependence for leading temp_s_mean term
+
+    if z_ft_quant is not None:
+        # If provide z, will compute z version of the theory - replace temp_ft anomaly with z_ft anomaly
+        # in delta temp_adiabat_anom term.
+        temp_ce_mean, temp_ce_quant = \
+            decompose_temp_adiabat_anomaly(temp_surf_mean, temp_surf_quant, sphum_mean,
+                                           sphum_quant, temp_ft_mean, temp_ft_quant, pressure_surf, pressure_ft)[1:3]
+        delta_temp_ce_mean = temp_ce_mean[1] - temp_ce_mean[0]
+        delta_temp_ce_quant = temp_ce_quant[1] - temp_ce_quant[0]
+        z_ft_anom = z_ft_quant - z_ft_mean[:, np.newaxis]
+        delta_z_ft_anom = z_ft_anom[1] - z_ft_anom[0]
+        # write adiabatic temp anomaly change in terms of z anomaly rather than free troposphere temp anomaly
+        delta_temp_adiabat_anom = delta_temp_ce_mean - delta_temp_ce_quant + g / R_mod * delta_z_ft_anom
+        info_coef['temp_s_mean'] += beta_a1  # extra delta_temp_s_mean term in z form
+        for var in beta_s1_use:
+            beta_s1_use[var] = beta_s1_use[var] + beta_a1       # extra term in denominator in z form
+    else:
+        delta_temp_adiabat_anom = temp_adiabat_anom[1] - temp_adiabat_anom[0]
+
+    # Get full coefficients by dividing numerator by denominator
+    for var in info_coef:
+        info_coef[var] = info_coef[var] / beta_s1_use[var]
+
+    info_change = {'temp_s_mean': temp_surf_mean[1] - temp_surf_mean[0],
+                   'r_mean': 0 if ignore_rh else r_mean[1] - r_mean[0],
+                   'r_quant': 0 if ignore_rh else r_quant[1] - r_quant[0],
+                   'temp_a': delta_temp_adiabat_anom}
+    info_change['temp_s_mean_temp_a0'] = info_change['temp_s_mean']
+
+
+    final_answer = {'full': sum([info_coef[var] * info_change[var] for var in info_coef]),
+                    'old': sum([info_coef[var] * info_change[var] for var in ['temp_s_mean', 'r_mean', 'r_quant']])}
     return final_answer['full'], final_answer['old'], info_coef, info_change
