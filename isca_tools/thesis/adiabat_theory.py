@@ -284,14 +284,12 @@ def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: n
             $\delta \Delta h_s^{\dagger}$ conditioned on each quantile of near-surface temperature. Units: *kJ/kg*.
         `info_dict`: Dictionary with 5 keys: `temp_adiabat_anom`, `mse_mod_mean`, `mse_mod_mean_squared`,
             `mse_mod_mean_cubed`, `non_linear`.</br>
-
             For each key, a list containing a prefactor computed in the base climate and a change between simulations is
             returned. I.e. for `info_dict[non_linear][1]` would be $\\delta \\Delta T_A\\delta \\overline{h^{\\dagger}}$
             and the total contribution of non-linear terms to $\delta \Delta h^{\dagger}$ would be
             `info_dict[non_linear][0] * info_dict[non_linear][1]`. In the `linear` case this would be zero,
             and `info_dict[temp_adiabat_anom][0]`$=\\beta_{A1}$ and `info_dict[mse_mod_mean][0]`$=
             \\frac{\\beta_{A2}}{\\beta_{A1}}\\frac{\\Delta T_A}{\\overline{T_A}}$ would be the only non-zero prefactors.
-
             Units of prefactor multiplied by change is *kJ/kg*.
         `temp_adiabat_anom`: `float [n_exp, n_quant]`</br>
             The adiabatic free troposphere temperature anomaly, $\Delta T_A$ for each experiment, as may be of use.
@@ -568,14 +566,11 @@ def get_delta_temp_quant_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.
             `r_quant`, `temp_s_mean_squared`, `temp_a`, `temp_s_mean_temp_a0`, `r_mean_temp_a0`,
             `temp_s_mean_squared_temp_a0`, `temp_s_mean_cubed_temp_a0`, `r_mean_squared_temp_a0`,
             `nl_temp_s_mean_temp_a`, `nl_r_mean_temp_a` and `nl_temp_s_mean_r_mean`.</br>
-
             This gives the prefactor for the term indicated such that `info_coef[var]` $\\times$ `info_change[var]`
             is the contribution for that term. Sum of all contributions equals `delta_temp_quant`
-            (only if `taylor_terms_delta_mse_mod='linear'`).
-
+            (only if `taylor_terms_delta_mse_mod='linear'`).</br>
             Terms with `temp_a0` have the $\Delta T_A$ term in the prefactor. I isolate them from the terms independent
-            of adiabatic temperature anomaly but `info_change['temp_s_mean'] = info_change['temp_s_mean_temp_a0']`.
-
+            of adiabatic temperature anomaly but `info_change['temp_s_mean'] = info_change['temp_s_mean_temp_a0']`.</br>
             `temp_a` is the $\delta \Delta T_A$ term and `nl` refers to non-linear terms.
         `info_change`: Complementary dictionary to `info_coef` with same keys that gives the relavent change to a
             quantity. I.e. the $\delta$ term so
@@ -784,18 +779,14 @@ def get_delta_temp_quant_theory_simple(temp_surf_mean: np.ndarray, temp_surf_qua
             Theoretical temperature difference using old theory which assumes $\Delta T_A = \delta \Delta T_A = 0$.
         `info_coef`: Dictionary with 5 keys for each term in the simple version of the theory: `temp_s_mean`, `r_mean`,
             `r_quant`, `temp_a` and `temp_s_mean_temp_a0`.</br>
-
             This gives the prefactor for the term indicated such that `info_coef[var]` $\\times$ `info_change[var]`
-            is the contribution for that term. Sum of all contributions equals `delta_temp_quant`.
-
+            is the contribution for that term. Sum of all contributions equals `delta_temp_quant`.</br>
             `temp_s_mean_temp_a0` has the $\Delta T_A$ term in the prefactor. I isolate it from the `temp_s_mean` term
              which is independent of adiabatic temperature anomaly but
-             `info_change['temp_s_mean'] = info_change['temp_s_mean_temp_a0']`.
-
+             `info_change['temp_s_mean'] = info_change['temp_s_mean_temp_a0']`.</br>
             `temp_a` is the $\delta \Delta T_A$ term.
         `info_change`: Complementary dictionary to `info_coef` with same keys that gives the relavent change to a
-            quantity. I.e. the $\delta$ term so
-            `info_change['r_quant']` $=\delta r_s(x)$.
+            quantity. I.e. the $\delta$ term so `info_change['r_quant']` $=\delta r_s(x)$.
     """
     # Compute adiabatic temperatures
     n_exp, n_quant = temp_surf_quant.shape
