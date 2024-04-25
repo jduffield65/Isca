@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'tau_sweep/land/meridional_band/evap/k=0_6'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/evap/k=0_6'
+   name = 'tau_sweep/land/meridional_band/evap/evap=0/k=0_6'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/evap/evap=0/k=0_6'
    n_months_total = 84           ! Total duration of simulation in months.
    n_months_job = 84             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -61,7 +61,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    land_evap_prefactor = 0.5                       ! LAND OPTION
+    land_evap_prefactor = 0                       ! LAND OPTION
 /
 
 &atmosphere_nml
@@ -110,7 +110,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 0.6                         ! FRIERSON kappa optical depth parameter
+    odp = 0.6                       ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
