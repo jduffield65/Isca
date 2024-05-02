@@ -854,11 +854,12 @@ def get_delta_temp_quant_theory_simple(temp_surf_mean: np.ndarray, temp_surf_qua
 
 
 def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
-                                       sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
-                                       temp_ft_mean: Optional[np.ndarray] = None,
-                                       temp_ft_quant: Optional[np.ndarray] = None,
-                                       z_ft_mean: Optional[np.ndarray] = None, z_ft_quant: Optional[np.ndarray] = None,
-                                       ignore_rh: bool = False) -> Tuple[np.ndarray, dict, dict]:
+                                        sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
+                                        temp_ft_mean: Optional[np.ndarray] = None,
+                                        temp_ft_quant: Optional[np.ndarray] = None,
+                                        z_ft_mean: Optional[np.ndarray] = None, z_ft_quant: Optional[np.ndarray] = None,
+                                        ignore_rh: bool = False,
+                                        use_sphum_anom0: bool = True) -> Tuple[np.ndarray, dict, dict]:
     """
     This performs the same calculation as `get_delta_temp_quant_theory_simple` but makes a further approximation
     to replace the climatological adiabatic temperature anomaly: $\Delta T_A \\approx \\beta_{A1} \Delta h^{\dagger}_s$.
@@ -893,11 +894,13 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
             `z_ft_quant[i, j]` is geopotential height at `pressure_ft`, averaged over all days with near-surface
             temperature corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *m*.
         ignore_rh: If `True`, will set $\delta r_s(x) = \delta \overline{r_s} = 0$.
+        use_sphum_anom0: If `True`, will use $\Delta q_s$ as humidity anomaly in reference climate. Otherwise,
+            will use $\Delta r_s$.
     Returns:
         `delta_temp_quant`: `float [n_quant]`</br>
             `delta_temp_quant[i]` refers to the theoretical temperature difference between experiments
             for percentile `quant_use[j]`.
-        `info_coef`: Dictionary with 4 keys for each term in the simple version of the theory: `temp_s`, `sphum`,
+        `info_coef`: Dictionary with 4 keys for each term in the simple version of the theory: `temp_s`, `humidity`,
             `r_change`, `temp_a_change`. The key refers to the variable that causes the variation with $x$.</br>
             This gives the prefactor for the term indicated such that `info_coef[var]` $\\times$ `info_change[var]`
             is the contribution for that term. Sum of all contributions equals $\delta T_s(x)-\delta \overline{T_s}$.
@@ -915,24 +918,32 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
                                                         pressure_ft)
     temp_adiabat_anom = temp_adiabat_quant - temp_adiabat_mean[:, np.newaxis]
     temp_surf_anom0 = (temp_surf_quant - temp_surf_mean[:, np.newaxis])[0]
-    sphum_anom0 = (sphum_quant - sphum_mean[:, np.newaxis])[0]
 
     # Compute relative humidities
     r_mean = sphum_mean / sphum_sat(temp_surf_mean, pressure_surf)
     r_quant = sphum_quant / sphum_sat(temp_surf_quant, pressure_surf)
     r_anom = r_quant - r_mean[:, np.newaxis]
 
-
     # Get parameters required for prefactors in the theory
     R_mod, _, _, beta_a1, beta_a2, _ = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf, pressure_ft)
     _, q_sat_surf_mean, alpha_s_mean, beta_s1_mean, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf,
-                                                                           pressure_ft, sphum_mean[0])
+                                                                                      pressure_ft, sphum_mean[0])
 
     # Record coefficients of each term in equation for delta T_s(x)
     # label is anomaly that causes variation with x.
-    info_coef = {'temp_s': beta_a2 * (c_p - R_mod) / (beta_a1**2 * temp_adiabat_mean[0]) * temp_surf_anom0,
-                 'sphum': (beta_a2 / (beta_a1**2 * temp_adiabat_mean[0]) - alpha_s_mean/beta_s1_mean
-                           ) * L_v * sphum_anom0,
+    gamma_t_s = beta_a2 * (c_p - R_mod) / (beta_a1 ** 2 * temp_adiabat_mean[0])
+    gamma_humidity = (beta_a2 / (beta_a1 ** 2 * temp_adiabat_mean[0]) - alpha_s_mean / beta_s1_mean) * L_v
+    if use_sphum_anom0:
+        # use specific humidity as anomaly in reference climate
+        humidity_anom0 = (sphum_quant - sphum_mean[:, np.newaxis])[0]
+    else:
+        # use relative humidity as anomaly in reference climate
+        gamma_t_s = gamma_t_s + gamma_humidity * alpha_s_mean * sphum_mean[0]
+        gamma_humidity = gamma_humidity * q_sat_surf_mean
+        humidity_anom0 = r_anom[0]
+
+    info_coef = {'temp_s': gamma_t_s * temp_surf_anom0,
+                 'humidity':  gamma_humidity * humidity_anom0,
                  'r_change': 0 if ignore_rh else -L_v * q_sat_surf_mean / beta_s1_mean,
                  'temp_a_change': beta_a1 / beta_s1_mean}
 
@@ -956,7 +967,7 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
         delta_temp_adiabat_anom = temp_adiabat_anom[1] - temp_adiabat_anom[0]
 
     info_change = {'temp_s': temp_surf_mean[1] - temp_surf_mean[0],
-                   'sphum': temp_surf_mean[1] - temp_surf_mean[0],
+                   'humidity': temp_surf_mean[1] - temp_surf_mean[0],
                    'r_change': 0 if ignore_rh else r_anom[1] - r_anom[0],
                    'temp_a_change': delta_temp_adiabat_anom}
 
