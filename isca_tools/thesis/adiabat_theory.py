@@ -205,6 +205,72 @@ Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
     return R_mod, q_sat, alpha, beta_1, beta_2, beta_3
 
 
+def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float,
+                      pressure_ft: float, sphum_form: bool = False
+                      ) -> Tuple[float, float, float, float]:
+    """
+    Calculates the sensitivity $\gamma$ parameters such that (in relative humidity form with `sphum_form=False`):
+
+    $$
+    \\frac{\delta T_s(x)}{\delta \overline{T_s}} \\approx 1 + \gamma_{T_s}\\frac{\Delta T_s(x)}{\overline{T_s}} +
+    \gamma_{r_s} \\frac{\Delta r_s(x)}{\overline{r_s}} +
+    \gamma_{\delta r_s} \\frac{\delta \Delta r_s(x)}{\overline{r_s}\delta \overline{T_s}} +
+    \gamma_{\delta T_A} \\frac{\delta \Delta T_A(x)}{\delta \overline{T_s}}
+    $$
+
+    If `sphum_form=True`, this changes to:
+
+    $$
+    \\frac{\delta T_s(x)}{\delta \overline{T_s}} \\approx 1 +
+    (\gamma_{T_s} - \overline{\\alpha_s}\overline{T_s})\\frac{\Delta T_s(x)}{\overline{T_s}} +
+    \gamma_{r_s} \\frac{\Delta q_s(x)}{\overline{q_s}} +
+    \gamma_{\delta r_s} \\frac{\delta \Delta r_s(x)}{\overline{r_s}\delta \overline{T_s}} +
+    \gamma_{\delta T_A} \\frac{\delta \Delta T_A(x)}{\delta \overline{T_s}}
+    $$
+
+
+    Args:
+        temp_surf:
+            Temperature at `pressure_surf` in *K*.
+        sphum:
+            Specific humidity at `pressure_surf` in *kg/kg*.
+        pressure_surf:
+            Pressure at near-surface, $p_s$ in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level, $p_{FT}$ in *Pa*.
+        sphum_form:
+            If `True`, `gamma_temp_s` will have $\overline{\\alpha_s}\overline{T_s}$ subtracted from it.
+    Returns:
+        `gamma_temp_s`:
+            $\gamma_{T_s}$ sensitivty parameter. Dimensionless.
+            This parameter depends on `sphum_form`.
+        `gamma_humidity`:
+            $\gamma_{r_s}$ sensitivty parameter. Dimensionless.
+        `gamma_r_change`:
+            $\gamma_{\delta r_s}$ sensitivity parameter. Units of $K$.
+        `gamma_temp_a_change`:
+            $\gamma_{\delta T_A}$ sensitivty parameter. Dimensionless.
+    """
+    temp_adiabat = get_temp_adiabat(temp_surf, sphum, pressure_surf, pressure_ft)
+
+    # Get parameters required for prefactors in the theory
+    _, _, _, beta_a1, beta_a2, _ = get_theory_prefactor_terms(temp_adiabat, pressure_surf, pressure_ft)
+    _, q_sat_surf, alpha_s, beta_s1, beta_s2, _ = get_theory_prefactor_terms(temp_surf, pressure_surf, pressure_ft,
+                                                                             sphum)
+
+    # Record coefficients of each term in equation for delta T_s(x)
+    # label is anomaly that causes variation with x.
+
+    gamma_temp_s = beta_a2 * beta_s1 / beta_a1 ** 2 * temp_surf / temp_adiabat - beta_s2 / beta_s1
+    gamma_humidity = (beta_a2 / (beta_a1 ** 2 * temp_adiabat) -
+                      alpha_s / beta_s1) * L_v * sphum
+    if sphum_form:
+        gamma_temp_s = gamma_temp_s - gamma_humidity * alpha_s * temp_surf
+    gamma_r_change = -L_v * sphum / beta_s1
+    gamma_temp_a_change = beta_a1 / beta_s1
+    return gamma_temp_s, gamma_humidity, gamma_r_change, gamma_temp_a_change
+
+
 def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                   sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
                                   taylor_terms: str = 'linear') -> Tuple[np.ndarray, dict, np.ndarray]:
@@ -924,32 +990,27 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
     r_quant = sphum_quant / sphum_sat(temp_surf_quant, pressure_surf)
     r_anom = r_quant - r_mean[:, np.newaxis]
 
-    # Get parameters required for prefactors in the theory
-    R_mod, _, _, beta_a1, beta_a2, _ = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf, pressure_ft)
-    _, q_sat_surf_mean, alpha_s_mean, beta_s1_mean, beta_s2_mean, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf,
-                                                                                      pressure_ft, sphum_mean[0])
-
     # Record coefficients of each term in equation for delta T_s(x)
     # label is anomaly that causes variation with x.
-
-    gamma_t_s = beta_a2 * beta_s1_mean / beta_a1**2 * temp_surf_mean[0]/temp_adiabat_mean[0] - \
-                beta_s2_mean / beta_s1_mean
-    gamma_humidity = (beta_a2 / (beta_a1 ** 2 * temp_adiabat_mean[0]) -
-                      alpha_s_mean / beta_s1_mean) * L_v * sphum_mean[0]
+    gamma_temp_s, gamma_humidity, gamma_r_change, gamma_temp_a_change = \
+        get_gamma_factors(temp_surf_mean[0], sphum_mean[0], pressure_surf, pressure_ft, use_sphum_anom0)
     if use_sphum_anom0:
         # use specific humidity as anomaly in reference climate
         humidity_anom0 = (sphum_quant - sphum_mean[:, np.newaxis])[0] / sphum_mean[0]
-        gamma_t_s = gamma_t_s - gamma_humidity * alpha_s_mean * temp_surf_mean[0]
     else:
         # use relative humidity as anomaly in reference climate
         humidity_anom0 = r_anom[0] / r_mean[0]
 
-    info_coef = {'temp_s': gamma_t_s * temp_surf_anom0 / temp_surf_mean[0],
-                 'humidity':  gamma_humidity * humidity_anom0,
-                 'r_change': 0 if ignore_rh else -L_v * q_sat_surf_mean / beta_s1_mean,
-                 'temp_a_change': beta_a1 / beta_s1_mean}
+    info_coef = {'temp_s': gamma_temp_s * temp_surf_anom0 / temp_surf_mean[0],
+                 'humidity': gamma_humidity * humidity_anom0,
+                 'r_change': 0 if ignore_rh else gamma_r_change / r_mean[0],
+                 'temp_a_change': gamma_temp_a_change}
 
     if z_ft_quant is not None:
+        # Get parameters required for conversion to z form of theory
+        R_mod, _, _, beta_a1, _, _ = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf, pressure_ft)
+        beta_s1_mean = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft, sphum_mean[0])[3]
+
         # If provide z, will compute z version of the theory - replace temp_ft anomaly with z_ft anomaly
         # in delta temp_adiabat_anom term.
         temp_ce_mean, temp_ce_quant = \
