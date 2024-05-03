@@ -859,7 +859,7 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
                                         temp_ft_quant: Optional[np.ndarray] = None,
                                         z_ft_mean: Optional[np.ndarray] = None, z_ft_quant: Optional[np.ndarray] = None,
                                         ignore_rh: bool = False,
-                                        use_sphum_anom0: bool = True) -> Tuple[np.ndarray, dict, dict]:
+                                        use_sphum_anom0: bool = False) -> Tuple[np.ndarray, dict, dict]:
     """
     This performs the same calculation as `get_delta_temp_quant_theory_simple` but makes a further approximation
     to replace the climatological adiabatic temperature anomaly: $\Delta T_A \\approx \\beta_{A1} \Delta h^{\dagger}_s$.
@@ -926,23 +926,25 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
 
     # Get parameters required for prefactors in the theory
     R_mod, _, _, beta_a1, beta_a2, _ = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf, pressure_ft)
-    _, q_sat_surf_mean, alpha_s_mean, beta_s1_mean, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf,
+    _, q_sat_surf_mean, alpha_s_mean, beta_s1_mean, beta_s2_mean, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf,
                                                                                       pressure_ft, sphum_mean[0])
 
     # Record coefficients of each term in equation for delta T_s(x)
     # label is anomaly that causes variation with x.
-    gamma_t_s = beta_a2 * (c_p - R_mod) / (beta_a1 ** 2 * temp_adiabat_mean[0])
-    gamma_humidity = (beta_a2 / (beta_a1 ** 2 * temp_adiabat_mean[0]) - alpha_s_mean / beta_s1_mean) * L_v
+
+    gamma_t_s = beta_a2 * beta_s1_mean / beta_a1**2 * temp_surf_mean[0]/temp_adiabat_mean[0] - \
+                beta_s2_mean / beta_s1_mean
+    gamma_humidity = (beta_a2 / (beta_a1 ** 2 * temp_adiabat_mean[0]) -
+                      alpha_s_mean / beta_s1_mean) * L_v * sphum_mean[0]
     if use_sphum_anom0:
         # use specific humidity as anomaly in reference climate
-        humidity_anom0 = (sphum_quant - sphum_mean[:, np.newaxis])[0]
+        humidity_anom0 = (sphum_quant - sphum_mean[:, np.newaxis])[0] / sphum_mean[0]
+        gamma_t_s = gamma_t_s - gamma_humidity * alpha_s_mean * temp_surf_mean[0]
     else:
         # use relative humidity as anomaly in reference climate
-        gamma_t_s = gamma_t_s + gamma_humidity * alpha_s_mean * sphum_mean[0]
-        gamma_humidity = gamma_humidity * q_sat_surf_mean
-        humidity_anom0 = r_anom[0]
+        humidity_anom0 = r_anom[0] / r_mean[0]
 
-    info_coef = {'temp_s': gamma_t_s * temp_surf_anom0,
+    info_coef = {'temp_s': gamma_t_s * temp_surf_anom0 / temp_surf_mean[0],
                  'humidity':  gamma_humidity * humidity_anom0,
                  'r_change': 0 if ignore_rh else -L_v * q_sat_surf_mean / beta_s1_mean,
                  'temp_a_change': beta_a1 / beta_s1_mean}
