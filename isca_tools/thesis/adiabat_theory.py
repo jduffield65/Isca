@@ -207,7 +207,7 @@ Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
 
 def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float,
                       pressure_ft: float, sphum_form: bool = False
-                      ) -> Tuple[float, float, float, float]:
+                      ) -> Tuple[float, float, float, float, float, float, float, float, float, float, float, float]:
     """
     Calculates the sensitivity $\gamma$ parameters such that (in relative humidity form with `sphum_form=False`):
 
@@ -240,6 +240,8 @@ def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float,
             Pressure at free troposphere level, $p_{FT}$ in *Pa*.
         sphum_form:
             If `True`, `gamma_temp_s` will have $\overline{\\alpha_s}\overline{T_s}$ subtracted from it.
+            Also, `gamma_temp_s_squared`, `gamma_humidity_squared` and `gamma_temp_s_humidity` will be set to zero if
+            `sphum_form=True`.
     Returns:
         `gamma_temp_s`:
             $\gamma_{T_s}$ sensitivty parameter. Dimensionless.
@@ -250,12 +252,18 @@ def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float,
             $\gamma_{\delta r_s}$ sensitivity parameter. Units of $K$.
         `gamma_temp_a_change`:
             $\gamma_{\delta T_A}$ sensitivty parameter. Dimensionless.
+        `gamma_temp_s_squared`:
+            $\gamma_{\delta T_s^2}$ sensitivty parameter. Dimensionless.
+        `gamma_humidity_squared`:
+            $\gamma_{\delta r_s^2}$ sensitivty parameter. Dimensionless.
+        `gamma_temp_s_humidity`:
+            $\gamma_{T_sr_s}$ senstivitiy parameter. Dimensionless.
     """
     temp_adiabat = get_temp_adiabat(temp_surf, sphum, pressure_surf, pressure_ft)
 
     # Get parameters required for prefactors in the theory
-    _, _, _, beta_a1, beta_a2, _ = get_theory_prefactor_terms(temp_adiabat, pressure_surf, pressure_ft)
-    _, q_sat_surf, alpha_s, beta_s1, beta_s2, _ = get_theory_prefactor_terms(temp_surf, pressure_surf, pressure_ft,
+    _, _, _, beta_a1, beta_a2, beta_a3 = get_theory_prefactor_terms(temp_adiabat, pressure_surf, pressure_ft)
+    _, q_sat_surf, alpha_s, beta_s1, beta_s2, beta_s3 = get_theory_prefactor_terms(temp_surf, pressure_surf, pressure_ft,
                                                                              sphum)
 
     # Record coefficients of each term in equation for delta T_s(x)
@@ -268,7 +276,40 @@ def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float,
         gamma_temp_s = gamma_temp_s - gamma_humidity * alpha_s * temp_surf
     gamma_r_change = -L_v * sphum / beta_s1
     gamma_temp_a_change = beta_a1 / beta_s1
-    return gamma_temp_s, gamma_humidity, gamma_r_change, gamma_temp_a_change
+
+    # non-linear contributions
+    if sphum_form:
+        # Calculation is not valid in sphum_form
+        gamma_temp_s_squared = 0
+        gamma_humidity_squared = 0
+        gamma_temp_s_humidity = 0
+        gamma_temp_s_temp_a_change = 0
+        gamma_humidity_temp_a_change = 0
+        gamma_temp_a_change_squared = 0
+        gamma_temp_s_r_mean_change = 0
+        gamma_humidity_r_mean_change = 0
+    else:
+        beta_a2_factor = beta_a2/beta_a1 * temp_surf/temp_adiabat
+        beta_a3_factor = beta_a3/beta_a1 * (temp_surf/temp_adiabat)**2
+        gamma_temp_s_squared = (beta_s2/beta_s1)**2 - beta_s3/(2*beta_s1) + beta_a2_factor * (
+                beta_s2/(2*beta_a1) - beta_s1**2 * beta_a2 * temp_surf / (2*beta_a1**3 * temp_adiabat)) + \
+                               0.5 * beta_a3_factor * (beta_s1/beta_a1)**2
+        gamma_humidity_squared = (L_v * alpha_s * sphum / beta_s1)**2 - \
+                                 beta_a2_factor * L_v**2 * sphum**2 * beta_a2 / (2*beta_a1**3*temp_surf*temp_adiabat) + \
+            0.5 * beta_a3_factor * (L_v * sphum/(temp_surf * beta_a1))**2
+        gamma_temp_s_humidity = 2 * beta_s2 * L_v * alpha_s * sphum / beta_s1**2 - beta_s2/beta_s1 + beta_a2_factor * (
+            L_v * alpha_s * sphum/beta_a1 - beta_a2 * beta_s1 * L_v * sphum / (beta_a1**3 * temp_adiabat)) + \
+            beta_a3_factor * beta_s1 * L_v * sphum / (temp_surf * beta_a1**2)
+        gamma_temp_s_temp_a_change = beta_a2/beta_a1 * temp_surf/temp_adiabat
+        gamma_humidity_temp_a_change = L_v * sphum * beta_a2 / (beta_s1 * beta_a1 * temp_adiabat)
+        gamma_temp_a_change_squared = 0.5 * beta_a2 / (beta_s1 * temp_adiabat)
+        gamma_temp_s_r_mean_change = L_v * sphum * beta_a2 / beta_a1**2 * temp_surf/temp_adiabat
+        gamma_humidity_r_mean_change = (L_v * sphum)**2 * beta_a2 / (temp_adiabat * beta_a1**2 * beta_s1)
+
+    return gamma_temp_s, gamma_humidity, gamma_r_change, gamma_temp_a_change, gamma_temp_s_squared, \
+        gamma_humidity_squared, gamma_temp_s_humidity, \
+        gamma_temp_s_temp_a_change, gamma_humidity_temp_a_change, gamma_temp_a_change_squared, \
+        gamma_temp_s_r_mean_change, gamma_humidity_r_mean_change
 
 
 def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
@@ -924,8 +965,8 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
                                         temp_ft_mean: Optional[np.ndarray] = None,
                                         temp_ft_quant: Optional[np.ndarray] = None,
                                         z_ft_mean: Optional[np.ndarray] = None, z_ft_quant: Optional[np.ndarray] = None,
-                                        ignore_rh: bool = False,
-                                        use_sphum_anom0: bool = False) -> Tuple[np.ndarray, dict, dict]:
+                                        ignore_rh: bool = False, use_sphum_anom0: bool = False,
+                                        include_squared_terms: bool = False) -> Tuple[np.ndarray, dict, dict]:
     """
     This performs the same calculation as `get_delta_temp_quant_theory_simple` but makes a further approximation
     to replace the climatological adiabatic temperature anomaly: $\Delta T_A \\approx \\beta_{A1} \Delta h^{\dagger}_s$.
@@ -962,6 +1003,8 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
         ignore_rh: If `True`, will set $\delta r_s(x) = \delta \overline{r_s} = 0$.
         use_sphum_anom0: If `True`, will use $\Delta q_s$ as humidity anomaly in reference climate. Otherwise,
             will use $\Delta r_s$.
+        include_squared_terms: If `True`, will include $\Delta T_s^2\delta \overline{T_s}$,
+            $\Delta r_s^2\delta \overline{T_s}$ and $\Delta T_s \Delta r_s \delta \overline{T_s}$ terms in theory.
     Returns:
         `delta_temp_quant`: `float [n_quant]`</br>
             `delta_temp_quant[i]` refers to the theoretical temperature difference between experiments
@@ -992,7 +1035,10 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
 
     # Record coefficients of each term in equation for delta T_s(x)
     # label is anomaly that causes variation with x.
-    gamma_temp_s, gamma_humidity, gamma_r_change, gamma_temp_a_change = \
+    gamma_temp_s, gamma_humidity, gamma_r_change, gamma_temp_a_change, \
+        gamma_temp_s_squared, gamma_humidity_squared, gamma_temp_s_humidity, \
+        gamma_temp_s_temp_a_change, gamma_humidity_temp_a_change, gamma_temp_a_change_squared, \
+        gamma_temp_s_r_mean_change, gamma_humidity_r_mean_change = \
         get_gamma_factors(temp_surf_mean[0], sphum_mean[0], pressure_surf, pressure_ft, use_sphum_anom0)
     if use_sphum_anom0:
         # use specific humidity as anomaly in reference climate
@@ -1005,6 +1051,19 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
                  'humidity': gamma_humidity * humidity_anom0,
                  'r_change': 0 if ignore_rh else gamma_r_change / r_mean[0],
                  'temp_a_change': gamma_temp_a_change}
+
+    if include_squared_terms:
+        if use_sphum_anom0:
+            raise ValueError('Cannot return squared terms in sphum form. '
+                             'Set `use_sphum_anom0 = False to include squared terms.')
+        info_coef['temp_s_squared'] = gamma_temp_s_squared * (temp_surf_anom0 / temp_surf_mean[0])**2
+        info_coef['humidity_squared'] = gamma_humidity_squared * humidity_anom0**2
+        info_coef['temp_s_humidity'] = gamma_temp_s_humidity * (temp_surf_anom0 / temp_surf_mean[0]) * humidity_anom0
+        info_coef['temp_s_temp_a_change'] = gamma_temp_s_temp_a_change * (temp_surf_anom0 / temp_surf_mean[0])
+        info_coef['humidity_temp_a_change'] = gamma_humidity_temp_a_change * humidity_anom0
+        info_coef['temp_a_change_squared'] = gamma_temp_a_change_squared
+        info_coef['temp_s_r_mean_change'] = gamma_temp_s_r_mean_change * (temp_surf_anom0 / temp_surf_mean[0])
+        info_coef['humidity_r_mean_change'] = gamma_humidity_r_mean_change * humidity_anom0
 
     if z_ft_quant is not None:
         # Get parameters required for conversion to z form of theory
@@ -1033,6 +1092,13 @@ def get_delta_temp_quant_theory_simple2(temp_surf_mean: np.ndarray, temp_surf_qu
                    'humidity': temp_surf_mean[1] - temp_surf_mean[0],
                    'r_change': 0 if ignore_rh else r_anom[1] - r_anom[0],
                    'temp_a_change': delta_temp_adiabat_anom}
-
+    if include_squared_terms:
+        for var in ['temp_s_squared', 'humidity_squared', 'temp_s_humidity']:
+            info_change[var] = temp_surf_mean[1] - temp_surf_mean[0]
+        info_change['temp_s_temp_a_change'] = delta_temp_adiabat_anom
+        info_change['humidity_temp_a_change'] = delta_temp_adiabat_anom
+        info_change['temp_a_change_squared'] = delta_temp_adiabat_anom**2
+        info_change['temp_s_r_mean_change'] = (r_mean[1] - r_mean[0]) / r_mean[0]
+        info_change['humidity_r_mean_change'] = (r_mean[1] - r_mean[0]) / r_mean[0]
     final_answer = temp_surf_mean[1] - temp_surf_mean[0] + sum([info_coef[var] * info_change[var] for var in info_coef])
     return final_answer, info_coef, info_change
