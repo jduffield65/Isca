@@ -985,17 +985,50 @@ def get_delta_temp_quant_theory_simple(temp_surf_mean: np.ndarray, temp_surf_qua
     return final_answer['full'], final_answer['old'], info_coef, info_change
 
 
-def get_delta_temp_quant_theory_simple_final(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray,
+def get_delta_temp_quant_theory_final(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray,
                                              sphum_mean: np.ndarray, sphum_quant: np.ndarray, pressure_surf: float,
                                              pressure_ft: float, temp_ft_mean: Optional[np.ndarray] = None,
                                              temp_ft_quant: Optional[np.ndarray] = None,
                                              z_ft_mean: Optional[np.ndarray] = None,
                                              z_ft_quant: Optional[np.ndarray] = None, ignore_rh: bool = False,
                                              include_squared_terms: bool = False) -> Tuple[
-    np.ndarray, dict, dict, Union[float, np.ndarray]]:
+    np.ndarray, dict, dict, np.ndarray]:
     """
-    This performs the same calculation as `get_delta_temp_quant_theory_simple` but makes a further approximation
-    to replace the climatological adiabatic temperature anomaly: $\Delta T_A \\approx \\beta_{A1} \Delta h^{\dagger}_s$.
+    Calculates the theoretical near-surface temperature change for percentile $x$, $\delta T_s(x)$,
+    such that in the simplest linear case (`include_squared_terms=False`), we have:
+
+    $$
+    \delta T_s(x) \\approx
+    1 + \gamma_{T_s}\\frac{\Delta T_s(x)}{\overline{T_s}} \delta \overline{T_s} +
+    \gamma_{r_s} \\frac{\Delta r_s(x)}{\overline{r_s}} \delta \overline{T_s} +
+    \gamma_{\delta r_s} \\frac{\delta \Delta r_s(x)}{\overline{r_s}} +
+    \gamma_{\delta T_A} \delta \Delta T_A(x)
+    $$
+
+    If `include_squared_terms=True`, then non-linear and squared terms are included. The LHS becomes
+    $\\left[1+\mu(x)\\frac{\delta r_s(x)}{\overline{r_s}}\\right]\delta T_s(x)$
+    where $\\mu(x) = \\frac{L_v \\alpha_s(x) q_s(x)}{\\beta_{s1}(x)}$, and extra terms e.g.
+    $\gamma_{T_s^2}(\\frac{\Delta T_s}{\overline{T_s}})^2 \delta \overline{T_s}$ are included on the RHS.
+
+    If `z_quant` is given (with other parameters the same), then the $z$ form of the theory will be computed
+    (not possible with `include_squared_terms=True` because gets too complicated):
+
+    $$
+    \\begin{align}
+    \\begin{split}
+    \delta T_s(x) &\\approx
+    1 + \\frac{\overline{\\beta_{s1}}}{\overline{\\beta_{s1}} + \\beta_{A1}} \\bigg(
+    \gamma_{T_s}\\frac{\Delta T_s(x)}{\overline{T_s}} \delta \overline{T_s} +
+    \gamma_{r_s} \\frac{\Delta r_s(x)}{\overline{r_s}} \delta \overline{T_s} \\\\
+    &+ \gamma_{\delta r_s} \\frac{\delta \Delta r_s(x)}{\overline{r_s}} +
+    \gamma_{\delta T_A} \delta \Delta T_A'(x) \\bigg)
+    \\end{split}
+    \\end{align}
+    $$
+
+    where $\Delta T_A' = \overline{T_{CE}} - T_{CE}(x) + \\frac{g}{R^{\dagger}} \Delta z_{FT}(x)$ is used for the $z$
+    theory to replace $\Delta T_{FT}(x)$.
+
 
     Args:
         temp_surf_mean: `float [n_exp]`</br>
@@ -1028,7 +1061,10 @@ def get_delta_temp_quant_theory_simple_final(temp_surf_mean: np.ndarray, temp_su
             temperature corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *m*.
         ignore_rh: If `True`, will set $\delta r_s(x) = \delta \overline{r_s} = 0$.
         include_squared_terms: If `True`, will include $\Delta T_s^2\delta \overline{T_s}$,
-            $\Delta r_s^2\delta \overline{T_s}$ and $\Delta T_s \Delta r_s \delta \overline{T_s}$ terms in theory.
+            $\Delta r_s^2\delta \overline{T_s}$, $\Delta T_s \Delta r_s \delta \overline{T_s}$,
+            $\Delta T_s^2 \Delta r_s \delta \overline{T_s}$, $\Delta T_s \Delta r_s^2 \delta \overline{T_s}$,
+            $\Delta T_s \delta \overline{r_s}$, $\Delta T_s \delta \Delta r_s$,
+            $\delta \overline{r_s} \delta \overline{T_s}$ and $\delta \Delta T_A \delta \overline{T_s}$ terms in theory.
     Returns:
         `delta_temp_quant`: `float [n_quant]`</br>
             `delta_temp_quant[i]` refers to the theoretical temperature difference between experiments
@@ -1039,6 +1075,9 @@ def get_delta_temp_quant_theory_simple_final(temp_surf_mean: np.ndarray, temp_su
             is the contribution for that term. Sum of all contributions equals $\delta T_s(x)-\delta \overline{T_s}$.
         `info_change`: Complementary dictionary to `info_coef` with same keys that gives the relavent change to a
             quantity i.e. the $\delta$ term. For both `temp_s` and `sphum`, this is $\delta \overline{T_s}$.
+        `mu`: `float [n_quant]`</br>
+            $\mu(x)$ factor. Will be all zeros if `include_squared_terms=False`.
+            Otherwise, will be $\\mu(x) = \\frac{L_v \\alpha_s(x) q_s(x)}{\\beta_{s1}(x)}$.
     """
     # Compute adiabatic temperatures
     n_exp, n_quant = temp_surf_quant.shape
@@ -1128,7 +1167,7 @@ def get_delta_temp_quant_theory_simple_final(temp_surf_mean: np.ndarray, temp_su
                                                                       sphum_quant[0])
         mu_factor = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x * (r_quant[1] - r_quant[0]) / r_quant[0]
     else:
-        mu_factor = 0
+        mu_factor = np.zeros(n_quant)
     final_answer = temp_surf_mean[1] - temp_surf_mean[0] + sum([info_coef[var] * info_change[var] for var in info_coef])
     final_answer = final_answer / (1+mu_factor)
     return final_answer, info_coef, info_change, mu_factor
