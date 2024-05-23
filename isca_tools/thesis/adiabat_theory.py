@@ -321,6 +321,49 @@ def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float, pres
         gamma_temp_a_change_temp_mean_change
 
 
+def get_gamma_factors2(temp_surf: float, sphum: float, pressure_surf: float, pressure_ft: float) -> Tuple[
+    float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float]:
+    temp_adiabat = get_temp_adiabat(temp_surf, sphum, pressure_surf, pressure_ft)
+
+    # Get parameters required for prefactors in the theory
+    _, _, _, beta_a1, beta_a2, beta_a3 = get_theory_prefactor_terms(temp_adiabat, pressure_surf, pressure_ft)
+    _, q_sat_surf, alpha_s, beta_s1, beta_s2, beta_s3 = get_theory_prefactor_terms(temp_surf, pressure_surf, pressure_ft,
+                                                                             sphum)
+
+    # Record coefficients of each term in equation for delta T_s(x)
+    # label is anomaly that causes variation with x.
+
+    gamma_temp_s = beta_a2 * beta_s1 / beta_a1 ** 2 * temp_surf / temp_adiabat - beta_s2 / beta_s1
+    gamma_humidity = (beta_a2 / (beta_a1 ** 2 * temp_adiabat) -
+                      alpha_s / beta_s1) * L_v * sphum
+    gamma_r_change = -L_v * sphum / beta_s1
+    gamma_temp_ft_change = beta_a1 / beta_s1
+    gamma_epsilon_change = 1 / beta_s1
+    gamma_epsilon = -beta_a2 / (beta_a1**2 * temp_adiabat)
+
+    # non-linear contributions
+    gamma_temp_s_squared = beta_a2 * beta_s2 / (2 * beta_a1**2) * temp_surf/temp_adiabat + (beta_s2/beta_s1)**2 - \
+                           0.5*beta_s3/beta_s1
+    gamma_humidity_squared = (L_v * alpha_s * sphum / beta_s1)**2
+    gamma_temp_s_humidity = beta_a2 * L_v * sphum * alpha_s / beta_a1**2 * temp_surf/temp_adiabat + \
+                            2 * beta_s2 * L_v * alpha_s * sphum/beta_s1**2 - beta_s2/beta_s1
+    gamma_temp_s_squared_humidity = 2 * (beta_s2/beta_s1)**2 - 0.5*beta_s3/beta_s1
+    gamma_temp_s_humidity_squared = 2 * L_v * alpha_s * sphum * beta_s2 / beta_s1**2
+
+    gamma_temp_s_r_mean_change = -L_v * alpha_s * sphum * temp_surf / beta_s1
+    gamma_temp_s_r_change = gamma_temp_s_r_mean_change
+
+    gamma_r_mean_change_temp_mean_change = L_v * alpha_s * sphum / beta_s1
+    gamma_temp_ft_change_temp_mean_change = beta_a2 / (beta_a1 * temp_adiabat)
+    gamma_epsilon_change_temp_mean_change = beta_a2 / (beta_a1**2 * temp_adiabat)
+    gamma_epsilon_change_temp_mean_change_squared = -beta_a2**2 * beta_s1 / (beta_a1**4 * temp_adiabat**2)
+
+    return gamma_temp_s, gamma_humidity, gamma_epsilon, gamma_r_change, gamma_temp_ft_change, gamma_epsilon_change, \
+        gamma_temp_s_squared, gamma_humidity_squared, gamma_temp_s_humidity, gamma_temp_s_squared_humidity, \
+        gamma_temp_s_humidity_squared, gamma_temp_s_r_mean_change, gamma_temp_s_r_change, \
+        gamma_r_mean_change_temp_mean_change, gamma_temp_ft_change_temp_mean_change, \
+        gamma_epsilon_change_temp_mean_change, gamma_epsilon_change_temp_mean_change_squared
+
 
 def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                   sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
@@ -1163,6 +1206,114 @@ def get_delta_temp_quant_theory_final(temp_surf_mean: np.ndarray, temp_surf_quan
                                                                                    temp_surf_mean[0])
         info_change['temp_a_change_temp_mean_change'] = delta_temp_adiabat_anom * (temp_surf_mean[1] -
                                                                                    temp_surf_mean[0])
+        _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
+                                                                      sphum_quant[0])
+        mu_factor = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x * (r_quant[1] - r_quant[0]) / r_quant[0]
+    else:
+        mu_factor = np.zeros(n_quant)
+    final_answer = temp_surf_mean[1] - temp_surf_mean[0] + sum([info_coef[var] * info_change[var] for var in info_coef])
+    final_answer = final_answer / (1+mu_factor)
+    return final_answer, info_coef, info_change, mu_factor
+
+
+def get_delta_temp_quant_theory_final2(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray,
+                                       sphum_mean: np.ndarray, sphum_quant: np.ndarray, pressure_surf: float,
+                                       pressure_ft: float, temp_ft_mean: np.ndarray,
+                                       temp_ft_quant: np.ndarray,
+                                       z_ft_mean: np.ndarray,
+                                       z_ft_quant: np.ndarray, z_form: bool = False, ignore_rh: bool = False,
+                                       include_squared_terms: bool = False) -> Tuple[
+    np.ndarray, dict, dict, np.ndarray]:
+    # Compute adiabatic temperatures
+    n_exp, n_quant = temp_surf_quant.shape
+    temp_adiabat_mean = np.zeros_like(temp_surf_mean)
+    for i in range(n_exp):
+        temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
+
+    # Compute relative humidities
+    r_mean = sphum_mean / sphum_sat(temp_surf_mean, pressure_surf)
+    r_quant = sphum_quant / sphum_sat(temp_surf_quant, pressure_surf)
+    r_anom = r_quant - r_mean[:, np.newaxis]
+
+    # Compute epsilon
+    epsilon_mean = moist_static_energy(temp_surf_mean, sphum_mean, height=0) - \
+                   moist_static_energy(temp_ft_mean, sphum_sat(temp_ft_mean, pressure_ft), z_ft_mean)
+    epsilon_quant = moist_static_energy(temp_surf_quant, sphum_quant, height=0) - \
+                    moist_static_energy(temp_ft_quant, sphum_sat(temp_ft_quant, pressure_ft), z_ft_quant)
+    epsilon_anom = (epsilon_quant - epsilon_mean[:, np.newaxis]) * 1000
+
+    temp_surf_anom_norm0 = (temp_surf_quant - temp_surf_mean[:, np.newaxis])[0] / temp_surf_mean[0]
+    r_anom_norm0 = r_anom[0] / r_mean[0]
+
+    # Record coefficients of each term in equation for delta T_s(x)
+    # label is anomaly that causes variation with x.
+    gamma_temp_s, gamma_humidity, gamma_epsilon, gamma_r_change, gamma_temp_ft_change, gamma_epsilon_change, \
+        gamma_temp_s_squared, gamma_humidity_squared, gamma_temp_s_humidity, gamma_temp_s_squared_humidity, \
+        gamma_temp_s_humidity_squared, gamma_temp_s_r_mean_change, gamma_temp_s_r_change, \
+        gamma_r_mean_change_temp_mean_change, gamma_temp_ft_change_temp_mean_change, \
+        gamma_epsilon_change_temp_mean_change, gamma_epsilon_temp_mean_change_squared = \
+        get_gamma_factors2(temp_surf_mean[0], sphum_mean[0], pressure_surf, pressure_ft)
+
+    info_coef = {'temp_s': gamma_temp_s * temp_surf_anom_norm0,
+                 'humidity': gamma_humidity * r_anom_norm0,
+                 'epsilon': gamma_epsilon * epsilon_anom[0],
+                 'r_change': 0 if ignore_rh else gamma_r_change / r_mean[0],
+                 'temp_ft_change': gamma_temp_ft_change,
+                 'epsilon_change': gamma_epsilon_change}
+
+    if include_squared_terms:
+        info_coef['temp_s_squared'] = gamma_temp_s_squared * temp_surf_anom_norm0**2
+        info_coef['humidity_squared'] = gamma_humidity_squared * r_anom_norm0**2
+        info_coef['temp_s_humidity'] = gamma_temp_s_humidity * temp_surf_anom_norm0 * r_anom_norm0
+        info_coef['temp_s_squared_humidity'] = gamma_temp_s_squared_humidity * temp_surf_anom_norm0**2 * r_anom_norm0
+        info_coef['temp_s_humidity_squared'] = gamma_temp_s_humidity_squared * temp_surf_anom_norm0 * r_anom_norm0**2
+
+        info_coef['temp_s_r_mean_change'] = gamma_temp_s_r_mean_change * temp_surf_anom_norm0 / r_mean[0]
+        info_coef['temp_s_r_change'] = gamma_temp_s_r_change * temp_surf_anom_norm0 / r_mean[0]
+
+        info_coef['r_mean_change_temp_mean_change'] = gamma_r_mean_change_temp_mean_change / r_mean[0]
+        info_coef['temp_ft_change_temp_mean_change'] = gamma_temp_ft_change_temp_mean_change
+        info_coef['epsilon_change_temp_mean_change'] = gamma_epsilon_change_temp_mean_change
+        info_coef['epsilon_temp_mean_change_squared'] = gamma_epsilon_temp_mean_change_squared * epsilon_anom[0]
+
+    if z_form:
+        if include_squared_terms:
+            raise ValueError('Conversion to z form of theory is too complicated with squared terms')
+        # Get parameters required for conversion to z form of theory
+        R_mod, _, _, beta_a1, _, _ = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf, pressure_ft)
+        beta_s1_mean = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft, sphum_mean[0])[3]
+
+        # If provide z, will compute z version of the theory - replace temp_ft anomaly with z_ft anomaly
+        z_ft_anom = z_ft_quant - z_ft_mean[:, np.newaxis]
+        delta_z_ft_anom = z_ft_anom[1] - z_ft_anom[0]
+        # write adiabatic temp anomaly change in terms of z anomaly rather than free troposphere temp anomaly
+        delta_temp_ft_anom = g / R_mod * delta_z_ft_anom
+
+        # In z-form, need to multiply each term by constant prefactor
+        for var in info_coef:
+            info_coef[var] = info_coef[var] * beta_s1_mean / (beta_s1_mean + beta_a1)
+    else:
+        temp_ft_anom = temp_ft_quant - temp_ft_mean[:, np.newaxis]
+        delta_temp_ft_anom = temp_ft_anom[1] - temp_ft_anom[0]
+
+    info_change = {'temp_s': temp_surf_mean[1] - temp_surf_mean[0],
+                   'humidity': temp_surf_mean[1] - temp_surf_mean[0],
+                   'epsilon': temp_surf_mean[1] - temp_surf_mean[0],
+                   'r_change': 0 if ignore_rh else r_anom[1] - r_anom[0],
+                   'temp_ft_change': delta_temp_ft_anom,
+                   'epsilon_change': epsilon_anom[1] - epsilon_anom[0]}
+    if include_squared_terms:
+        for var in ['temp_s_squared', 'humidity_squared', 'temp_s_humidity', 'temp_s_squared_humidity',
+                    'temp_s_humidity_squared']:
+            info_change[var] = temp_surf_mean[1] - temp_surf_mean[0]
+        info_change['temp_s_r_mean_change'] = 0 if ignore_rh else r_mean[1] - r_mean[0]
+        info_change['temp_s_r_change'] = 0 if ignore_rh else r_anom[1] - r_anom[0]
+        info_change['r_mean_change_temp_mean_change'] = (r_mean[1] - r_mean[0]) * (temp_surf_mean[1] -
+                                                                                   temp_surf_mean[0])
+        info_change['temp_ft_change_temp_mean_change'] = delta_temp_ft_anom * (temp_surf_mean[1] - temp_surf_mean[0])
+        info_change['epsilon_change_temp_mean_change'] = (epsilon_anom[1] - epsilon_anom[0]) * (
+                temp_surf_mean[1] - temp_surf_mean[0])
+        info_change['epsilon_temp_mean_change_squared'] = (temp_surf_mean[1] - temp_surf_mean[0])**2
         _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
                                                                       sphum_quant[0])
         mu_factor = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x * (r_quant[1] - r_quant[0]) / r_quant[0]
