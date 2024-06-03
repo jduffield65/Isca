@@ -1820,3 +1820,154 @@ def get_delta_temp_quant_theory_final2(temp_surf_mean: np.ndarray, temp_surf_qua
     final_answer = temp_surf_mean[1] - temp_surf_mean[0] + sum([info_coef[var] * info_change[var] for var in info_coef])
     final_answer = final_answer / (1+mu_factor)
     return final_answer, info_coef, info_change, mu_factor
+
+
+def get_delta_temp_quant_theory_final3(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
+                                       sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
+                                       temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray, z_ft_mean: np.ndarray,
+                                       z_ft_quant: np.ndarray, beta_approx: Optional[list] = None) -> Tuple[
+    np.ndarray, dict, dict, np.ndarray]:
+    """
+    Calculates the theoretical near-surface temperature change for percentile $x$, $\delta T_s(x)$,
+    such that in the simplest linear case (`include_squared_terms=False`) with `epsilon_form=True`, we have:
+
+    $$
+    \\begin{align}
+    \\begin{split}
+    \delta T_s(x) \\approx
+    1 &+ \gamma_{T_s}\\frac{\Delta T_s(x)}{\overline{T_s}} \delta \overline{T_s}+
+    \gamma_{r_s} \\frac{\Delta r_s(x)}{\overline{r_s}} \delta \overline{T_s}+
+    \gamma_{\epsilon} \Delta \epsilon(x) \delta \overline{T_s} \\\\
+    &+ \gamma_{\delta r_s} \\frac{\delta \Delta r_s(x)}{\overline{r_s}} +
+    \gamma_{\delta T_{FT}} \delta \Delta T_{FT}(x) + \gamma_{\delta \epsilon} \delta \Delta \epsilon(x)
+    \\end{split}
+    \\end{align}
+    $$
+
+    If `include_squared_terms=True`, then non-linear and squared terms are included. The LHS becomes
+    $\\left[1+\mu(x)\\frac{\delta r_s(x)}{\overline{r_s}}\\right]\delta T_s(x)$
+    where $\\mu(x) = \\frac{L_v \\alpha_s(x) q_s(x)}{\\beta_{s1}(x)}$, and extra terms e.g.
+    $\gamma_{T_s^2}(\\frac{\Delta T_s}{\overline{T_s}})^2 \delta \overline{T_s}$ are included on the RHS.
+
+    If `z_quant` is given (with other parameters the same), then the $z$ form of the theory will be computed
+    (not possible with `include_squared_terms=True` because gets too complicated):
+
+    $$
+    \\begin{align}
+    \\begin{split}
+    \delta T_s(x) \\approx
+    1 + \\frac{\overline{\\beta_{s1}}}{\overline{\\beta_{s1}} + \\beta_{A1}} \\bigg(
+    &\gamma_{T_s}\\frac{\Delta T_s(x)}{\overline{T_s}} \delta \overline{T_s}+
+    \gamma_{r_s} \\frac{\Delta r_s(x)}{\overline{r_s}} \delta \overline{T_s}+
+    \gamma_{\epsilon} \Delta \epsilon(x) \delta \overline{T_s} \\\\
+    &+ \gamma_{\delta r_s} \\frac{\delta \Delta r_s(x)}{\overline{r_s}} +
+    \gamma_{\delta T_{FT}} \\frac{g}{R^{\dagger}} \delta \Delta z_{FT}(x) +
+    \gamma_{\delta \epsilon} \delta \Delta \epsilon(x) \\bigg)
+    \\end{split}
+    \\end{align}
+    $$
+
+    Args:
+        temp_surf_mean: `float [n_exp]`</br>
+            Average near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+        temp_surf_quant: `float [n_exp, n_quant]`</br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+        sphum_mean: `float [n_exp]`</br>
+            Average near surface specific humidity of each simulation. Units: *kg/kg*.
+        sphum_quant: `float [n_exp, n_quant]`</br>
+            `sphum_quant[i, j]` is near-surface specific humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+        temp_ft_mean: ONLY NEEDED FOR $z$ THEORY</br>`float [n_exp]`</br>
+            Average temperature at `pressure_ft` in Kelvin.
+        temp_ft_quant: ONLY NEEDED FOR $z$ THEORY</br>`float [n_exp, n_quant]`</br>
+            `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        z_ft_mean: ONLY NEEDED FOR $z$ THEORY</br>`float [n_exp]`</br>
+            Average geopotential height at `pressure_ft` in *m*.
+        z_ft_quant: IF GIVEN, WILL RETURN $z$ THEORY</br>`float [n_exp, n_quant]`</br>
+            `z_ft_quant[i, j]` is geopotential height at `pressure_ft`, averaged over all days with near-surface
+            temperature corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *m*.
+        z_form: If `True`, will return $z$ version of theory.
+        epsilon_form: If `True`, will quantify deviation from convective equilibrium through moist static energy:
+            $\\epsilon = h_s - h_{FT}^*$. Otherwise, will quantify it in temperature space through
+            $T_{CE} = T_{FT} - T_A$.
+        ignore_rh: If `True`, will set $\delta r_s(x) = \delta \overline{r_s} = 0$.
+        include_squared_terms: If `True`, will include $\Delta T_s^2\delta \overline{T_s}$,
+            $\Delta r_s^2\delta \overline{T_s}$, $\Delta T_s \Delta r_s \delta \overline{T_s}$,
+            $\Delta T_s^2 \Delta r_s \delta \overline{T_s}$, $\Delta T_s \Delta r_s^2 \delta \overline{T_s}$,
+            $\Delta T_s \delta \overline{r_s}$, $\Delta T_s \delta \Delta r_s$,
+            $\delta \overline{r_s} \delta \overline{T_s}$ and $\delta \Delta T_A \delta \overline{T_s}$ terms in theory.
+    Returns:
+        `delta_temp_quant`: `float [n_quant]`</br>
+            `delta_temp_quant[i]` refers to the theoretical temperature difference between experiments
+            for percentile `quant_use[j]`.
+        `info_coef`: Dictionary with 4 keys for each term in the simple version of the theory: `temp_s`, `humidity`,
+            `r_change`, `temp_a_change`. The key refers to the variable that causes the variation with $x$.</br>
+            This gives the prefactor for the term indicated such that `info_coef[var]` $\\times$ `info_change[var]`
+            is the contribution for that term. Sum of all contributions equals $\delta T_s(x)-\delta \overline{T_s}$.
+        `info_change`: Complementary dictionary to `info_coef` with same keys that gives the relavent change to a
+            quantity i.e. the $\delta$ term. For both `temp_s` and `sphum`, this is $\delta \overline{T_s}$.
+        `mu`: `float [n_quant]`</br>
+            $\mu(x)$ factor. Will be all zeros if `include_squared_terms=False`.
+            Otherwise, will be $\\mu(x) = \\frac{L_v \\alpha_s(x) q_s(x)}{\\beta_{s1}(x)}$.
+    """
+    # Compute adiabatic temperatures
+    n_exp, n_quant = temp_surf_quant.shape
+    temp_adiabat_mean = np.zeros_like(temp_surf_mean)
+    for i in range(n_exp):
+        temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
+
+    # Compute relative humidities
+    r_mean = sphum_mean / sphum_sat(temp_surf_mean, pressure_surf)
+    r_quant = sphum_quant / sphum_sat(temp_surf_quant, pressure_surf)
+    r_anom = r_quant - r_mean[:, np.newaxis]
+
+    # Compute epsilon
+    # Quantify deviation from convective equilibrium in MSE space
+    epsilon_mean = (moist_static_energy(temp_surf_mean, sphum_mean, height=0) -
+                    moist_static_energy(temp_ft_mean, sphum_sat(temp_ft_mean, pressure_ft), z_ft_mean))*1000
+    epsilon_quant = (moist_static_energy(temp_surf_quant, sphum_quant, height=0) -
+                     moist_static_energy(temp_ft_quant, sphum_sat(temp_ft_quant, pressure_ft), z_ft_quant))*1000
+    epsilon_anom = epsilon_quant - epsilon_mean[:, np.newaxis]
+
+    temp_ft_anom = temp_ft_quant - temp_ft_mean[:, np.newaxis]
+
+    temp_surf_anom0 = (temp_surf_quant - temp_surf_mean[:, np.newaxis])[0]
+
+    _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
+                                                                   sphum_quant[0])
+    _, q_sat_s, alpha_s, beta_s1_mean, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
+                                                                         sphum_mean[0])
+    _, _, _, beta_ft1, beta_ft2, _ = get_theory_prefactor_terms(temp_ft_mean[0], pressure_surf, pressure_ft)
+    mu_x = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x * (r_quant[1] - r_quant[0]) / r_quant[0]
+    mu_mean = L_v * alpha_s * sphum_mean[0] / beta_s1_mean * (r_mean[1] - r_mean[0]) / r_mean[0]
+
+    if beta_approx is None:
+        beta_approx = []
+    beta_s1_use = [beta_s1_x] * 7
+    for i in range(len(beta_s1_use)):
+        if i in beta_approx:
+            beta_s1_use[i] = beta_s1_mean
+
+    term0 = beta_ft1 * (temp_ft_anom[1]-temp_ft_anom[0]) / beta_s1_use[0]
+    mse_mod_mean_change = beta_s1_mean * (1+mu_mean)*(temp_surf_mean[1]-temp_surf_mean[0]) + \
+                          L_v * q_sat_s * (r_mean[1]-r_mean[0]) - (epsilon_mean[1]-epsilon_mean[0])
+    mse_mod_anom0 = (beta_s1_mean * temp_surf_anom0 + L_v * q_sat_s * r_anom[0] - epsilon_anom[0])
+    term1 = mse_mod_mean_change/beta_s1_use[1]
+    term2 = beta_ft2/beta_ft1**2/temp_ft_mean[0] * mse_mod_anom0 * mse_mod_mean_change / beta_s1_use[2]
+    term3_mean = (epsilon_mean[1]-epsilon_mean[0])/beta_s1_use[3]
+    term3_anom = (epsilon_anom[1]-epsilon_anom[0])/beta_s1_use[4]
+    term4_mean = -L_v * sphum_quant[0]/r_quant[0] * (r_mean[1]-r_mean[0])/beta_s1_use[5]
+    term4_anom = -L_v * sphum_quant[0] / r_quant[0] * (r_anom[1] - r_anom[0]) / beta_s1_use[6]
+
+    final_answer = (term0+term1+term2+term3_mean+term3_anom+term4_mean+term4_anom)/(1+mu_x)
+    return final_answer
