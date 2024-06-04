@@ -798,7 +798,7 @@ def mse_mod_anom_change_ft_expansion(temp_ft_mean: np.ndarray, temp_ft_quant: np
     term_lll = beta_2 / beta_1 * temp_ft_anom0 / temp_ft_mean[0] * mse_mod_mean_change
     if taylor_terms == 'squared_0':
         # term_sl = beta_2 * temp_adiabat_anom[0] / temp_adiabat_mean[0] * delta_temp_adiabat_anom
-        term_sl = 0
+        term_sl = beta_2 * temp_ft_anom0 / temp_ft_mean[0] * delta_temp_ft_anom
         term_sll = 0.5 * beta_3 / beta_1 * (temp_ft_anom0 / temp_ft_mean[0]) ** 2 * mse_mod_mean_change
         term_lls = 0
         term_lsl = 0
@@ -1945,23 +1945,29 @@ def get_delta_temp_quant_theory_final3(temp_surf_mean: np.ndarray, temp_surf_qua
 
     _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
                                                                    sphum_quant[0])
-    _, q_sat_s, alpha_s, beta_s1_mean, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
+    _, q_sat_s, alpha_s, beta_s1_mean, beta_s2, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
                                                                          sphum_mean[0])
     _, _, _, beta_ft1, beta_ft2, _ = get_theory_prefactor_terms(temp_ft_mean[0], pressure_surf, pressure_ft)
     mu_x = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x * (r_quant[1] - r_quant[0]) / r_quant[0]
     mu_mean = L_v * alpha_s * sphum_mean[0] / beta_s1_mean * (r_mean[1] - r_mean[0]) / r_mean[0]
 
+    beta_s1_x_approx = 1-beta_s2/beta_s1_mean*temp_surf_anom0/temp_surf_mean[0]-\
+                       L_v*alpha_s*q_sat_s/beta_s1_mean*r_anom[0]-\
+                       beta_s2/beta_s1_mean/temp_surf_mean[0]/r_mean[0]*temp_surf_anom0*r_anom[0]
+    beta_s1_x_approx = beta_s1_mean/beta_s1_x_approx
     if beta_approx is None:
         beta_approx = []
     beta_s1_use = [beta_s1_x] * 7
     for i in range(len(beta_s1_use)):
         if i in beta_approx:
-            beta_s1_use[i] = beta_s1_mean
+            # beta_s1_use[i] = beta_s1_mean
+            beta_s1_use[i] = beta_s1_x_approx
 
     term0 = beta_ft1 * (temp_ft_anom[1]-temp_ft_anom[0]) / beta_s1_use[0]
     mse_mod_mean_change = beta_s1_mean * (1+mu_mean)*(temp_surf_mean[1]-temp_surf_mean[0]) + \
                           L_v * q_sat_s * (r_mean[1]-r_mean[0]) - (epsilon_mean[1]-epsilon_mean[0])
-    mse_mod_anom0 = (beta_s1_mean * temp_surf_anom0 + L_v * q_sat_s * r_anom[0] - epsilon_anom[0])
+    mse_mod_anom0 = beta_s1_mean * temp_surf_anom0 + L_v * q_sat_s * r_anom[0] + \
+                    L_v * alpha_s * q_sat_s * temp_surf_anom0 * r_anom[0] - epsilon_anom[0]
     term1 = mse_mod_mean_change/beta_s1_use[1]
     term2 = beta_ft2/beta_ft1**2/temp_ft_mean[0] * mse_mod_anom0 * mse_mod_mean_change / beta_s1_use[2]
     term3_mean = (epsilon_mean[1]-epsilon_mean[0])/beta_s1_use[3]
