@@ -852,7 +852,8 @@ def mse_mod_anom_change_ft_expansion(temp_ft_mean: np.ndarray, temp_ft_quant: np
 
 def mse_mod_change_surf_expansion(temp_surf: np.ndarray, sphum_surf: np.ndarray, epsilon: np.ndarray,
                                   pressure_surf: float, pressure_ft: float, taylor_terms: str = 'linear',
-                                  temp_use_rh_term: Optional[Union[np.ndarray, float]] = None
+                                  q_sat_s_linear_term_use: Optional[Union[np.ndarray, float]] = None,
+                                  beta_s1_use: Optional[Union[np.ndarray, float]] = None
                                   ) -> Tuple[Union[np.ndarray, float], dict]:
     """
     Does a taylor expansion of the change in modified moist static energy, $\delta h^{\dagger}$:
@@ -905,12 +906,14 @@ def mse_mod_change_surf_expansion(temp_surf: np.ndarray, sphum_surf: np.ndarray,
     delta_rh = rh[1] - rh[0]
     delta_epsilon = epsilon[1] - epsilon[0]
 
-    if temp_use_rh_term is None:
-        temp_use_rh_term = temp_surf[0]
-    q_sat_s = sphum_sat(temp_use_rh_term, pressure_surf)
-    alpha_s = clausius_clapeyron_factor(temp_use_rh_term, pressure_surf)
-    coef_rh = L_v * q_sat_s
-    coef_temp = beta_s1
+    q_sat_s = sphum_sat(temp_surf[0], pressure_surf)
+    alpha_s = clausius_clapeyron_factor(temp_surf[0], pressure_surf)
+
+    if q_sat_s_linear_term_use is None:
+        coef_rh = L_v * q_sat_s
+    else:
+        coef_rh = L_v * q_sat_s_linear_term_use
+    coef_temp = beta_s1 if beta_s1_use is None else beta_s1_use
 
     if taylor_terms == 'squared':
         # Add extra term in taylor expansion of delta_mse_mod if requested
