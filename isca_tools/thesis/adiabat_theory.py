@@ -48,7 +48,7 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
 
 
 def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, pressure_ft: float,
-                     guess_temp_adiabat: float = 273):
+                     guess_temp_adiabat: float = 273) -> float:
     """
     This returns the adiabatic temperature at `pressure_ft`, $T_{A, FT}$, such that surface moist static
     energy equals free troposphere saturated moist static energy: $h(T_s, q_s, p_{FT}) = h^*(T_{A}, p_{FT})$.
@@ -252,7 +252,7 @@ def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_s
             Pressure at near-surface, $p_s$ in *Pa*.
         pressure_ft:
             Pressure at free troposphere level, $p_{FT}$ in *Pa*.
-            
+
     Returns:
         gamma:
             The theory (ignoring $\mu$ factors) is a sum of 16 terms. The first four $\gamma$ factors multiply
