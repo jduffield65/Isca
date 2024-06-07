@@ -36,6 +36,7 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
             Pressure at near-surface in *Pa*.
         pressure_ft:
             Pressure at free troposphere level in *Pa*.
+
     Returns:
         MSE discrepancy: difference between surface and free troposphere saturated adiabatic MSE.
     """
@@ -63,6 +64,7 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
             Pressure at free troposphere level in *Pa*.
         guess_temp_adiabat:
             Initial guess for what adiabatic temperature at `pressure_ft` should be.
+
     Returns:
         Adiabatic temperature at `pressure_ft` in Kelvin.
     """
@@ -578,6 +580,7 @@ def mse_mod_anom_change_ft_expansion(temp_ft_mean: np.ndarray, temp_ft_quant: np
         temp_ft_anom0: `float [n_quant]`</br>
             Can specify the $\Delta T_{FT}$ term to use in the equation. May want to do this, if want to
             relate $\Delta T_{FT}$ to surface quantities assuming strict convective equilibrium.
+
     Returns:
         delta_mse_mod_anomaly: `float [n_quant]`</br>
             $\delta \Delta h^{\dagger}$ conditioned on each quantile of near-surface temperature. Units: *kJ/kg*.
@@ -722,6 +725,7 @@ def mse_mod_change_surf_expansion(temp_surf: np.ndarray, sphum_surf: np.ndarray,
             Can specify the $\\beta_{s1} = (c_p - R^{\\dagger} + L_v \\alpha q)$ factor preceeding the $\delta T_s$
             term. May want to do this if want to investigate the approximation
             $\\beta_{s1}(x) \\approx \overline{\\beta_{s1}}$.
+
     Returns:
         delta_mse_mod: `float` or `float [n_quant]` </br>
             Approximation of $\delta h^{\\dagger}$. Units are *kJ/kg*.
@@ -851,6 +855,7 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
         use_temp_adiabat: If `True`, then the mean adiabatic temperature, $\overline{T_A}$, is used in the computation
             of the $\gamma$ parameters, rather than the mean free tropospheric temperature, $\overline{T_{FT}}$
             if it is `False`.
+            
     Returns:
         scaling_factor: `float [n_quant]`</br>
             `scaling_factor[i]` refers to the theoretical temperature difference between experiments
