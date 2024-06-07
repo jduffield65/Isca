@@ -164,6 +164,7 @@ Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
             `float` or `float [n_temp]`</br>
             Specific humidity corresponding to the temperature i.e. specific humidity conditioned on same
             days as temperature given.
+
     Returns:
         R_mod: Modified gas constant, $R^{\dagger} = R\\ln(p_s/p_{FT})/2$</br>
             Units: *J/kg/K*
@@ -251,6 +252,7 @@ def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_s
             Pressure at near-surface, $p_s$ in *Pa*.
         pressure_ft:
             Pressure at free troposphere level, $p_{FT}$ in *Pa*.
+            
     Returns:
         gamma:
             The theory (ignoring $\mu$ factors) is a sum of 16 terms. The first four $\gamma$ factors multiply
@@ -312,186 +314,6 @@ def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_s
     gamma[key]['r0'] = gamma_e_change * gamma_e0 * mu / (alpha_s * temp_surf)
     gamma[key]['e0'] = gamma_e_change * gamma_e0
     return gamma
-
-# def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
-#                                   sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
-#                                   taylor_terms: str = 'linear', mse_mod_mean_change: Optional[float] = None
-#                                   ) -> Tuple[np.ndarray, dict, np.ndarray]:
-#     """
-#     This function returns an approximation in the change in modified MSE anomaly,
-#     $\delta \Delta h_s^{\dagger} = \delta (h_s^{\dagger}(x) - \overline{h_s^{\dagger}})$, with warming -
-#     the basis of a theory for $\delta T_s(x)$.
-#
-#     Doing a second order taylor expansion of $h_s^{\dagger}$ in the base climate,
-#     about adiabatic temperature $\overline{T_A}$, we can get:
-#
-#     $$\\Delta h^{\\dagger}(x) \\approx \\beta_{A1} \\Delta T_A + \\frac{1}{2\\overline{T_A}}
-#     \\beta_{A2} \\Delta T_A^2$$
-#
-#     Terms in equation:
-#         * $h_s^{\\dagger} = (c_p - R^{\\dagger})T_s + L_v q_s = (c_p + R^{\\dagger})T_A + L_vq^*(T_A, p_{FT})$ where
-#         $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
-#         * $\\Delta T_A = T_A(x) - \overline{T_A}$
-#         * $\\beta_{A1} = \\frac{d\\overline{h_s^{\\dagger}}}{d\overline{T_A}} = c_p + R^{\dagger} + L_v \\alpha_A q_A^*$
-#         * $\\beta_{A2} = \overline{T_A} \\frac{d^2\\overline{h_s^{\\dagger}}}{d\overline{T_A}^2} =
-#          \overline{T_A}\\frac{d\\beta_1}{d\overline{T_A}} = L_v \\alpha_A q_A^*(\\alpha_A \\overline{T_A} - 2)$
-#         * All terms on RHS are evaluated at the free tropospheric adiabatic temperature, $T_A$. I.e.
-#         $q^* = q^*(T_A, p_{FT})$ where $p_{FT}$ is the free tropospheric pressure.
-#
-#     Doing a second taylor expansion on this equation for a change with warming between simulations, $\delta$, we can
-#     decompose $\delta \\Delta h_s^{\\dagger}(x)$ into terms involving $\delta \Delta T_A$ and $\delta \overline{T_A}$
-#
-#     We can then use a third taylor expansion to relate $\delta \overline{T_A}$ to $\delta \overline{h^{\\dagger}}$:
-#
-#     $$\\delta \\overline{T_A} \\approx \\frac{\\delta \\overline{h^{\\dagger}}}{\\beta_{A1}} -
-#     \\frac{1}{2} \\frac{\\beta_{A2}}{\\beta_{A1}^3 \\overline{T_A}} (\\delta \\overline{h_s^{\\dagger}})^2$$
-#
-#     Overall, we get $\delta \Delta h_s^{\dagger}$ as a function of $\delta \Delta T_A$,
-#     $\delta \overline{h_s^{\\dagger}}$ and quantities evaluated at the base climate.
-#     The `taylor_terms` variable can be used to specify how many terms we want to keep.
-#
-#     The simplest equation with `taylor_terms = 'linear'` is:
-#
-#     $$\\delta \\Delta h_s^{\\dagger} \\approx \\beta_{A1} \\delta \\Delta T_A +
-#     \\frac{\\beta_{A2}}{\\beta_{A1}}\\frac{\\Delta T_A}{\\overline{T_A}} \\delta \\overline{h_s^{\\dagger}}$$
-#
-#     Args:
-#         temp_surf_mean: `float [n_exp]`</br>
-#             Average near surface temperature of each simulation, corresponding to a different
-#             optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
-#         temp_surf_quant: `float [n_exp, n_quant]`</br>
-#             `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
-#             experiment `i`. Units: *K*.</br>
-#             Note that `quant_use` is not provided as not needed by this function, but is likely to be
-#             `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
-#             of a quantity.
-#         sphum_mean: `float [n_exp]`</br>
-#             Average near surface specific humidity of each simulation. Units: *kg/kg*.
-#         sphum_quant: `float [n_exp, n_quant]`</br>
-#             `sphum_quant[i, j]` is near-surface specific humidity, averaged over all days with near-surface temperature
-#              corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
-#         pressure_surf:
-#             Pressure at near-surface in *Pa*.
-#         pressure_ft:
-#             Pressure at free troposphere level in *Pa*.
-#         taylor_terms:
-#             The approximations in this equation arise from the three taylor series mentioned above, we can specify
-#             how many terms we want to keep, with one of the 3 options below:
-#
-#             * `linear`: Only keep the two terms which are linear in all three taylor series i.e.
-#             $\\delta \\Delta h_s^{\\dagger} \\approx \\beta_{A1} \\delta \\Delta T_A +
-#             \\frac{\\beta_{A2}}{\\beta_{A1}}\\frac{\\Delta T_A}{\\overline{T_A}} \\delta \\overline{h_s^{\\dagger}}$
-#             * `non_linear`: Keep *LL*, *LLL* and *LNL* terms.
-#             * `squared_0`: Keep terms linear and squared in first expansion and then just linear terms:
-#             *LL*, *LLL*, *SL*, *SLL*.
-#             * `squared`: Keep four additional terms corresponding to *LLS*, *LSL*, *LNL* and *SNL* terms in the
-#             taylor series. SNL means second order in the first taylor series mentioned above, non-linear
-#             (i.e. $\\delta \\Delta T_A\\delta \\overline{h^{\\dagger}}$ terms)  in the second
-#             and linear in the third. These 5 terms are the most significant non-linear terms.
-#             * `full`: In addition to the terms in `squared`, we keep the usually small *LSS* and *SLS* terms.
-#         mse_mod_mean_change: `float [n_exp]`</br>
-#             Can provide the $\\delta \\overline{h^{\\dagger}}$ in J/kg. Use this if wan't to use a particular taylor
-#             approximation for this.
-#     Returns:
-#         `delta_mse_mod_anomaly`: `float [n_quant]`</br>
-#             $\delta \Delta h_s^{\dagger}$ conditioned on each quantile of near-surface temperature. Units: *kJ/kg*.
-#         `info_dict`: Dictionary with 5 keys: `temp_adiabat_anom`, `mse_mod_mean`, `mse_mod_mean_squared`,
-#             `mse_mod_mean_cubed`, `non_linear`.</br>
-#             For each key, a list containing a prefactor computed in the base climate and a change between simulations is
-#             returned. I.e. for `info_dict[non_linear][1]` would be $\\delta \\Delta T_A\\delta \\overline{h^{\\dagger}}$
-#             and the total contribution of non-linear terms to $\delta \Delta h^{\dagger}$ would be
-#             `info_dict[non_linear][0] * info_dict[non_linear][1]`. In the `linear` case this would be zero,
-#             and `info_dict[temp_adiabat_anom][0]`$=\\beta_{A1}$ and `info_dict[mse_mod_mean][0]`$=
-#             \\frac{\\beta_{A2}}{\\beta_{A1}}\\frac{\\Delta T_A}{\\overline{T_A}}$ would be the only non-zero prefactors.
-#             Units of prefactor multiplied by change is *kJ/kg*.
-#         `temp_adiabat_anom`: `float [n_exp, n_quant]`</br>
-#             The adiabatic free troposphere temperature anomaly, $\Delta T_A$ for each experiment, as may be of use.
-#             Units: *Kelvin*.
-#     """
-#     # Compute adiabatic temperatures
-#     n_exp, n_quant = temp_surf_quant.shape
-#     temp_adiabat_mean = np.zeros_like(temp_surf_mean)
-#     temp_adiabat_quant = np.zeros_like(temp_surf_quant)
-#     for i in range(n_exp):
-#         temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
-#         for j in range(n_quant):
-#             temp_adiabat_quant[i, j] = get_temp_adiabat(temp_surf_quant[i, j], sphum_quant[i, j], pressure_surf,
-#                                                         pressure_ft)
-#     temp_adiabat_anom = temp_adiabat_quant - temp_adiabat_mean[:, np.newaxis]
-#     delta_temp_adiabat_anom = temp_adiabat_anom[1] - temp_adiabat_anom[0]
-#
-#     # Parameters needed for taylor expansions - most compute using adiabatic temperature in free troposphere.
-#     R_mod, _, _, beta_1, beta_2, beta_3 = get_theory_prefactor_terms(temp_adiabat_mean[0], pressure_surf,
-#                                                                      pressure_ft)
-#
-#     # Compute modified MSE - need in units of J/kg at the moment hence multiply by 1000
-#     if mse_mod_mean_change is None:
-#         mse_mod_mean = moist_static_energy(temp_surf_mean, sphum_mean, height=0, c_p_const=c_p - R_mod) * 1000
-#         mse_mod_mean_change = mse_mod_mean[1] - mse_mod_mean[0]
-#
-#     # Decompose Taylor Expansions - 3 in total
-#     # l means linear, s means squared and n means non-linear
-#     # first index is for Delta expansion i.e. base climate - quantile about mean
-#     # second index is for delta expansion i.e. difference between climates
-#     # third index is for conversion between delta_temp_adiabat_mean and delta_mse_mod_mean
-#     # I neglect all terms that are more than squared in two or more of these taylor expansions
-#     if taylor_terms.lower() not in ['linear', 'non_linear', 'squared_0', 'squared', 'full']:
-#         raise ValueError(f'taylor_terms given is {taylor_terms}, but must be linear, squared_0, squared or full.')
-#
-#     term_ll = beta_1 * delta_temp_adiabat_anom
-#     term_lll = beta_2 / beta_1 * temp_adiabat_anom[0] / temp_adiabat_mean[0] * mse_mod_mean_change
-#     if taylor_terms == 'squared_0':
-#         # term_sl = beta_2 * temp_adiabat_anom[0] / temp_adiabat_mean[0] * delta_temp_adiabat_anom
-#         term_sl = 0
-#         term_sll = 0.5 * beta_3 / beta_1 * (temp_adiabat_anom[0] / temp_adiabat_mean[0]) ** 2 * mse_mod_mean_change
-#         term_lls = 0
-#         term_lsl = 0
-#         term_lnl = 0
-#         term_snl = 0
-#     elif 'linear' not in taylor_terms:
-#         term_sl = beta_2 * temp_adiabat_anom[0] / temp_adiabat_mean[0] * delta_temp_adiabat_anom
-#         term_sll = 0.5 * beta_3 / beta_1 * (temp_adiabat_anom[0] / temp_adiabat_mean[0]) ** 2 * mse_mod_mean_change
-#         term_lls = -0.5 * beta_2 ** 2 / beta_1 ** 3 * temp_adiabat_anom[0] / temp_adiabat_mean[
-#             0] ** 2 * mse_mod_mean_change ** 2
-#         term_lsl = 0.5 * beta_3 / beta_1 ** 2 * temp_adiabat_anom[0] / temp_adiabat_mean[0] ** 2 * mse_mod_mean_change ** 2
-#         term_lnl = beta_2 / beta_1 / temp_adiabat_mean[0] * delta_temp_adiabat_anom * mse_mod_mean_change
-#         term_snl = beta_3 / beta_1 * temp_adiabat_anom[0] / temp_adiabat_mean[
-#             0] ** 2 * delta_temp_adiabat_anom * mse_mod_mean_change
-#     else:
-#         term_sl = 0
-#         term_sll = 0
-#         term_lls = 0
-#         term_lsl = 0
-#         term_lnl = 0 if taylor_terms == 'linear' else beta_2 / beta_1 / temp_adiabat_mean[0] * delta_temp_adiabat_anom * mse_mod_mean_change
-#         term_snl = 0
-#     # Extra squared-squared terms
-#     if taylor_terms == 'full':
-#         term_lss = -0.5 * beta_3 * beta_2 / beta_1 ** 4 * temp_adiabat_anom[0] / temp_adiabat_mean[
-#             0] ** 3 * mse_mod_mean_change ** 3
-#         term_sls = -0.25 * beta_3 * beta_2 / beta_1 ** 3 * temp_adiabat_anom[0] ** 2 / temp_adiabat_mean[
-#             0] ** 3 * mse_mod_mean_change ** 2
-#         # The two below are very small so should exclude
-#         # term_ss = 0.5 * beta_2/temp_adiabat_mean[0] * delta_temp_anom**2
-#         # term_lns = -0.5 * beta_2**2/beta_1**3/temp_adiabat_mean[0]**2 * delta_temp_anom * delta_mse**2
-#     else:
-#         term_lss = 0
-#         term_sls = 0
-#
-#     # Keep track of contribution to different changes
-#     # Have a prefactor based on current climate and a change between simulations for each factor.
-#     info_dict = {'temp_adiabat_anom': [(term_ll + term_sl) / delta_temp_adiabat_anom / 1000, delta_temp_adiabat_anom],
-#                  'mse_mod_mean': [(term_lll + term_sll) / mse_mod_mean_change / 1000, mse_mod_mean_change],
-#                  'mse_mod_mean_squared': [(term_lls + term_lsl + term_sls) / mse_mod_mean_change ** 2 / 1000,
-#                                           mse_mod_mean_change ** 2],
-#                  'mse_mod_mean_cubed': [term_lss / mse_mod_mean_change ** 3 / 1000, mse_mod_mean_change ** 3],
-#                  'non_linear': [(term_lnl + term_snl) / (delta_temp_adiabat_anom * mse_mod_mean_change) / 1000,
-#                                 delta_temp_adiabat_anom * mse_mod_mean_change]
-#                  }
-#
-#     final_answer = term_ll + term_lll + term_sl + term_lls + term_sll + term_lsl + term_lnl + term_snl + term_lss + \
-#                    term_sls
-#     final_answer = final_answer / 1000  # convert to units of kJ/kg
-#     return final_answer, info_dict, temp_adiabat_anom
 
 
 def mse_mod_anom_change_ft_expansion(temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray,
@@ -855,7 +677,7 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
         use_temp_adiabat: If `True`, then the mean adiabatic temperature, $\overline{T_A}$, is used in the computation
             of the $\gamma$ parameters, rather than the mean free tropospheric temperature, $\overline{T_{FT}}$
             if it is `False`.
-            
+
     Returns:
         scaling_factor: `float [n_quant]`</br>
             `scaling_factor[i]` refers to the theoretical temperature difference between experiments
