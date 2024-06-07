@@ -372,9 +372,7 @@ def get_gamma_factors(temp_surf: float, sphum: float, pressure_surf: float, pres
 
 
 def get_gamma_factors2(temp_surf: float, sphum: float, temp_ft: float, pressure_surf: float,
-                       pressure_ft: float) -> Tuple[
-    float, float, float, float, float, float, float, float, float, float, float, float, float, float,
-    float, float, float]:
+                       pressure_ft: float) -> dict:
     """
     Calculates the sensitivity $\gamma$ parameters such that in the simplest linear case, in `epsilon_form`, we have:
 
@@ -485,23 +483,44 @@ def get_gamma_factors2(temp_surf: float, sphum: float, temp_ft: float, pressure_
     _, _, _, beta_ft1, beta_ft2, beta_ft3 = get_theory_prefactor_terms(temp_ft, pressure_surf, pressure_ft)
     _, q_sat_surf, alpha_s, beta_s1, beta_s2, beta_s3 = get_theory_prefactor_terms(temp_surf, pressure_surf,
                                                                                    pressure_ft, sphum)
+    mu = L_v * sphum * alpha_s / beta_s1
+    rh = sphum / q_sat_surf
 
     # Record coefficients of each term in equation for delta T_s(x)
     # label is anomaly that causes variation with x.
-    gamma_temp_s = beta_ft2 * beta_s1 / beta_ft1 ** 2 * temp_surf / temp_ft - beta_s2 / beta_s1
-    gamma_r = (alpha_s / beta_s1 - beta_ft2 / (beta_ft1 ** 2 * temp_ft)) * L_v * sphum
-    gamma_epsilon = beta_ft2 / (beta_ft1**2 * temp_ft)
-    gamma_r_change = L_v * sphum / beta_s1
-    gamma_temp_ft_change = beta_ft1 / beta_s1
-    gamma_epsilon_change = 1/beta_s1
 
-    # # These terms come from keeping \Delta T_A^2 term in expansion of \Delta h_s^{\dagger}
-    # # I.e. when \Delta T_A is large in reference climate.
-    # gamma_temp_s_squared += 0.5 * beta_a3 * beta_s1**2 / beta_a1**3 * (temp_surf/temp_adiabat)**2
-    # gamma_humidity_squared += 0.5 * beta_a3 * (L_v * sphum)**2 / beta_a1**3 / temp_adiabat**2
-    # gamma_temp_s_humidity += beta_a3 * beta_s1 * L_v * sphum * temp_surf / beta_a1**3 / temp_adiabat**2
+    gamma = {'t_mean_change': {}, 'r_mean_change': {}, 'e_mean_change': {}, 'anomaly_change': {}}
+    # temp_s_mean_change terms
+    key = 't_mean_change'
+    gamma_e0 = beta_ft2 * beta_s1 / beta_ft1**2 * temp_surf/temp_ft
+    gamma[key]['t0'] = gamma_e0 - beta_s2/beta_s1
+    gamma[key]['t0_r0'] = beta_s2/beta_s1 - mu * gamma_e0
+    gamma[key]['r0'] = mu * (1 - gamma_e0 / (alpha_s * temp_surf))
+    gamma[key]['e0'] = gamma_e0
 
-    return gamma_temp_s, gamma_r, gamma_epsilon, gamma_r_change, gamma_temp_ft_change, gamma_epsilon_change
+    # Anomaly change terms
+    key = 'anomaly_change'
+    gamma_r_change = mu / alpha_s / rh
+    gamma_e_change = 1/beta_s1
+    gamma[key]['r'] = gamma_r_change
+    gamma[key]['t0_r'] = gamma_r_change * alpha_s * temp_surf
+    gamma[key]['ft'] = beta_ft1 / beta_s1
+    gamma[key]['e'] = gamma_e_change
+
+    # r_s_mean change terms
+    key = 'r_mean_change'
+    gamma[key]['t0'] = gamma_r_change * gamma_e0 * (alpha_s * temp_surf / gamma_e0 - 1)
+    gamma[key]['t0_r0'] = gamma_r_change * gamma_e0 * mu
+    gamma[key]['r0'] = gamma_r_change * gamma_e0 * mu / (alpha_s * temp_surf)
+    gamma[key]['e0'] = gamma_r_change * gamma_e0
+
+    # epsilon mean change terms
+    key = 'e_mean_change'
+    gamma[key]['t0'] = gamma_e_change * gamma_e0
+    gamma[key]['t0_r0'] = gamma_e_change * gamma_e0 * mu
+    gamma[key]['r0'] = gamma_e_change * gamma_e0 * mu / (alpha_s * temp_surf)
+    gamma[key]['e0'] = gamma_e_change * gamma_e0
+    return gamma
 
 # def get_delta_mse_mod_anom_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
 #                                   sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
@@ -1828,7 +1847,8 @@ def get_delta_temp_quant_theory_final2(temp_surf_mean: np.ndarray, temp_surf_qua
 def get_delta_temp_quant_theory_final3(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                        sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
                                        temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray, z_ft_mean: np.ndarray,
-                                       z_ft_quant: np.ndarray, beta_approx: Optional[list] = None) -> Tuple[
+                                       z_ft_quant: np.ndarray, non_linear: bool = False,
+                                       z_form: bool = False, use_temp_adiabat: bool = False) -> Tuple[
     np.ndarray, dict, dict, np.ndarray]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta T_s(x)$,
@@ -1923,12 +1943,6 @@ def get_delta_temp_quant_theory_final3(temp_surf_mean: np.ndarray, temp_surf_qua
             $\mu(x)$ factor. Will be all zeros if `include_squared_terms=False`.
             Otherwise, will be $\\mu(x) = \\frac{L_v \\alpha_s(x) q_s(x)}{\\beta_{s1}(x)}$.
     """
-    # Compute adiabatic temperatures
-    n_exp, n_quant = temp_surf_quant.shape
-    temp_adiabat_mean = np.zeros_like(temp_surf_mean)
-    for i in range(n_exp):
-        temp_adiabat_mean[i] = get_temp_adiabat(temp_surf_mean[i], sphum_mean[i], pressure_surf, pressure_ft)
-
     # Compute relative humidities
     r_mean = sphum_mean / sphum_sat(temp_surf_mean, pressure_surf)
     r_quant = sphum_quant / sphum_sat(temp_surf_quant, pressure_surf)
@@ -1942,41 +1956,87 @@ def get_delta_temp_quant_theory_final3(temp_surf_mean: np.ndarray, temp_surf_qua
                      moist_static_energy(temp_ft_quant, sphum_sat(temp_ft_quant, pressure_ft), z_ft_quant))*1000
     epsilon_anom = epsilon_quant - epsilon_mean[:, np.newaxis]
 
-    temp_ft_anom = temp_ft_quant - temp_ft_mean[:, np.newaxis]
+    # Get factors needed for theory
+    if use_temp_adiabat:
+        # use adiabatic temperature for current climate to compute gamma params so only depends on surface quantities
+        temp_mean_ft_beta_use = get_temp_adiabat(temp_surf_mean[0], sphum_mean[0], pressure_surf, pressure_ft)
+    else:
+        temp_mean_ft_beta_use = temp_ft_mean[0]
+    gamma = get_gamma_factors2(temp_surf_mean[0], sphum_mean[0], temp_mean_ft_beta_use, pressure_surf, pressure_ft)
+    _, _, alpha_s, beta_s1, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
+                                                                  sphum_mean[0])
+    if non_linear:
+        _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
+                                                                      sphum_quant[0])
+        mu_x = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x
+        mu = L_v * alpha_s * sphum_mean[0] / beta_s1
+    else:
+        mu = 0
+        mu_x = 0
 
-    temp_surf_anom0 = (temp_surf_quant - temp_surf_mean[:, np.newaxis])[0]
+    if z_form:
+        R_mod, _, _, beta_ft1, _, _ = get_theory_prefactor_terms(temp_mean_ft_beta_use, pressure_surf, pressure_ft)
+        temp_ft_anom_change = g/R_mod * np.diff(z_ft_quant - z_ft_mean[:, np.newaxis], axis=0)[0]
+        # Need to multiply all mu and gamma factors by beta_s1/(beta_s1+beta_ft1) if z form of theory
+        mu = mu * beta_s1 / (beta_s1+beta_ft1)
+        mu_x = mu_x * beta_s1 / (beta_s1+beta_ft1)
+        for key1 in gamma:
+            for key2 in gamma[key1]:
+                gamma[key1][key2] = gamma[key1][key2] * beta_s1 / (beta_s1+beta_ft1)
+    else:
+        temp_ft_anom_change = np.diff(temp_ft_quant - temp_ft_mean[:, np.newaxis], axis=0)[0]
+    mu_factor = 1 + mu * (r_mean[1] - r_mean[0]) / r_mean[0]
+    mu_factor_x = 1 + mu_x * (r_quant[1] - r_quant[0]) / r_quant[0]
 
-    _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
-                                                                   sphum_quant[0])
-    _, q_sat_s, alpha_s, beta_s1_mean, beta_s2, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
-                                                                         sphum_mean[0])
-    _, _, _, beta_ft1, beta_ft2, _ = get_theory_prefactor_terms(temp_ft_mean[0], pressure_surf, pressure_ft)
-    mu_x = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x * (r_quant[1] - r_quant[0]) / r_quant[0]
-    mu_mean = L_v * alpha_s * sphum_mean[0] / beta_s1_mean * (r_mean[1] - r_mean[0]) / r_mean[0]
+    anom_norm0 = {'t0': (temp_surf_quant - temp_surf_mean[:, np.newaxis])[0] / temp_surf_mean[0],
+                  'r0': r_anom[0] / r_mean[0], 'e0': epsilon_anom[0]/(beta_s1*temp_surf_mean[0])}
+    anom_norm0['t0_r0'] = anom_norm0['t0'] * anom_norm0['r0']
 
-    beta_s1_x_approx = 1-beta_s2/beta_s1_mean*temp_surf_anom0/temp_surf_mean[0]-\
-                       L_v*alpha_s*q_sat_s/beta_s1_mean*r_anom[0]-\
-                       beta_s2/beta_s1_mean/temp_surf_mean[0]/r_mean[0]*temp_surf_anom0*r_anom[0]
-    beta_s1_x_approx = beta_s1_mean/beta_s1_x_approx
-    if beta_approx is None:
-        beta_approx = []
-    beta_s1_use = [beta_s1_x] * 7
-    for i in range(len(beta_s1_use)):
-        if i in beta_approx:
-            # beta_s1_use[i] = beta_s1_mean
-            beta_s1_use[i] = beta_s1_x_approx
+    # Record the sign of each term, and also normalize relative humidity change terms by climatological mean
+    # relative humidity
+    coef_sign = {'t_mean_change': {key2: 1 if key2 == 't0' else -1 for key2 in gamma['t_mean_change']},
+                 'r_mean_change': {key2: -1 if key2 in ['t0', 'e0'] else 1
+                                   for key2 in gamma['r_mean_change']},
+                 'e_mean_change': {key2: 1 if key2 == 'e0' else -1 for key2 in gamma['e_mean_change']},
+                 'anomaly_change': {key2: -1 if 'r' in key2 else 1 for key2 in gamma['anomaly_change']}}
 
-    term0 = beta_ft1 * (temp_ft_anom[1]-temp_ft_anom[0]) / beta_s1_use[0]
-    mse_mod_mean_change = beta_s1_mean * (1+mu_mean)*(temp_surf_mean[1]-temp_surf_mean[0]) + \
-                          L_v * q_sat_s * (r_mean[1]-r_mean[0]) - (epsilon_mean[1]-epsilon_mean[0])
-    mse_mod_anom0 = beta_s1_mean * temp_surf_anom0 + L_v * q_sat_s * r_anom[0] + \
-                    L_v * alpha_s * q_sat_s * temp_surf_anom0 * r_anom[0] - epsilon_anom[0]
-    term1 = mse_mod_mean_change/beta_s1_use[1]
-    term2 = beta_ft2/beta_ft1**2/temp_ft_mean[0] * mse_mod_anom0 * mse_mod_mean_change / beta_s1_use[2]
-    term3_mean = (epsilon_mean[1]-epsilon_mean[0])/beta_s1_use[3]
-    term3_anom = (epsilon_anom[1]-epsilon_anom[0])/beta_s1_use[4]
-    term4_mean = -L_v * sphum_quant[0]/r_quant[0] * (r_mean[1]-r_mean[0])/beta_s1_use[5]
-    term4_anom = -L_v * sphum_quant[0] / r_quant[0] * (r_anom[1] - r_anom[0]) / beta_s1_use[6]
+    # Each term is a coefficient evaluated in the current climate, multiplied by a change between climates.
+    # Record the climatological coefficient in info_coef
+    info_coef = {key: {} for key in gamma}
+    for key1 in gamma:
+        for key2 in gamma[key1]:
+            if 'anomaly' in key1:
+                if 't0' in key2:
+                    info_coef[key1][key2] = coef_sign[key1][key2] * gamma[key1][key2] * anom_norm0['t0']
+                else:
+                    info_coef[key1][key2] = coef_sign[key1][key2] * gamma[key1][key2]
+            else:
+                info_coef[key1][key2] = coef_sign[key1][key2] * gamma[key1][key2] * anom_norm0[key2]
 
-    final_answer = (term0+term1+term2+term3_mean+term3_anom+term4_mean+term4_anom)/(1+mu_x)
+    # Record the change between climates in info_change
+    info_change = {'t_mean_change': (temp_surf_mean[1] - temp_surf_mean[0]) * mu_factor,
+                   'r_mean_change': r_mean[1] - r_mean[0],
+                   'e_mean_change': epsilon_mean[1] - epsilon_mean[0],
+                   'anomaly_change': {'r': r_anom[1]-r_anom[0],
+                                      't0_r': r_anom[1]-r_anom[0],
+                                      'ft': temp_ft_anom_change,
+                                      'e': epsilon_anom[1] - epsilon_anom[0]}}
+
+    # info_change - Normalise by mean temp change to get scale factor estimate
+    # info_cont - Multiply coef by change to get overall contribution of each term
+    info_cont = {key1: {} for key1 in gamma}
+    for key1 in gamma:
+        if 'mean' in key1:
+            info_change[key1] = info_change[key1] / (temp_surf_mean[1] - temp_surf_mean[0]) / mu_factor_x
+        for key2 in gamma[key1]:
+            if 'mean' in key1:
+                info_cont[key1][key2] = info_coef[key1][key2] * info_change[key1]
+            else:
+                info_change[key1][key2] = info_change[key1][key2] / (temp_surf_mean[1] - temp_surf_mean[0]
+                                                                     ) / mu_factor_x
+                info_cont[key1][key2] = info_coef[key1][key2] * info_change[key1][key2]
+
+    final_answer = mu_factor/mu_factor_x + sum([sum([info_cont[key1][key2] for key2 in info_coef[key1]])
+                                                for key1 in info_coef])
+
     return final_answer
