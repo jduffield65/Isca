@@ -94,7 +94,9 @@ def moist_profile(temp_start: float, p_start: float, p_levels: np.ndarray) -> np
         temp_start: Starting temperature of parcel. Units: *Kelvin*.
         p_start: Starting pressure of parcel. Units: *Pa*.
         p_levels: `float [n_p_levels]`.</br>
-            Pressure levels to find the temperature of the parcel at. Units: *Pa*.
+            Pressure levels to find the temperature of the parcel at.
+            Assumes p_levels is ascending i.e. starts in space.
+            Units: *Pa*.
 
     Returns:
         `float [n_p_levels]`.</br>
@@ -186,7 +188,9 @@ def convection_neutral_profile(temp_start: float, p_start: float, temp_lcl: floa
         p_start: Starting pressure of parcel. Units: *Pa*.
         temp_lcl: Temperature of *LCL* in *K*.
         p_levels: `float [n_p_levels]`.</br>
-            Pressure levels to find the temperature of the parcel at. Units: *Pa*.
+            Pressure levels to find the temperature of the parcel at.
+            Assumes p_levels is ascending i.e. starts in space.
+            Units: *Pa*.
 
     Returns:
         `float [n_p_levels]`.</br>
