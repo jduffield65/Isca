@@ -598,7 +598,8 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
                               sphum_quant: np.ndarray, pressure_surf: float, pressure_ft: float,
                               temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray, z_ft_mean: np.ndarray,
                               z_ft_quant: np.ndarray, non_linear: bool = False,
-                              z_form: bool = False, use_temp_adiabat: bool = False) -> Tuple[
+                              z_form: bool = False, use_temp_adiabat: bool = False,
+                              strict_conv_eqb: bool = False, simple: bool = False) -> Tuple[
     np.ndarray, dict, dict, dict, Union[float, np.ndarray]]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta T_s(x)$, relative
@@ -643,6 +644,22 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
     the $\gamma$ parameters (and $\\beta_{FT1}$ if `z_form=True`), rather than the mean free tropospheric temperature,
     $\overline{T_{FT}}$ if it is `False`.
 
+    If `simple = True`, will return:
+
+    $$
+    \\begin{align}
+    \\begin{split}
+    &\\left(1 + \mu(x)\\frac{\delta r_s(x)}{r_s(x)}\\right)\\frac{\delta T_s(x)}{\overline{\delta T_s}}
+    \\approx \\\\
+    &\\left(\gamma_{T}\\frac{\Delta T_s(x)}{\overline{T_s}}
+    - \gamma_{r} \\frac{\Delta r_s(x)}{\overline{r_s}} -
+    \gamma_{\delta \Delta r} \\frac{\delta \Delta r_s(x)}{\delta \overline{T_s}}
+    + \gamma_{FT} \\frac{\delta \Delta T_{FT}(x)}{\delta \overline{T_s}}\\right)
+    \\left(1 + \overline{\mu} \\frac{\delta \overline{r_s}}{\overline{r_s}}\\right)
+    \\end{split}
+    \\end{align}
+    $$
+
     Args:
         temp_surf_mean: `float [n_exp]`</br>
             Average near surface temperature of each simulation, corresponding to a different
@@ -677,6 +694,10 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
         use_temp_adiabat: If `True`, then the mean adiabatic temperature, $\overline{T_A}$, is used in the computation
             of the $\gamma$ parameters, rather than the mean free tropospheric temperature, $\overline{T_{FT}}$
             if it is `False`.
+        strict_conv_eqb: If `True`, will ignore all $\epsilon$ terms in theory
+        simple: If `True`, will exclude no-linear $\Delta T_s \Delta r_s$ and $\Delta T_s \delta \Delta r_s$ terms.
+            Will also exclude $\\frac{\delta \overline{r_s}}{\delta \overline{T_s}}$ and
+            $\\frac{\delta \overline{\epsilon}}{\delta \overline{T_s}}$ terms. Will not affect value of $\mu$ though.
 
     Returns:
         scaling_factor: `float [n_quant]`</br>
@@ -770,6 +791,22 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
                     info_coef[key1][key2] = coef_sign[key1][key2] * gamma[key1][key2]
             else:
                 info_coef[key1][key2] = coef_sign[key1][key2] * gamma[key1][key2] * anom_norm0[key2]
+
+    if strict_conv_eqb:
+        # Ignore effect of epsilon
+        for key1 in gamma:
+            for key2 in gamma[key1]:
+                if 'e_mean' in key1 or key2 == 'e' or key2 == 'e0':
+                    info_coef[key1][key2] = 0
+    if simple:
+        for key1 in gamma:
+            for key2 in gamma[key1]:
+                # if 'r_mean' in key1 or 'e_mean' in key1:
+                #     # only keep temp mean changes
+                #     info_coef[key1][key2] = 0
+                if 't0_r' in key2:
+                    # remove non-linear terms
+                    info_coef[key1][key2] = 0
 
     # Record the change between climates in info_change
     info_change = {'t_mean_change': (temp_surf_mean[1] - temp_surf_mean[0]) * mu_factor,
