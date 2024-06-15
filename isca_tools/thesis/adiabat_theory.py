@@ -662,7 +662,7 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
 
     Args:
         temp_surf_mean: `float [n_exp]`</br>
-            Average near surface temperature of each simulation, corresponding to a different
+            Average (can use mean or median) near surface temperature of each simulation, corresponding to a different
             optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
         temp_surf_quant: `float [n_exp, n_quant]`</br>
             `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
