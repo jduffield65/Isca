@@ -801,9 +801,9 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
     if simple:
         for key1 in gamma:
             for key2 in gamma[key1]:
-                # if 'r_mean' in key1 or 'e_mean' in key1:
-                #     # only keep temp mean changes
-                #     info_coef[key1][key2] = 0
+                if 'r_mean' in key1 or 'e_mean' in key1:
+                    # only keep temp mean changes
+                    info_coef[key1][key2] = 0
                 if 't0_r' in key2:
                     # remove non-linear terms
                     info_coef[key1][key2] = 0
