@@ -1,7 +1,7 @@
 # Relaxed Arakawa Schubert Convection
 The [`ras_nml`](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/ras/ras.f90) 
 only ever needs to be specified if 
-[`convection_scheme = RAS_CONV`](../main/idealized_moist_physics.md#convection_scheme) in 
+[`convection_scheme = RAS`](../main/idealized_moist_physics.md#convection_scheme) in 
 `idealized_moist_phys_nml`.
 Some of the most common options for configuring this convection scheme are described below:
 
@@ -14,7 +14,8 @@ Some of the most common options for configuring this convection scheme are descr
 The diagnostics for 
 [this module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/ras/ras.f90) 
 can be specified using the `module_name` of `ras` in the 
-diagnostic table file.
+diagnostic table file. I haven't been able to save any of these 
+diagnostics, get error when using the `ras` module name.
 Some available diagnostics are given below:
 
 ### `tdt_conv`

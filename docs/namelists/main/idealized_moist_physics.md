@@ -20,14 +20,14 @@ namelists needs to be specified.
 [*[Betts1986]*](https://execlim.github.io/Isca/references.html#betts1986),
 [*[BettsMiller1986]*](https://execlim.github.io/Isca/references.html#bettsmiller1986). </br>
 If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and [`betts_miller_nml`](../convection/betts_miller.md) namelists needs to be specified.
-* `RAS_CONV` - Use the relaxed Arakawa Schubert convection scheme 
+* `RAS` - Use the relaxed Arakawa Schubert convection scheme 
 [*[Moorthi1992]*](https://execlim.github.io/Isca/references.html#moorthi1992). </br>
 If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and [`ras_nml`](../convection/ras.md) namelists needs to be specified.
-* `DRY_CONV` - Use the dry convection scheme 
+* `DRY` - Use the dry convection scheme 
 [*[Schneider2006]*](https://execlim.github.io/Isca/references.html#schneider2006). </br>
 This [module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/dry_convection/dry_convection.f90) does not 
 need any additional namelist specified.
-* `NO_CONV` - Use no convection scheme.
+* `NONE` - Use no convection scheme.
 * `UNSET` - Will raise an error.
 
 **Default:** `UNSET`
