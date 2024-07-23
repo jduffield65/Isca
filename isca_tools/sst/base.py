@@ -31,6 +31,11 @@ def write_sst(file_name: str, namelist_file: str, sst_array: np.ndarray):
     nlon = lons.shape[0]
     nlat = lats.shape[0]
 
+    lonb = resolution_file.variables['lonb'][:]
+    latb = resolution_file.variables['latb'][:]
+    nlonb = lonb.shape[0]
+    nlatb = latb.shape[0]
+
 
     # Write land and topography arrays to file
     file_name = file_name.replace('.nc', '')
@@ -41,11 +46,30 @@ def write_sst(file_name: str, namelist_file: str, sst_array: np.ndarray):
     sst_file = Dataset(file_name, 'w', format='NETCDF3_CLASSIC')
     sst_file.createDimension('lat', nlat)
     sst_file.createDimension('lon', nlon)
-    latitudes = sst_file.createVariable('lat','f4',('lat',))
-    longitudes = sst_file.createVariable('lon','f4',('lon',))
+    latitudes = sst_file.createVariable('lat','float64',('lat',))
+    longitudes = sst_file.createVariable('lon','float64',('lon',))
+    # Set units otherwise get error when reading in with Isca
+    latitudes.units = resolution_file.variables['lat'].units
+    longitudes.units = resolution_file.variables['lon'].units
+    latitudes.cartesian_axes = resolution_file.variables['lat'].cartesian_axis
+    longitudes.cartesian_axes = resolution_file.variables['lon'].cartesian_axis
+    latitudes.edges = resolution_file.variables['lat'].edges
+    longitudes.edges = resolution_file.variables['lon'].edges
+    latitudes.long_name = resolution_file.variables['lat'].long_name
+    longitudes.long_name = resolution_file.variables['lon'].long_name
+
+    sst_file.createDimension('latb', nlatb)
+    sst_file.createDimension('lonb', nlonb)
+    latitudesb = sst_file.createVariable('latb','float64',('latb',))
+    longitudesb = sst_file.createVariable('lonb','float64',('lonb',))
+    latitudesb.units = resolution_file.variables['latb'].units
+    longitudesb.units = resolution_file.variables['lonb'].units
+
     sst_array_netcdf = sst_file.createVariable('sst','f4',('lat','lon',))
     latitudes[:] = lats
     longitudes[:] = lons
+    latitudesb[:] = latb
+    longitudesb[:] = lonb
     sst_array_netcdf[:] = sst_array
     sst_file.close()
     print('Output written to: ' + file_name)
