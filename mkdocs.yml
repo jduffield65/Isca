@@ -124,6 +124,8 @@ nav:
             - Spin Up: code/plot/spin_up.md
         - Run:
             - Base: code/run/base.md
+        - SST:
+            - Base: code/sst/base.md
         - Thesis:
             - Adiabat Theory: code/thesis/adiabat_theory.md
             - Aquaplanet Theory: code/thesis/aquaplanet_theory.md
