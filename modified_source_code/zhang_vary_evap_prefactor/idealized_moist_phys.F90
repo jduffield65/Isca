@@ -142,7 +142,7 @@ real :: land_roughness_prefactor = 1.0
 
 character(len=256) :: land_option = 'none'
 character(len=256) :: land_file_name  = 'INPUT/land.nc'
-character(len=256) :: land_evap_prefactor_file_name = 'INPUT/land.nc'
+character(len=256) :: land_evap_prefactor_file_name = 'INPUT/land.nc'           !YZ 20240726 - land_evap_file_edit
 character(len=256) :: land_field_name = 'land_mask'
 
 ! Add bucket
@@ -515,7 +515,7 @@ allocate(q_2m        (is:ie, js:je))
 allocate(rh_2m       (is:ie, js:je))
 allocate(land        (is:ie, js:je)); land = .false.
 allocate(land_ones   (is:ie, js:je)); land_ones = 0.0
-allocate(land_evap_prefactor_2d         (is:ie, js:je)); land_evap_prefactor_2d = 1
+allocate(land_evap_prefactor_2d         (is:ie, js:je)); land_evap_prefactor_2d = 1  !YZ 20240726 - land_evap_file_edit
 allocate(avail       (is:ie, js:je)); avail = .true.
 allocate(fracland    (is:ie, js:je)); fracland = 0.0
 allocate(rough       (is:ie, js:je))
