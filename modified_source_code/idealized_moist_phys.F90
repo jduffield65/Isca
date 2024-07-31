@@ -153,6 +153,7 @@ namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roug
                                       mixed_layer_bc, do_simple,                     &
                                       roughness_moist, roughness_mom, do_virtual,    &
                                       land_option, land_file_name, land_field_name,   & !s options for idealised land
+                                      land_evap_prefactor_file_name,          &      !YZ 20240726 - land_evap_file_edit
                                       land_roughness_prefactor,               &
                                       gp_surface, convection_scheme,          &
                                       bucket, init_bucket_depth, init_bucket_depth_land, & !RG Add bucket 
@@ -238,7 +239,8 @@ logical, allocatable, dimension(:,:) ::                                       &
                                ! vert_turb_driver but not used unless do_entrain=.true.
 
 real, allocatable, dimension(:,:) ::                                          &
-     land_ones                 ! land points (all zeros)
+     land_ones,               &  ! land points (all zeros)
+     land_evap_prefactor_2d      !YZ 20240726 - land_evap_file_edit
 
 real, allocatable, dimension(:,:) ::                                          &
      klzbs,                &   ! stored level of zero buoyancy values
@@ -573,6 +575,27 @@ if(trim(land_option) .eq. 'input')then
 
     !s convert data in land nc file to land logical array
     where(land_ones > 0.) land = .true.
+
+    !YZ 20240726 - land_evap_file_edit START
+    if(file_exist(trim(land_evap_prefactor_file_name))) then
+        call mpp_get_global_domain(grid_domain, xsize=global_num_lon, ysize=global_num_lat)
+        call field_size(trim(land_evap_prefactor_file_name), trim('land_evap_prefactor'), siz)
+        if ( siz(1) == global_num_lon .or. siz(2) == global_num_lat ) then
+            call read_data(trim(land_evap_prefactor_file_name), trim('land_evap_prefactor'), land_evap_prefactor_2d, grid_domain)
+            ! write something to screen to let the user know what's happening.
+        else
+            write(ctmp1(1: 4),'(i4)') siz(1)
+            write(ctmp1(9:12),'(i4)') siz(2)
+            write(ctmp2(1: 4),'(i4)') global_num_lon
+            write(ctmp2(9:12),'(i4)') global_num_lat
+            call error_mesg ('idealized_moist_phys','Land file contains data on a '// &
+                             ctmp1//' grid, but atmos model grid is '//ctmp2, FATAL)
+        endif
+    else
+        call error_mesg('idealized_moist_phys','land_option="'//trim(land_option)//'"'// &
+                        ' but '//trim(land_evap_prefactor_file_name)//' does not exist', FATAL)
+    endif
+    !YZ 20240726 - land_evap_file_edit END
 
 elseif(trim(land_option) .eq. 'zsurf')then
     !s wherever zsurf is greater than some threshold height then make land = .true.
@@ -1080,6 +1103,7 @@ if(.not.gp_surface) then
                        depth_change_cond(:,:),                              &
                                   u_surf(:,:),                              &
                                   v_surf(:,:),                              &
+                  land_evap_prefactor_2d(:,:),                              & !YZ 20240726 - land_evap_file_edit
                                rough_mom(:,:),                              &
                               rough_heat(:,:),                              &
                              rough_moist(:,:),                              &

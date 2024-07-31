@@ -347,6 +347,7 @@ subroutine surface_flux_1d (                                           &
 	 bucket, bucket_depth, max_bucket_depth_land,                      & !RG Add bucket
      depth_change_lh_1d, depth_change_conv_1d, depth_change_cond_1d,   & !RG Add bucket
      u_surf,    v_surf,                                                &
+     land_evap_prefactor_2d,                                           & !YZ 20240726 - land_evap_file_edit
      rough_mom, rough_heat, rough_moist, rough_scale, gust,            &
      flux_t, flux_q, flux_r, flux_u, flux_v,                           &
      cd_m,      cd_t,       cd_q,       rho,                           &
@@ -367,6 +368,7 @@ subroutine surface_flux_1d (                                           &
        t_atm,     q_atm_in,   u_atm,     v_atm,              &
        p_atm,     z_atm,      t_ca,                          &
        p_surf,    t_surf,     u_surf,    v_surf,  &
+       land_evap_prefactor_2d,           & !YZ 20240726 - land_evap_file_edit
        rough_mom, rough_heat, rough_moist,  rough_scale, gust
   real, intent(out), dimension(:) :: &
        flux_t,    flux_q,     flux_r,    flux_u,  flux_v,    &
@@ -685,9 +687,11 @@ subroutine surface_flux_1d (                                           &
   where (avail)
      where (land)
 !s      Simplified land model uses simple prefactor in front of qsurf0. Land is therefore basically the same as sea, but with this prefactor, hence the changes to dedq_surf and dedt_surf also.
-        flux_q    =  rho_drag * land_evap_prefactor * (land_humidity_prefactor*q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
+!        flux_q    =  rho_drag * land_evap_prefactor * (land_humidity_prefactor*q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
+flux_q    =  rho_drag * land_evap_prefactor_2d * (land_humidity_prefactor*q_surf0 - q_atm) !YZ 20240726 - land_evap_file_edit, flux of water vapor  (Kg/(m**2 s))
         dedq_surf = 0
-        dedt_surf =  rho_drag * land_evap_prefactor * (land_humidity_prefactor*q_sat1 - q_sat) *del_temp_inv
+!        dedt_surf =  rho_drag * land_evap_prefactor * (land_humidity_prefactor*q_sat1 - q_sat) *del_temp_inv
+        dedt_surf =  rho_drag * land_evap_prefactor_2d * (land_humidity_prefactor*q_sat1 - q_sat) *del_temp_inv !YZ 20240726 - land_evap_file_edit
 !        dedq_surf = rho_drag
 !        dedt_surf = 0
      elsewhere
@@ -806,6 +810,7 @@ subroutine surface_flux_0d (                                                 &
        t_atm,     q_atm,      u_atm,     v_atm,              &
        p_atm,     z_atm,      t_ca,                          &
        p_surf,    t_surf,     u_surf,    v_surf,             &
+       land_evap_prefactor_0d, & !YZ 20240726 - land_evap_file_edit
        rough_mom, rough_heat, rough_moist,  rough_scale, gust
   real, dimension(1) :: &
        flux_t,    flux_q,     flux_r,    flux_u,  flux_v,    &
@@ -845,6 +850,7 @@ subroutine surface_flux_0d (                                                 &
   land(1)        = land_0
   seawater(1)    = seawater_0
   avail(1)       = avail_0
+  land_evap_prefactor_0d(1) = 1.0   !YZ 20240726 - land_evap_file_edit, land_evap_prefactor
 
   call surface_flux_1d (                                                 &
        t_atm,     q_atm,      u_atm,     v_atm,     p_atm,     z_atm,    &
@@ -852,6 +858,7 @@ subroutine surface_flux_0d (                                                 &
 	   bucket, bucket_depth, max_bucket_depth_land,                      & !RG Add bucket
        depth_change_lh_1d, depth_change_conv_1d, depth_change_cond_1d,   & !RG Add bucket
        u_surf,    v_surf,                                                &
+       land_evap_prefactor_0d,  & !YZ 20240726 - land_evap_file_edit
        rough_mom, rough_heat, rough_moist, rough_scale, gust,            &
        flux_t, flux_q, flux_r, flux_u, flux_v,                           &
        cd_m,      cd_t,       cd_q,       rho,                           &
@@ -901,6 +908,7 @@ subroutine surface_flux_2d (                                           &
 	 bucket, bucket_depth, max_bucket_depth_land,                      & !RG Add bucket
      depth_change_lh,   depth_change_conv,   depth_change_cond,        & !RG Add bucket
      u_surf,    v_surf,                                                &
+     land_evap_prefactor_2d,                                           & !YZ 20240726 - land_evap_file_edit
      rough_mom, rough_heat, rough_moist, rough_scale, gust,            &
      flux_t,    flux_q,     flux_r,    flux_u,    flux_v,              &
      cd_m,      cd_t,       cd_q,       rho,                           &
@@ -918,6 +926,7 @@ subroutine surface_flux_2d (                                           &
        t_atm,     q_atm_in,   u_atm,     v_atm,              &
        p_atm,     z_atm,      t_ca,                          &
        p_surf,    t_surf,     u_surf,    v_surf,             &
+       land_evap_prefactor_2d,                               & !YZ 20240726 - land_evap_file_edit
        rough_mom, rough_heat, rough_moist, rough_scale, gust
   real, intent(out), dimension(:,:) :: &
        flux_t,    flux_q,     flux_r,    flux_u,  flux_v,    &
@@ -947,6 +956,7 @@ subroutine surface_flux_2d (                                           &
 		  bucket, bucket_depth(:,j), max_bucket_depth_land,                                               & !RG Add bucket
           depth_change_lh(:,j), depth_change_conv(:,j), depth_change_cond(:,j),                           & !RG Add bucket
           u_surf(:,j),    v_surf(:,j),                                                                    &
+          land_evap_prefactor_2d(:,j),                                                                    & !YZ 20240726 - land_evap_file_edit
           rough_mom(:,j), rough_heat(:,j), rough_moist(:,j), rough_scale(:,j), gust(:,j),                 &
           flux_t(:,j),    flux_q(:,j),     flux_r(:,j),    flux_u(:,j),    flux_v(:,j),                   &
           cd_m(:,j),      cd_t(:,j),       cd_q(:,j),      rho(:,j),                                      &

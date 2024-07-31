@@ -278,7 +278,7 @@ dt_tracers = 0.0
 if(current == previous) then
   delta_t = dt_real
 else
-  delta_t = 2*dt_real
+  delta_t = 2*dt_real    ! JD - This is 2* because implicit leapfrog used I think. But actual time between iterations is dt_real
 endif
 
 Time_next = Time + Time_step
