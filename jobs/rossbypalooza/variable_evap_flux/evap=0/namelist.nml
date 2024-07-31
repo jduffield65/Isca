@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'rossbypalooza/variable_evap_flux/lat_20/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/rossbypalooza/variable_evap_flux/lat_20/'
+   name = 'rossbypalooza/variable_evap_flux/evap=0/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/rossbypalooza/variable_evap_flux/evap=0/'
    n_months_total = 48          ! Total duration of simulation in months.
    n_months_job = 48            ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
