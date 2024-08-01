@@ -88,7 +88,7 @@
 
 &qe_moist_convection_nml
     tmax = 350.0
-    tmin = 160.0
+    tmin = 130.0                                ! Different from default of 160, but gave error with temp too low
     rhbm = 0.7
 /
 
