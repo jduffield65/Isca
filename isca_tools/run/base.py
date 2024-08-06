@@ -73,7 +73,16 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # month_jobs[i] are the months to simulate in job i.
     month_jobs = np.array_split(np.arange(1, exp_details['n_months_total'] + 1), n_jobs)
 
-    slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm.sh')
+    # Specify which node to run
+    if 'nodelist' not in exp_details:
+        # if not given, allow all available nodes
+        print('nodelist not listed in experiment_details_nml section of namelist. '
+              'Using default node, may submit jobs in wrong order if multiple jobs')
+        slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm_no_namelist.sh')
+        exp_details['nodelist'] = ''    # just set to empty string
+    else:
+        print(f"Submitting to node: {exp_details['nodelist']}")
+        slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm.sh')
     # Run this base.py script aas main if using slurm
     # Because doing this, cannot have any relative imports in this file
     run_job_script = os.path.realpath(__file__)     # run this script as main if using slurm
@@ -84,7 +93,8 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             # We now call it again but with input arguments so that it runs the job on slurm.
             os.system(f"bash {slurm_script} {exp_details['name']} {month_job[0]} {len(month_job)} "
                       f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script}")
+                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} "
+                      f"{exp_details['nodelist']}")
         else:
             run_job(namelist_file, diag_table_file, month_job[0], len(month_job))
 

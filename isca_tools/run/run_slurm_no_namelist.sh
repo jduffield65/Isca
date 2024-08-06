@@ -10,7 +10,6 @@ sbatch <<EOT
 #SBATCH --mail-type=FAIL # send email if job fails
 #SBATCH --mail-user=$USER@st-andrews.ac.uk # email address
 #SBATCH --partition=$4 # queue to run on
-#SBATCH --nodelist=${11}
 
 # Input parameters
 # $1 - Name of job
@@ -23,7 +22,6 @@ sbatch <<EOT
 # $8 - diagnostic output file indicating what to save
 # $9 - maximum allowed walltime to run job
 # ${10} - python script path to run i.e. the path of run_job_script.py
-# ${11} - Node to submit to: kennedy20, kennedy21 or kennedy22
 
 # Run the base.py script for experiment and record how long it takes
 python ${10} $7 $8 $2 $3   # run job
