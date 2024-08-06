@@ -80,6 +80,7 @@ on kennedy.
 #SBATCH --mail-type=END # send email at job completion
 #SBATCH --mail-user=$USER@st-andrews.ac.uk # email address
 #SBATCH --partition=debug # queue to run on
+#SBATCH --nodelist=kennedy20 # node to run on
 
 python $GFDL_BASE/exp/test_cases/held_suarez/held_suarez_test_case.py
 ```
@@ -120,6 +121,7 @@ The corresponding files for the [*Held Suarez*](#held-suarez) experiment are giv
        compile = .false.
        max_walltime = '01:00:00'
        delete_restart_files = .true.
+       nodelist = 'kennedy20'
     /
     
     &atmosphere_nml

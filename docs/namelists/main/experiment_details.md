@@ -77,3 +77,13 @@ $1$ hour would be `'01:00:00'` and $30$ minutes would be `'30:00'`.</br>
 If `True`, only the restart file for the final month will be kept.
 Otherwise, a restart file will be generated for every month.</br>
 **Default:** N/A
+
+### `nodelist`
+*string*</br>
+Specify node to submit to.</br>
+Options on `debug` partition on St Andrews kennedy are `kennedy20`, `kennedy21` or `kennedy22`.</br>
+Number listed needs to match `n_nodes`.</br>
+`kennedy[20-22]` would request the 3 nodes `20, 21, 22`.</br>
+If not given, will just submit to default nodes. If multiple jobs, this will likely result in
+jobs being submit in the wrong order, and an error occuring.</br>
+**Default:** N/A
