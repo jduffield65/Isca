@@ -74,7 +74,8 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
 
 def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                    sphum_quant: np.ndarray, temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray,
-                                   pressure_surf, pressure_ft) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                                   pressure_surf: float, pressure_ft: float
+                                   ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     The theory for $\delta T(x)$ involves the adiabatic temperature anomaly, $\Delta T_A$. This can be decomposed
     into more physically meaningful quantities:
@@ -718,9 +719,8 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
             $\\left(1 + \mu(x)\\frac{\delta r_s(x)}{r_s(x)}\\right)$.
         info_cont: Dictionary containing same keys as `info_coef`. Each term is `info_coef` $\times$ `info_change`
             so it gives the contribution in $K/K$ to the scaling factor for each of the 16 terms.
-        mu_factor_ratio: `float` or `float [n_quant]`</br>
-            The ratio $\\left(1 + \overline{\mu} \\frac{\delta \overline{r_s}}{\overline{r_s}}\\right)/
-            \\left(1 + \mu(x)\\frac{\delta r_s(x)}{r_s(x)}\\right)$. Will be 1 if `non_linear = False`.
+        mu_factor: `float` or `float [n_quant]`</br>
+            The quantity $1 + \mu(x)\\frac{\delta r_s(x)}{r_s(x)}$. Will be 1 if `non_linear = False`.
     """
     # Compute relative humidities
     r_mean = sphum_mean / sphum_sat(temp_surf_mean, pressure_surf)
@@ -834,4 +834,131 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
     final_answer = mu_factor/mu_factor_x + sum([sum([info_cont[key1][key2] for key2 in info_coef[key1]])
                                                 for key1 in info_coef])
 
-    return final_answer, info_coef, info_change, info_cont, mu_factor/mu_factor_x
+    return final_answer, info_coef, info_change, info_cont, mu_factor_x
+
+
+def get_p_x(temp: Union[float, np.ndarray], temp_ft_p: np.ndarray, quant_p: np.ndarray
+            ) -> Tuple[Union[float, np.ndarray], Union[int, np.ndarray]]:
+    """
+    Find the quantile of `temp` in the `temp_ft_px` dataset, which is defined such that `quant_px[i]` is the quantile
+    of `temp_ft_px[i]`.
+
+    Args:
+        temp: `float [n_temp]`</br>
+            Temperatures to find quantile for in `temp_ft_px`.
+        temp_ft_p: `float [n_quant_px]`</br>
+            Array of temperatures such defined such that `temp_ft_p[i]` is the `quant_px[i]`$^{th}$ quantile.
+        quant_p: `float [n_quant_px]`</br>
+            Corresponding quantiles to `temp_ft_p`.
+
+    Returns:
+        p_x: `float [n_temp]`</br>
+            `p_x[i]` is the quantile of `temp[i]` in `temp_ft_p`.
+        p_x_ind: `int [n_temp]`</br>
+            `p_x_ind[i]` is the index of value in `quant_p` closest to `p_x[i]`.
+    """
+    interp_func = scipy.interpolate.interp1d(temp_ft_p, quant_p, fill_value='extrapolate')
+    p_x = interp_func(temp)
+    if isinstance(temp, float):
+        return float(p_x), np.abs(quant_p - p_x).argmin()
+    else:
+        return p_x, np.asarray([np.abs(quant_p - p_x[i]).argmin() for i in range(p_x.size)])
+
+
+def decompose_temp_ft_anom_change(temp_ft_av: np.ndarray, temp_ft_x: np.ndarray, temp_ft_p: np.ndarray,
+                                  quant_p: np.ndarray = np.arange(100, dtype=int), simple: bool = True
+                                  ) -> Tuple[np.ndarray, np.ndarray, dict]:
+    """
+    We can decompose the change in free tropospheric temperature anomaly, conditioned on near-surface temperature
+    percentile $x$ into the change in the corresponding free tropospheric temperature percentile $p_x$, byt accounting
+    for how $p_x$ changes with warming:
+
+    $\delta \Delta T_{FT}(x) \\approx \delta \Delta T_{FT}[p_x] + \overline{\eta}\delta \Delta p_x +
+    \Delta \eta(p_x) \delta \overline{p} + \Delta \eta(p_x)\Delta p_x + \Delta (\delta \eta(p_x) \delta p_x)$
+
+    where:
+
+    * $p_x$ is defined such that $T_{FT}(x) = T_{FT}[p_x]$ and $\overline{p}$ such that
+    $\overline{T_{FT}} = T_{FT}[\overline{p}]$.
+    * $\eta(p_x) = \\frac{\\partial T_{FT}}{\\partial p}\\bigg|_{p_x}$;
+    $\overline{\eta} = \\frac{\\partial T_{FT}}{\\partial p}\\bigg|_{\overline{p}}$ and
+    $\Delta \eta(p_x) = \eta(p_x) - \overline{\eta}$.
+    * $\delta \Delta p_x = \delta (p_x - \overline{p})$
+    * $\delta \Delta T_{FT}[p_x] = \delta (T_{FT}[p_x] - T_{FT}[\overline{p}])$ keeping $p_x$ and $\overline{p}$
+    constant.
+    * $\Delta (\delta \eta(p_x) \delta p_x) = \delta \eta(p_x) \delta p_x - \delta \overline{\eta}\delta \overline{p}$
+
+    The only approximation in the above is saying that $\eta(p)$ is constant between $p=p_x$ and $p=p_x+\delta p_x$.
+    Keeping only the first two terms on the RHS, also provides a good approximation.
+    This is achieved by setting `simple=True`.
+
+    Args:
+        temp_ft_av: `float [n_exp]`</br>
+            Average free tropospheric temperature for each experiment, likely to be $T_{FT}(x=50)$.
+        temp_ft_x: `float [n_exp, n_quant_x]`</br>
+            Free tropospheric temperature conditioned on near-surface temperature percentile, $x$, for each
+            experiment: $T_{FT}(x)$. $x$ can differ from `quant_px`, but likely to be the same: `np.arange(100)`.
+        temp_ft_p: `float [n_exp, n_quant_p]`</br>
+            `temp_ft_p[i, j]` is the $p=$`quant_p[j]`$^{th}$ percentile of free tropospheric temperature for
+            experiment `i`: $T_{FT}[p]$.
+        quant_p: `float [n_quant_p]`</br>
+            Corresponding quantiles to `temp_ft_p`.
+        simple: If `True`, `temp_ft_change_theory` will be
+            $\delta \Delta T_{FT}[p_x] + \overline{\eta}\delta \Delta p_x$. If `False`, will also include
+            $\Delta \eta(p_x) \delta \overline{p} + \Delta \eta(p_x)\Delta p_x + \Delta (\delta \eta(p_x) \delta p_x)$.
+
+    Returns:
+        temp_ft_change: `float [n_quant_x]`</br>
+            Simulated $\delta \Delta T_{FT}(x)$
+        temp_ft_change_theory: `float [n_quant_x]`</br>
+            Theoretical $\delta \Delta T_{FT}(x)$
+        temp_ft_change_cont: Dictionary recording the five terms in the theory for $\delta \Delta T_{FT}(x)$.
+            The key name indicates which variable is causing the $x$ variation:
+
+            * `ft_dist`: $\delta \Delta T_{FT}[p_x]$
+            * `p_x`: $\overline{\eta}\delta \Delta p_x$
+            * `eta0`: $\Delta \eta(p_x) \delta \overline{p}$
+            * `eta0_p_x`: $\Delta \eta(p_x)\Delta p_x$
+            * `eta_p_x`: $\Delta (\delta \eta(p_x) \delta p_x)$
+
+    """
+    n_exp, n_quant_x = temp_ft_x.shape
+
+    # Get FT percentile corresponding to each FT temperature conditioned on near-surface percentile
+    p_av = np.zeros(n_exp)
+    p_av_ind = np.zeros(n_exp, dtype=int)
+    p_x = np.zeros((n_exp, n_quant_x))
+    p_x_ind = np.zeros((n_exp, n_quant_x), dtype=int)
+    for i in range(n_exp):
+        p_av[i], p_av_ind[i] = get_p_x(temp_ft_av[i], temp_ft_p[i], quant_p)
+        p_x[i], p_x_ind[i] = get_p_x(temp_ft_x[i], temp_ft_p[i], quant_p)
+
+    # Get eta on corresponding to p_x in the reference (coldest) simulation
+    eta_av0 = np.zeros(n_exp)
+    eta_px0 = np.zeros((n_exp, n_quant_x))
+    for i in range(n_exp):
+        eta_use = np.gradient(temp_ft_p[i], quant_p)
+        eta_av0[i] = eta_use[p_av_ind[0]]
+        for j in range(n_quant_x):
+            eta_px0[i, j] = eta_use[p_x_ind[0, j]]
+
+    # Isolate x dependence into different terms
+    p_x_anom = p_x - p_av[:, np.newaxis]
+    eta_px0_anom = eta_px0 - eta_av0[:, np.newaxis]
+    temp_ft_change = temp_ft_x[1] - temp_ft_x[0] - (temp_ft_av[1] - temp_ft_av[0])
+    temp_ft_change_cont = {'ft_dist': temp_ft_p[1, p_x_ind[0]] - temp_ft_p[0, p_x_ind[0]] -
+                                      (temp_ft_p[1, p_av_ind[0]] - temp_ft_p[0, p_av_ind[0]]),
+                           'p_x': eta_av0[0] * (p_x_anom[1] - p_x_anom[0]),
+                           'eta0': eta_px0_anom[0] * (p_av[1] - p_av[0]),
+                           'eta0_p_x': eta_px0_anom[0] * (p_x_anom[1] - p_x_anom[0]),
+                           'eta_p_x': (eta_px0[1]-eta_px0[0]) * (p_x[1] - p_x[0]) -
+                                      (eta_av0[1] - eta_av0[0]) * (p_av[1] - p_av[0])}
+
+    # Theory is sum of these terms
+    # not exact because we approximate an integral by taking out assuming integrand constant.
+    temp_ft_change_theory = temp_ft_change_cont['ft_dist'] + temp_ft_change_cont['p_x']
+    if not simple:
+        temp_ft_change_theory = temp_ft_change_theory + temp_ft_change_cont['eta0'] + \
+                                temp_ft_change_cont['eta0_p_x'] + temp_ft_change_cont['eta_p_x']
+
+    return temp_ft_change, temp_ft_change_theory, temp_ft_change_cont
