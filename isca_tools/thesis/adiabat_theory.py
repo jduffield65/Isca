@@ -840,15 +840,15 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
 def get_p_x(temp: Union[float, np.ndarray], temp_ft_p: np.ndarray, quant_p: np.ndarray
             ) -> Tuple[Union[float, np.ndarray], Union[int, np.ndarray]]:
     """
-    Find the quantile of `temp` in the `temp_ft_px` dataset, which is defined such that `quant_px[i]` is the quantile
-    of `temp_ft_px[i]`.
+    Find the quantile of `temp` in the `temp_ft_p` dataset, which is defined such that `temp_ft_p[i]` is
+    the `quant_p[i]`$^{th}$ quantile.
 
     Args:
         temp: `float [n_temp]`</br>
-            Temperatures to find quantile for in `temp_ft_px`.
-        temp_ft_p: `float [n_quant_px]`</br>
-            Array of temperatures such defined such that `temp_ft_p[i]` is the `quant_px[i]`$^{th}$ quantile.
-        quant_p: `float [n_quant_px]`</br>
+            Temperatures to find quantile for in `temp_ft_p`.
+        temp_ft_p: `float [n_quant_p]`</br>
+            Array of temperatures defined such that `temp_ft_p[i]` is the `quant_p[i]`$^{th}$ quantile.
+        quant_p: `float [n_quant_p]`</br>
             Corresponding quantiles to `temp_ft_p`.
 
     Returns:
@@ -874,7 +874,7 @@ def decompose_temp_ft_anom_change(temp_ft_av: np.ndarray, temp_ft_x: np.ndarray,
     for how $p_x$ changes with warming:
 
     $\delta \Delta T_{FT}(x) \\approx \delta \Delta T_{FT}[p_x] + \overline{\eta}\delta \Delta p_x +
-    \Delta \eta(p_x) \delta \overline{p} + \Delta \eta(p_x)\Delta p_x + \Delta (\delta \eta(p_x) \delta p_x)$
+    \Delta \eta(p_x) \delta \overline{p} + \Delta \eta(p_x)\delta \Delta p_x + \Delta (\delta \eta(p_x) \delta p_x)$
 
     where:
 
@@ -918,7 +918,7 @@ def decompose_temp_ft_anom_change(temp_ft_av: np.ndarray, temp_ft_x: np.ndarray,
             * `ft_dist`: $\delta \Delta T_{FT}[p_x]$
             * `p_x`: $\overline{\eta}\delta \Delta p_x$
             * `eta0`: $\Delta \eta(p_x) \delta \overline{p}$
-            * `eta0_p_x`: $\Delta \eta(p_x)\Delta p_x$
+            * `eta0_p_x`: $\Delta \eta(p_x)\delta \Delta p_x$
             * `eta_p_x`: $\Delta (\delta \eta(p_x) \delta p_x)$
 
     """
