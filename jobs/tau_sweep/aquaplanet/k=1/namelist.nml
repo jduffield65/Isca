@@ -1,4 +1,4 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
+S! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
 ! in the mixed_layer_nml namelist.
 ! It is also run for 10 years.
 
