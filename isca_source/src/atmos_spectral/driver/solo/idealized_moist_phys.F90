@@ -135,7 +135,7 @@ real :: land_roughness_prefactor = 1.0
 
 character(len=256) :: land_option = 'none'
 character(len=256) :: land_file_name  = 'INPUT/land.nc'
-character(len=256) :: land_evap_prefactor_file_name = 'INPUT/land_evap_prefactor.nc' !YZ 20240726 - land_evap_file_edit
+character(len=256) :: land_evap_prefactor_file_name = 'none' !YZ 20240726 - land_evap_file_edit
 character(len=256) :: land_field_name = 'land_mask'
 
 ! RG Add bucket
@@ -593,9 +593,10 @@ if(trim(land_option) .eq. 'input')then
             call error_mesg ('idealized_moist_phys','Land file contains data on a '// &
                              ctmp1//' grid, but atmos model grid is '//ctmp2, FATAL)
         endif
-    else
+    elseif(trim(land_evap_prefactor_file_name) .ne. 'none') then
         call error_mesg('idealized_moist_phys','land_option="'//trim(land_option)//'"'// &
                         ' but '//trim(land_evap_prefactor_file_name)//' does not exist', FATAL)
+        ! elseif so if no file given, no error given and will return land_evap_prefactor_2d as all ones.
     endif
     !YZ 20240726 - land_evap_file_edit END
 

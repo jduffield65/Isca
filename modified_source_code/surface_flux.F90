@@ -651,7 +651,8 @@ subroutine surface_flux_1d (                                           &
 			elsewhere	
                 flux_q    =  bucket_depth/(max_bucket_depth_land*0.75) * rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 			end where
-            flux_q = land_evap_prefactor * flux_q       ! JOSH CHANGE TO ADD ANOTHER LIMITING FACTOR TO LAND EVAP WITH BUCKET
+            flux_q = land_evap_prefactor * land_evap_prefactor_2d * flux_q       ! JD CHANGE TO ADD ANOTHER LIMITING FACTOR TO LAND EVAP WITH BUCKET
+            !YZ 20240726 - allow to use 2D evap prefactor to pre-multiply bucket
 		elsewhere
 	        flux_q    =  rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 		end where
@@ -688,10 +689,10 @@ subroutine surface_flux_1d (                                           &
      where (land)
 !s      Simplified land model uses simple prefactor in front of qsurf0. Land is therefore basically the same as sea, but with this prefactor, hence the changes to dedq_surf and dedt_surf also.
 !        flux_q    =  rho_drag * land_evap_prefactor * (land_humidity_prefactor*q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
-flux_q    =  rho_drag * land_evap_prefactor_2d * (land_humidity_prefactor*q_surf0 - q_atm) !YZ 20240726 - land_evap_file_edit, flux of water vapor  (Kg/(m**2 s))
+        flux_q    =  rho_drag * land_evap_prefactor * land_evap_prefactor_2d * (land_humidity_prefactor*q_surf0 - q_atm) !YZ 20240726 - land_evap_file_edit, flux of water vapor  (Kg/(m**2 s))
         dedq_surf = 0
 !        dedt_surf =  rho_drag * land_evap_prefactor * (land_humidity_prefactor*q_sat1 - q_sat) *del_temp_inv
-        dedt_surf =  rho_drag * land_evap_prefactor_2d * (land_humidity_prefactor*q_sat1 - q_sat) *del_temp_inv !YZ 20240726 - land_evap_file_edit
+        dedt_surf =  rho_drag * land_evap_prefactor * land_evap_prefactor_2d * (land_humidity_prefactor*q_sat1 - q_sat) *del_temp_inv !YZ 20240726 - land_evap_file_edit
 !        dedq_surf = rho_drag
 !        dedt_surf = 0
      elsewhere
