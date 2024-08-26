@@ -2,6 +2,7 @@ import os
 import xarray as xr
 from typing import List, Optional
 import f90nml
+import warnings
 
 
 def get_file_suffix(dir: str, suffix: str) -> List[str]:
@@ -43,8 +44,15 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
         data_dir = os.environ['GFDL_DATA']
     exp_dir = os.path.join(data_dir, exp_name)
 
+    # Get index of first run file i.e. which month saved first
+    files_run = [filename for filename in os.listdir(exp_dir) if filename.startswith('run')]
+    files_run.sort()
+    first_month = int(files_run[0][-4:])
+    if first_month != 1:
+        warnings.warn(f'First month saved is {first_month} not 1.')
+
     # File name is the same for all runs and is the only file with the suffix '.nc' in the run folder
-    file_name = get_file_suffix(os.path.join(exp_dir, 'run%04d' % 1), '.nc')[0]
+    file_name = get_file_suffix(os.path.join(exp_dir, 'run%04d' % first_month), '.nc')[0]
 
     if run_no is None:
         data_file = os.path.join(exp_dir, 'run*', file_name)
@@ -79,7 +87,12 @@ def load_namelist(exp_name: Optional[str] = None, data_dir: Optional[str] = None
             data_dir = os.environ['GFDL_DATA']
         exp_dir = os.path.join(data_dir, exp_name)
 
+        # Get index of first run file i.e. which month saved first
+        files_run = [filename for filename in os.listdir(exp_dir) if filename.startswith('run')]
+        files_run.sort()
+        first_month = int(files_run[0][-4:])
+
         # Namelist file_name is the same for all runs and is the only file with the suffix '.nml' in the run folder
-        file_name = get_file_suffix(os.path.join(exp_dir, 'run%04d' % 1), '.nml')[0]
-        file_path = os.path.join(exp_dir, 'run%04d' % 1, file_name)
+        file_name = get_file_suffix(os.path.join(exp_dir, 'run%04d' % first_month), '.nml')[0]
+        file_path = os.path.join(exp_dir, 'run%04d' % first_month, file_name)
     return f90nml.read(file_path)
