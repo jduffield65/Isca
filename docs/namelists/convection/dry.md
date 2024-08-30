@@ -7,7 +7,9 @@ The key options are also described below:
 
 ## Options
 ### `tau`
-*float*</br> Relaxation timescale, $\tau$ (seconds).</br>
+*float*</br> Relaxation timescale, $\tau$ (seconds). 
+The [equivalent parameter for moist convection](./qe_moist_convection.md#tau_bm)
+is set to `7200`.</br>
 **Default:** `N/A`
 
 ### `gamma`
