@@ -25,8 +25,8 @@ If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and
 If this is selected, the [`lscale_cond_nml`](../condensation/lscale_cond.md) and [`ras_nml`](../convection/ras.md) namelists needs to be specified.
 * `DRY` - Use the dry convection scheme 
 [*[Schneider2006]*](https://execlim.github.io/Isca/references.html#schneider2006). </br>
-This [module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/dry_convection/dry_convection.f90) does not 
-need any additional namelist specified.
+This [module](https://github.com/ExeClim/Isca/blob/master/src/atmos_param/dry_convection/dry_convection.f90) 
+needs the [`dry_convection_nml`](../convection/dry.md) namelist specified.
 * `NONE` - Use no convection scheme.
 * `UNSET` - Will raise an error.
 

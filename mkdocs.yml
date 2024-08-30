@@ -91,6 +91,7 @@ nav:
           - Quasi Equilibrium Moist: namelists/convection/qe_moist_convection.md
           - Betts-Miller: namelists/convection/betts_miller.md
           - Relaxed Arakawa Schubert: namelists/convection/ras.md
+          - Dry Convection: namelists/convection/dry.md
         - Condensation:
           - namelists/condensation/index.md
           - Large Scale Condensation: namelists/condensation/lscale_cond.md

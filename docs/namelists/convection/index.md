@@ -10,3 +10,8 @@ module name in the `idealized_moist_phys` module.
 If [`convection_scheme`](../main/idealized_moist_physics.md#convection_scheme) is [`ras_nml`](ras.md), 
 then there are some additional diagnostics that can be specified with the [`ras`](ras.md#diagnostics) module name.
 
+If [`convection_scheme`](../main/idealized_moist_physics.md#convection_scheme) is `DRY`, `gamma` and `tau` in 
+[`dry_convection_nml`] must be specified 
+because they have no default value. An error will be raised otherwise.
+
+
