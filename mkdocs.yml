@@ -138,6 +138,7 @@ nav:
         - Utils:
             - Base: code/utils/base.md
             - Calculus: code/utils/calculus.md
+            - Circulation: code/utils/circulation.md
             - Dataset Slicing: code/utils/ds_slicing.md
             - Fourier: code/utils/fourier.md
             - Land: code/utils/land.md

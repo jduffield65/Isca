@@ -40,11 +40,14 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
     year_days = year_months * month_days    # number of days in a year
     # ceil to deal with daily output data when 1st day is 0.5, 2nd day is 1.5 etc
     ds_days = (first_day - 1 + np.ceil(ds.time)) % year_days  # day in a given year that each value in ds.time refers to
+    ds_days[ds_days == 0] = year_days       # correction so last day of year has index 360 not 0
     if include_months is not None:
         include_days = [np.arange(1, month_days+1) + month_days * (month-1) for month in include_months]
         include_days = np.concatenate(include_days)
     elif include_days is None:
         raise ValueError("Either include_months or include_days need to be specified but both are None.")
+    if not np.isin(include_days, ds_days).all():
+        raise ValueError("Not all months / days provided in include_months / include_days are valid")
     return ds.where(ds_days.isin(include_days), drop=True)
 
 
