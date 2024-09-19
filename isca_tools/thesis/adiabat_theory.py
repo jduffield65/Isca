@@ -72,6 +72,84 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
                                  args=(temp_surf, sphum_surf, pressure_surf, pressure_ft))
 
 
+def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf: float, z_ft: Optional[float],
+                               pressure_surf: float, pressure_ft: float) -> float:
+    """
+    Adiabatic Near-surface temperature, $T_{A,s}$, is defined such that surface moist static energy, $h$
+    evaluated at $T_{A, s}$ is equal to the saturated free tropospheric moist static energy, $h^*$,
+    and free troposphere pressure, $p_{FT}$ i.e. $h(T_{A,s}, r_s, p_s) = h^*(T_{FT}, z_{FT}, p_{FT})$.
+
+    Args:
+        temp_surf_adiabat: float
+            Adiabatic temperature at `pressure_surf` in Kelvin.
+        temp_ft:
+            Actual temperature at `pressure_ft` in Kelvin.
+        rh_surf:
+            Actual relative humidity at `pressure_surf`.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+
+    Returns:
+        MSE discrepancy: difference between adiabatic surface and free troposphere saturated MSE.
+    """
+    if z_ft is None:
+        # Compute z_ft using from temperatures
+        R_mod = R * np.log(pressure_surf / pressure_ft) / 2
+        mse_surf = moist_static_energy(temp_surf_adiabat, rh_surf * sphum_sat(temp_surf_adiabat, pressure_surf),
+                                       height=0, c_p_const=c_p - R_mod)
+        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod)
+    else:
+        mse_surf = moist_static_energy(temp_surf_adiabat, rh_surf * sphum_sat(temp_surf_adiabat, pressure_surf),
+                                       height=0)
+        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft)
+    return mse_surf - mse_sat_ft
+
+
+def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[float],
+                          pressure_surf: float, pressure_ft: float, rh_form: bool = True,
+                          guess_temp_surf: float = 283) -> float:
+    """
+    This returns the temperature at `pressure_surf`, $T_s$, such that near-surface moist static
+    energy equals free troposphere saturated moist static energy: $h(T_s, q_s, p_{FT}) = h^*(T_{FT}, p_{FT})$
+    given the near-surface specific humidity $q_s$ or relative humidity $r_s$.
+
+    Args:
+        humidity_surf:
+            Specific humidity in *kg/kg* or relative humidity at `pressure_surf`.
+        temp_ft:
+            Temperature at `pressure_ft` in Kelvin.
+        z_ft:
+            Geopotential height at `pressure_ft` in *m*. If `None` will approximate as
+            $z_{FT} \approx \\frac{R^{\\dagger}}{g}(T_s + T_A)$.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+        rh_form:
+            If `True` (recommended), will return surface temperature for a given relative humidity.
+            Otherwise, will return for a given specific humidity.
+        guess_temp_surf:
+            Initial guess for what adiabatic temperature at `pressure_surf` should be.
+
+    Returns:
+        Convectively maintained temperature at `pressure_surf` in Kelvin.
+    """
+    if rh_form:
+        return scipy.optimize.fsolve(temp_adiabat_surf_fit_func, guess_temp_surf,
+                                     args=(temp_ft, humidity_surf, z_ft, pressure_surf, pressure_ft))
+    else:
+        if z_ft is None:
+            R_mod = R * np.log(pressure_surf / pressure_ft) / 2
+            mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0,
+                                             c_p_const=c_p+R_mod) * 1000
+            return (mse_ft_sat - L_v * humidity_surf)/(c_p-R_mod)
+        else:
+            mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft) * 1000
+            return (mse_ft_sat - L_v * humidity_surf)/c_p
+
+
 def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
                                    sphum_quant: np.ndarray, temp_ft_mean: np.ndarray, temp_ft_quant: np.ndarray,
                                    pressure_surf: float, pressure_ft: float

@@ -2,7 +2,7 @@ from typing import Union, Optional
 import numpy as np
 import numpy_indexed
 from scipy.integrate import odeint
-from ..utils.constants import lapse_dry, L_v, R, epsilon, c_p, g, kappa
+from ..utils.constants import lapse_dry, L_v, R, epsilon, c_p, g, kappa, R_v
 from ..utils.moist_physics import saturation_vapor_pressure, mixing_ratio_from_partial_pressure, \
     mixing_ratio_from_sphum, sphum_sat, rh_from_sphum
 

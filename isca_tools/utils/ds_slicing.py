@@ -37,13 +37,13 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
         Dataset only including certain months/days for each year.
 
     """
-    year_days = year_months * month_days    # number of days in a year
+    year_days = year_months * month_days  # number of days in a year
     # ceil to deal with daily output data when 1st day is 0.5, 2nd day is 1.5 etc
     ds_days = (first_day - 1 + np.ceil(ds.time)) % year_days  # day in a given year that each value in ds.time refers to
-    ds_days[ds_days == 0] = year_days       # correction so last day of year has index 360 not 0
+    ds_days[ds_days == 0] = year_days  # correction so last day of year has index 360 not 0
     ds_days_step = float(ds_days[1] - ds_days[0])
     if include_months is not None:
-        include_days = [np.arange(1, month_days+1) + month_days * (month-1) for month in include_months]
+        include_days = [np.arange(1, month_days + 1) + month_days * (month - 1) for month in include_months]
         include_days = np.concatenate(include_days)
     elif include_days is None:
         raise ValueError("Either include_months or include_days need to be specified but both are None.")
@@ -56,16 +56,15 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
     return ds.where(ds_days.isin(include_days), drop=True)
 
 
-def annual_mean(ds: Dataset, month_days: int = 30, year_months: int = 12, first_day: int = 1) -> Dataset:
+def annual_mean(ds: Dataset, n_year_days: int = 360, first_day: int = 1) -> Dataset:
     """
     Returns dataset `ds` with variables being the average over all years i.e. time dimension of `ds` will now be from
     0.5 to 359.5 if a year has 360 days.
 
     Args:
         ds: Dataset for particular experiment.
-        month_days: Number of days in each month used for the simulation.
+        n_year_days: Number of days in a year used for the simulation.
             This depends on the `calendar` option in the `main_nml` namelist.
-        year_months: Number of months in a year. I think this is always likely to be `12`.
         first_day: Day used in starting date for the simulation.
             It is equal to the third number in the `current_date` option in the `main_nml` namelist.
             `1` refers to January 1st.
@@ -74,9 +73,40 @@ def annual_mean(ds: Dataset, month_days: int = 30, year_months: int = 12, first_
         Dataset containing the annual average of each variable
 
     """
-    year_days = year_months * month_days    # number of days in a year
-    ds_days = (first_day - 1 + ds.time) % year_days  # day in a given year that each value in ds.time refers to
+    ds_days = (first_day - 1 + ds.time) % n_year_days  # day in a given year that each value in ds.time refers to
     return ds.groupby(ds_days).mean(dim='time')
+
+
+def anom_from_annual_mean(ds: Dataset, combine_lon: bool = False, n_year_days: int = 360,
+                          first_day: int = 1) -> Dataset:
+    """
+    For each lat, lon and pressure; this computes the annual mean of each variable. It then subtracts it
+    from the initial dataset, to give the anomaly relative to the annual mean value.
+
+    Args:
+        ds: Dataset for particular experiment.
+        combine_lon: If `True` will be anomaly with respect to zonal annual mean, otherwise will just
+            be with respect to annual mean.
+        n_year_days: Number of days in a year used for the simulation.
+            This depends on the `calendar` option in the `main_nml` namelist.
+        first_day: Day used in starting date for the simulation.
+            It is equal to the third number in the `current_date` option in the `main_nml` namelist.
+            `1` refers to January 1st.
+
+    Returns:
+        Dataset with same `time` variable as `ds`, containing the annomaly relative to the
+        annual average.
+    """
+    if combine_lon:
+        ds_annual_mean = annual_mean(ds.mean(dim='lon'), n_year_days, first_day)
+    else:
+        ds_annual_mean = annual_mean(ds, n_year_days, first_day)
+    ds_annual_mean = ds_annual_mean.rename({'time': 'day_of_year'})  # change coordinate to day of year
+    # make it integer starting at 0
+    ds_annual_mean = ds_annual_mean.assign_coords(day_of_year=(ds_annual_mean.day_of_year -
+                                                               ds_annual_mean.day_of_year.min()).astype(int))
+    ds['day_of_year'] = (ds.time % n_year_days - (ds.time % n_year_days).min()).astype(int)
+    return ds.groupby('day_of_year') - ds_annual_mean
 
 
 def lat_lon_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Dataset:

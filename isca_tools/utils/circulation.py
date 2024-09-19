@@ -62,6 +62,9 @@ def get_u_thermal(temp: np.ndarray, p: np.ndarray, lat: np.ndarray, ax_p: int = 
          `float [n_lat, ...]`.</br>
             Thermal wind at pressure level given by `p[-1]`. Units: *m/s*.
     """
+    if len(p) > 1:
+        if p[1] > p[0]:
+            raise ValueError(f'Pressure is not in correct order, expect p[0] to be surface value but it is {p[0]}Pa')
     n_ax = len(temp.shape)  # all axis 2 or higher are not p or lat
     ax_expand_dims = list(np.append(np.asarray([ax_lat]), np.arange(2, n_ax)))
     integrand = np.gradient(temp, np.deg2rad(lat), axis=ax_lat) / np.expand_dims(p, axis=ax_expand_dims)

@@ -1,6 +1,6 @@
 import numpy as np
-from typing import Union
-from .constants import L_v, epsilon, c_p, temp_kelvin_to_celsius, g
+from typing import Union, Optional
+from .constants import L_v, epsilon, c_p, temp_kelvin_to_celsius, g, R, R_v
 
 
 def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -17,7 +17,7 @@ def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np
     """
     # Alternative equation from MATLAB exercise M9.2 in Holdon 2004
     # return 611 * np.exp(L_v/R_v * (1/temp_kelvin_to_celsius - 1/temp))
-    temp = temp - temp_kelvin_to_celsius       # Convert temperature in kelvin to celsius, as celsius used for this formula.
+    temp = temp - temp_kelvin_to_celsius  # Convert temperature in kelvin to celsius, as celsius used for this formula.
     # if np.abs(np.asarray(temp)).max() > 35:
     #     warnings.warn('This formula is only valid for $-35^\circ C < T < 35^\circ C$\n'
     #                   'At least one temperature given is outside this range.')
@@ -59,7 +59,7 @@ def mixing_ratio_from_sphum(sphum: Union[float, np.ndarray]) -> Union[float, np.
     Returns:
         Mixing ratio, $w$, in units of $kg/kg$.
     """
-    return sphum / (1-sphum)
+    return sphum / (1 - sphum)
 
 
 def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray],
@@ -83,7 +83,7 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     sat_mix_ratio = mixing_ratio_from_partial_pressure(saturation_vapor_pressure(temp), total_pressure)
     mix_ratio = mixing_ratio_from_sphum(sphum)
     # return 100 * mix_ratio / sat_mix_ratio
-    return 100 * mix_ratio/(epsilon+mix_ratio) * (epsilon+sat_mix_ratio)/sat_mix_ratio
+    return 100 * mix_ratio / (epsilon + mix_ratio) * (epsilon + sat_mix_ratio) / sat_mix_ratio
 
 
 def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.ndarray, float],
@@ -120,7 +120,7 @@ def sphum_sat(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray]
     """
     # Saturation specific humidity
     w_sat = mixing_ratio_from_partial_pressure(saturation_vapor_pressure(temp), pressure)
-    q_sat = w_sat / (1+w_sat)
+    q_sat = w_sat / (1 + w_sat)
     return q_sat
 
 
@@ -140,5 +140,50 @@ def clausius_clapeyron_factor(temp: np.ndarray, pressure: Union[float, np.ndarra
     Returns:
         Clausius clapeyron factor, $\\alpha$. Units: *Kelvin$^{-1}$*
     """
-    lambda_const = 4302.645 / (temp - 29.65)**2
+    lambda_const = 4302.645 / (temp - 29.65) ** 2
     return lambda_const * pressure / epsilon * sphum_sat(temp, pressure) / saturation_vapor_pressure(temp)
+
+
+def virtual_temp(temp: Union[float, np.ndarray], sphum: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Equation for virtual temperature using [Isca code](https://github.com/jduffield65/Isca/blob/b9249275469583c1723f12ac62333067f9460fea/isca_source/src/coupler/surface_flux.F90#L463).
+
+    The constants `d622`, `d378`, `d608` are to match the
+    [Isca code](https://github.com/jduffield65/Isca/blob/b9249275469583c1723f12ac62333067f9460fea/isca_source/src/coupler/surface_flux.F90#L935-L940).
+
+    Args:
+        temp: `float [n_p_levels]`
+            Temperature in *K* to find virtual potential temperature at.
+        sphum: `float [n_p_levels]`
+            Specific humidity of parcel at each pressure level in *kg/kg*.
+
+    Returns:
+        Virtual temperature at each pressure level in *K*.
+    """
+    d622 = R / R_v
+    d378 = 1 - d622
+    d608 = d378 / d622
+    return (1 + d608 * sphum) * temp
+
+
+def get_density(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
+                sphum: Optional[Union[float, np.ndarray]] = None) -> Union[float, np.ndarray]:
+    """
+    Equation for density using ideal gas equation of state: $\rho = \\frac{p}{RT}$.
+    If specific humidity given, will compute density using virtual temperature, $T_v$.
+
+    Args:
+        temp: `float [n_p_levels]`
+            Temperature in *K* to find density at.
+        pressure: `float [n_p_levels]`
+            Pressure in *Pa* to find density at.
+        sphum: `float [n_p_levels]`
+            Specific humidity in *kg/kg* to find density at.
+
+    Returns:
+        Density in units of $kg/m^3$.
+    """
+    if sphum is None:
+        return pressure / (R * temp)
+    else:
+        return pressure / (R * virtual_temp(temp, sphum))
