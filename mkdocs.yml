@@ -110,6 +110,8 @@ nav:
             - Vertical Turbulence Driver: namelists/turbulence/vert_turb_driver.md
             - Diffusivity: namelists/turbulence/diffusivity.md
     - Code:
+        - CESM:
+            - Load: code/cesm/load.md
         - Convection:
             - Base: code/convection/base.md
             - Simple Betts-Miller: code/convection/simple_betts_miller.md
