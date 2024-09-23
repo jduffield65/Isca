@@ -134,6 +134,7 @@ nav:
             - Aquaplanet Theory: code/thesis/aquaplanet_theory.md
             - Extratropics Land Theory: code/thesis/extrop_land_theory.md
             - Hottest date: code/thesis/hottest_date.md
+            - Surface Energy Budget: code/thesis/surface_energy_budget.md
         - Time Series:
             - Base: code/time_series/base.md
             - Cmip Time: code/time_series/cmip_time.md
