@@ -31,8 +31,8 @@ def fourier_series(time: np.ndarray, period: float, coefs_amp: Union[List[float]
     return ans
 
 
-def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: List[float],
-                         coefs_phase: List[float], day_seconds: float = 86400) -> np.ndarray:
+def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: Union[np.ndarray, List[float]],
+                         coefs_phase: Union[np.ndarray, List[float]], day_seconds: float = 86400) -> np.ndarray:
     """
     For $N$ harmonics, the derivative of a fourier series with frequency $f$ is:
 
@@ -46,7 +46,7 @@ def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: List[float]
             The amplitude coefficients, $F_n$. $F_0$ needs to be provided even though it is not used.
         coefs_phase: `float [N]`</br>
             The phase coefficients in radians, $\Phi_n$
-        day_seconds: Duration of a day in seconds
+        day_seconds: Duration of a day in seconds.
 
     Returns:
         `float [n_time]`</br>
