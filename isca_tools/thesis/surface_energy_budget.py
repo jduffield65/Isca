@@ -139,7 +139,7 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
     * $\\tan \phi_n = \\frac{2\pi nfC + \\tan \\varphi_n \sum_i \lambda_i \cos \Phi_{ni} -
     \sum_i \lambda_i \sin \Phi_{ni}}{-2\pi nfC \\tan \\varphi_n + \sum_i \lambda_i \cos \Phi_{ni} -
     \\tan \\varphi_n \sum_i \lambda_i \sin \Phi_{ni}}$
-    * $\Phi_{ni} = 2\pi nf \Delta_i$ (units of radians, whereas $\Lambda_i$ is in units of time - days).
+    * $\Phi_{ni} = 2\pi nf \Lambda_i$ (units of radians, whereas $\Lambda_i$ is in units of time - days).
 
     If $\lambda_{sq}\\neq 0$, an approximate numerical solution will be obtained, still of the Fourier form.
 

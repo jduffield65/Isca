@@ -122,7 +122,7 @@ def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[f
             Temperature at `pressure_ft` in Kelvin.
         z_ft:
             Geopotential height at `pressure_ft` in *m*. If `None` will approximate as
-            $z_{FT} \approx \\frac{R^{\\dagger}}{g}(T_s + T_A)$.
+            $z_{FT} \\approx \\frac{R^{\\dagger}}{g}(T_s + T_A)$.
         pressure_surf:
             Pressure at near-surface in *Pa*.
         pressure_ft:
@@ -148,6 +148,36 @@ def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[f
         else:
             mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft) * 1000
             return (mse_ft_sat - L_v * humidity_surf)/c_p
+
+
+def get_z_ft_approx(temp_surf: Union[float, np.ndarray], temp_ft: Union[float, np.ndarray],
+                    pressure_surf: float, pressure_ft: float, z_surf: Union[float, np.ndarray] = 0):
+    """
+    Returns an approximation for geopotential height, $z_{FT}$ at pressure $p_{FT}$ according to:
+
+    $$z_{FT} \\approx \\frac{R^{\\dagger}}{g}(T_s + T_{FT}) + z_s$$
+
+    where $R^{\dagger} = \\ln(p_s/p_{FT})/2$ and $s$ refers to the surface. This assumes hydrostatic balance
+    and fixed lapse rate between the surface and $p_{FT}$.
+
+    Args:
+        temp_surf: `float [n_temp]`</br>
+            Temperature at `pressure_surf` in Kelvin.
+        temp_ft: `float [n_temp]`</br>
+            Temperature at `pressure_ft` in Kelvin.
+        pressure_surf:
+            Pressure at near-surface in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level in *Pa*.
+        z_surf: `float [n_temp]`</br>
+            Geopotential height at `pressure_surf` in *m*. Can also give `0` to ignore this contribution.
+
+    Returns:
+        `float [n_temp]`</br>
+            Geopotential height at `pressure_ft` in *m*.
+    """
+    R_mod = R * np.log(pressure_surf / pressure_ft) / 2
+    return R_mod/g * (temp_surf + temp_ft) + z_surf
 
 
 def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
