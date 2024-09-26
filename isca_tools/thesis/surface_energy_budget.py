@@ -205,8 +205,12 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
         # force positive phase coefficient to match analytic solution
         bounds_lower = [-np.inf] * (n_harmonics + 1) + [0] * n_harmonics
         bounds_upper = [np.inf] * (n_harmonics + 1) + [2 * np.pi] * n_harmonics
-        args_found = optimize.curve_fit(fit_func, time, sw_fourier, np.ones(2 * n_harmonics + 1),
-                                        bounds=(bounds_lower, bounds_upper))[0]
+        try:
+            args_found = optimize.curve_fit(fit_func, time, sw_fourier, np.ones(2 * n_harmonics + 1),
+                                            bounds=(bounds_lower, bounds_upper))[0]
+        except RuntimeError:
+            warnings.warn('Hit Runtime Error, trying without bounds')
+            args_found = optimize.curve_fit(fit_func, time, sw_fourier, np.ones(2 * n_harmonics + 1))[0]
         temp_fourier_amp = args_found[:n_harmonics + 1]
         temp_fourier_phase = args_found[n_harmonics + 1:]
     else:
