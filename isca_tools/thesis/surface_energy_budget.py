@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 
 def gamma_linear_approx(time: np.ndarray, temp: np.ndarray,
                         lambda_const: np.ndarray, lambda_time_lag: Optional[np.ndarray] = None,
-                        lambda_sq: float = 0) -> np.ndarray:
+                        lambda_sq: float = 0, temp_anom_squared: Optional[np.ndarray] = None) -> np.ndarray:
     """
     This approximates $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$ as:
 
@@ -39,6 +39,9 @@ def gamma_linear_approx(time: np.ndarray, temp: np.ndarray,
             The constants $\Lambda_i$ used in the approximation.</br>
             `lambda_time_lag[0]` is $\Lambda_1$ and `lambda_time_lag[i]` is $\Lambda_{i+1}$ for $i>0$.
         lambda_sq: The constant $\lambda_{sq}$ used in the approximation.
+        temp_anom_squared: `float [n_time]`</br>
+            The value of $\\left(T(t) - \overline{T}\\right)^2$ to use in the calculation. If `None`,
+            will compute from `temp`.
 
     Returns:
         `float [n_time]`</br>
@@ -55,14 +58,15 @@ def gamma_linear_approx(time: np.ndarray, temp: np.ndarray,
         lambda_temp = np.zeros_like(temp)
         for i in range(n_lambda):
             lambda_temp += lambda_const[1+i] * temp_spline_fit(time - lambda_time_lag[i])
-
-    return lambda_const[0] + lambda_temp + lambda_sq * (temp-np.mean(temp))**2
+    if temp_anom_squared is None:
+        temp_anom_squared = (temp-np.mean(temp))**2
+    return lambda_const[0] + lambda_temp + lambda_sq * temp_anom_squared
 
 
 def swdn_from_temp_fourier(time: np.ndarray, temp_fourier_amp: np.ndarray, temp_fourier_phase: np.ndarray,
                            heat_capacity: float, lambda_const: np.ndarray,
                            lambda_time_lag: Optional[np.ndarray] = None, lambda_sq: float = 0,
-                           day_seconds: float = 86400) -> np.ndarray:
+                           day_seconds: float = 86400, single_harmonic_squared: bool = False) -> np.ndarray:
     """
     This inverts the linearized surface energy budget to return an approximation for downward shortwave radiation
     at the surface, $F(t)$, given a Fourier approximation for surface temperature,
@@ -93,6 +97,8 @@ def swdn_from_temp_fourier(time: np.ndarray, temp_fourier_amp: np.ndarray, temp_
             `lambda_time_lag[0]` is $\Lambda_1$ and `lambda_time_lag[i]` is $\Lambda_{i+1}$ for $i>0$.
         lambda_sq: The constant $\lambda_{sq}$ used in the approximation for $\Gamma^{\\uparrow}$.
         day_seconds: Duration of a day in seconds.
+        single_harmonic_squared: If `True`, the $\lambda_{sq}T^2$ term in $\Gamma^{\\uparrow}$ will only
+            use the first harmonic, not all harmonics.
 
     Returns:
         `float [n_time]`</br>
@@ -101,8 +107,14 @@ def swdn_from_temp_fourier(time: np.ndarray, temp_fourier_amp: np.ndarray, temp_
     """
     n_year_days = len(time)
     temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
-    gamma = gamma_linear_approx(time, temp_fourier, lambda_const,
-                                lambda_time_lag, lambda_sq)
+    if single_harmonic_squared:
+        temp_anom_squared = fourier.fourier_series(time, n_year_days, [0, temp_fourier_amp[1]],
+                                                   [temp_fourier_phase[0]])**2
+        gamma = gamma_linear_approx(time, temp_fourier, lambda_const,
+                                    lambda_time_lag, lambda_sq, temp_anom_squared)
+    else:
+        gamma = gamma_linear_approx(time, temp_fourier, lambda_const,
+                                    lambda_time_lag, lambda_sq)
     dtemp_dt = fourier.fourier_series_deriv(time, n_year_days, temp_fourier_amp, temp_fourier_phase, day_seconds)
     return heat_capacity * dtemp_dt + gamma
 
@@ -111,7 +123,8 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
                      lambda_const: np.ndarray, lambda_time_lag: Optional[np.ndarray] = None,
                      lambda_sq: float = 0, n_harmonics: int = 2,
                      include_sw_phase: bool = False, numerical: bool = False,
-                     day_seconds: float = 86400) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                     day_seconds: float = 86400,
+                     single_harmonic_squared: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Seeks a fourier solution of the form $T(t) = \\frac{T_0}{2} + \\sum_{n=1}^{N} T_n\\cos(2n\\pi ft - \\phi_n)$
     to the linearized surface energy budget of the general form:
@@ -168,6 +181,8 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
             https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html) rather than using the
             analytic solution. Will always return numerical solution if `lambda_sq` $\\neq 0$.
         day_seconds: Duration of a day in seconds.
+        single_harmonic_squared: If `True`, the $\lambda_{sq}T^2$ term in $\Gamma^{\\uparrow}$ will only
+            use the first harmonic, not all harmonics.
 
     Returns:
         temp_fourier: `float [n_time]`</br>
@@ -200,7 +215,7 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
             fourier_amp_coef = np.asarray([args[i] for i in range(n_harmonics + 1)])
             fourier_phase_coef = np.asarray([args[i] for i in range(n_harmonics + 1, len(args))])
             return swdn_from_temp_fourier(time_array, fourier_amp_coef, fourier_phase_coef, heat_capacity, lambda_const,
-                                          lambda_time_lag, lambda_sq, day_seconds)
+                                          lambda_time_lag, lambda_sq, day_seconds, single_harmonic_squared)
 
         # force positive phase coefficient to match analytic solution
         bounds_lower = [-np.inf] * (n_harmonics + 1) + [0] * n_harmonics
