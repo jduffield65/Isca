@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import CubicSpline
 from typing import Optional, Tuple
+import scipy.ndimage
 
 
 def get_extrema_date_from_spline(spline: CubicSpline, type: str = 'max', thresh: Optional[float] = None,
@@ -39,9 +40,9 @@ def get_extrema_date_from_spline(spline: CubicSpline, type: str = 'max', thresh:
     return extrema_date
 
 
-def get_var_extrema_date(time: np.ndarray, var: np.ndarray, spline_spacing: int, type: str = 'max',
-                         thresh_extrema: Optional[float] = None,
-                         max_extrema: int = 2) -> Tuple[np.ndarray, CubicSpline]:
+def get_var_extrema_date(time: np.ndarray, var: np.ndarray, smooth_window: int = 1,
+                         type: str = 'max', thresh_extrema: Optional[float] = None,
+                         max_extrema: int = 2, smooth_method: str = 'convolve') -> Tuple[np.ndarray, CubicSpline]:
     """
     Finds the dates of extrema of a variable, given some smoothing is performed first.
     Also returns the splines themselves.
@@ -51,20 +52,31 @@ def get_var_extrema_date(time: np.ndarray, var: np.ndarray, spline_spacing: int,
             Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`)
         var: `float [n_time]`</br>
             Value of variable at each time. Again, assume periodic
-        spline_spacing: Interval of time to use to fit spline to variable. Smaller equals more accurate fit.
+        smooth_window: Number of days to use to smooth `var` before finding extrema. Smaller equals more accurate fit.
+            `1` is perfect fit.
         type: which extrema to find ('max' or 'min')
         thresh_extrema: Only keep maxima (minima) with values above (below) this.
         max_extrema: Keep at most this many extrema, if more than this then will only keep highest (lowest).
+        smooth_method: `convolve` or `spline`
+            If `convolve`, will return smooth via convolution with window of length `smooth_window`.
+            If `spline`, will fit a spline using every `smooth_window` days.
 
     Returns:
         `extrema_date`: `float [max_extrema]`</br>
             Dates of extrema of var
         `spline_var`: Spline fit to var to find the extrema.
     """
-    # Make so last element of arrays equal first as periodic
-    time = np.append(time, time[-1]+1)
-    var = np.append(var, var[0])
-    # Get spline
-    spline_var = CubicSpline(time[::spline_spacing], var[::spline_spacing], bc_type='periodic')
+    if smooth_method.lower() == 'spline':
+        # Make so last element of arrays equal first as periodic
+        time_smooth = np.append(time, time[-1]+1)[::smooth_window]
+        var_smooth = np.append(var, var[0])[::smooth_window]
+    elif smooth_method.lower() == 'convolve':
+        var_smooth = scipy.ndimage.convolve(var, np.ones(smooth_window) / smooth_window, mode='wrap')
+        time_smooth = np.append(time, time[-1] + 1)
+        var_smooth = np.append(var_smooth, var_smooth[0])
+    else:
+        raise  ValueError('smooth_method must be either spline or convolve')
+    # Spline var is the spline replicating var_smooth exactly i.e. spline_var(t) = var_smooth[t] if t in time_smooth
+    spline_var = CubicSpline(time_smooth, var_smooth, bc_type='periodic')
     extrema_date = get_extrema_date_from_spline(spline_var, type, thresh_extrema, max_extrema)
     return extrema_date, spline_var
