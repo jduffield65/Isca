@@ -259,6 +259,7 @@ logical :: use_mixing_ratio        = .false.
 real    :: gust_const              =  1.0
 real    :: gust_min                =  0.0
 real    :: w_atm_const             =  0.0    ! JD - option for no-WISHE
+real    :: rh_flux_q               =  0.0    ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc
 logical :: mo_drag_use_w_atm_const = .false. ! JD - option to use constant wind to compute drag coeffs if no-WISHE
 logical :: ncar_ocean_flux         = .false.
 logical :: ncar_ocean_flux_orig    = .false. ! for backwards compatibility
@@ -278,6 +279,7 @@ namelist /surface_flux_nml/ no_neg_q,                &
                             gust_const,              &
                             gust_min,                &
                             w_atm_const,             &
+                            rh_flux_q,               &   ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc
                             mo_drag_use_w_atm_const, &
                             old_dtaudv,              &
                             use_mixing_ratio,        &
@@ -402,7 +404,7 @@ subroutine surface_flux_1d (                                           &
        rho_drag, drag_t,    drag_m,   drag_q,              &
        q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
        e_sat_2m, q_sat_2m, cd_t_ignored, cd_q_ignored,     &
-       cd_m_ignored, u_star_ignored, b_star_ignored
+       cd_m_ignored, u_star_ignored, b_star_ignored, e_sat_atm    ! JD 29/10/2024 - add e_sat_atm for const rh stuff
 
   integer :: i, nbad
 
@@ -639,6 +641,24 @@ subroutine surface_flux_1d (                                           &
          rho_drag  =  drag_q * rho
       end where
   end if
+
+  ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc (start)
+  if (rh_flux_q > 0.0) then
+      call escomp (t_atm, e_sat_atm)  ! saturation vapor pressure at lowest atmospheric level
+
+      ! set atmospheric humidity used for latent heat calc to rh_flux_q multiplied by saturated specific humidity
+      ! at the lowest atmospheric level
+      if(use_mixing_ratio) then
+          ! surface mixing ratio at saturation
+          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-e_sat_atm)
+      elseif(do_simple) then
+          q_atm   = rh_flux_q*d622*e_sat_atm / p_atm
+      else
+          ! surface specific humidity at saturation
+          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-d378*e_sat_atm)
+      endif
+  end if
+ ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc (end)
 
 !RG Add bucket - if bucket is on evaluate fluxes based on moisture availability.
 !RG Note changes to avail statements to allow bucket to be switched on or off	  
