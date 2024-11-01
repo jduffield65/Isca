@@ -1,13 +1,13 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
+S! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
 ! in the mixed_layer_nml namelist.
 ! It is also run for 10 years.
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'rossbypalooza/lat_10/1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/rossbypalooza/lat_10/1'
-   n_months_total = 48          ! Total duration of simulation in months.
-   n_months_job = 24            ! Approximate duration of each job of the simulation in months.
+   name = 'rossbypalooza/albedo/aqua_22lat'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/rossbypalooza/albedo/aqua_22lat'
+   n_months_total = 84          ! Total duration of simulation in months.
+   n_months_job = 21            ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
@@ -18,10 +18,6 @@
    max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
    nodelist = 'kennedy22'
-/
-
-&constants_nml
-    omega = 7.2921150e-05         ! Default Earth value
 /
 
 &main_nml
@@ -45,8 +41,6 @@
     roughness_mom = 3.21e-05
     two_stream_gray = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
-    land_option = 'input'                           ! LAND OPTION
-    land_file_name = 'INPUT/land.nc'                ! LAND OPTION
 /
 
 &vert_turb_driver_nml
@@ -74,16 +68,14 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                                 ! different from frierson_test_case value of 2.5
+    albedo_choice = 6                   ! Gaussian minima in albedo stuff
+    higher_albedo = 0.1
+    albedo_cntr = 22.0
+    albedo_wdth = 5.0
+    depth = 5.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
-    do_read_sst = .true.                        ! TO keep SST fixed
-    do_sc_sst = .true.                          ! TO keep SST fixed
-    sst_file = 'sst'                            ! TO SPECIFY SST
-    specify_sst_over_ocean_only = .true.        ! TO SPECIFY SST
     prescribe_initial_dist = .true.
     tconst = 285.0
-    land_option = 'input',                      ! LAND OPTION - Tell mixed layer to get land mask from input file
-    land_h_capacity_prefactor = 0.1             ! LAND OPTION
 /
 
 &qe_moist_convection_nml
