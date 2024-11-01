@@ -466,6 +466,12 @@ select case (albedo_choice)
        albedo(:,j) = albedo_value + (higher_albedo-albedo_value)*&
              0.5*(1+tanh((lat-albedo_cntr)/albedo_wdth))
      enddo
+  case (6) ! JD 1/11/2024 - Add option for gaussian peak in albedo about a single latitude
+     do j = 1, size(t_surf,2)
+       lat = deg_lat(js+j-1)
+       albedo(:,j) = albedo_value + (higher_albedo-albedo_value)*&
+              exp(-(lat-albedo_cntr)**2/2.0/albedo_wdth**2)
+     enddo
 end select
 
 albedo_initial=albedo
