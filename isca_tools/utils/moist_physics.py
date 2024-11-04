@@ -169,7 +169,7 @@ def virtual_temp(temp: Union[float, np.ndarray], sphum: Union[float, np.ndarray]
 def get_density(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray],
                 sphum: Optional[Union[float, np.ndarray]] = None) -> Union[float, np.ndarray]:
     """
-    Equation for density using ideal gas equation of state: $\rho = \\frac{p}{RT}$.
+    Equation for density using ideal gas equation of state: $\\rho = \\frac{p}{RT}$.
     If specific humidity given, will compute density using virtual temperature, $T_v$.
 
     Args:

@@ -80,3 +80,4 @@ def get_var_extrema_date(time: np.ndarray, var: np.ndarray, smooth_window: int =
     spline_var = CubicSpline(time_smooth, var_smooth, bc_type='periodic')
     extrema_date = get_extrema_date_from_spline(spline_var, type, thresh_extrema, max_extrema)
     return extrema_date, spline_var
+

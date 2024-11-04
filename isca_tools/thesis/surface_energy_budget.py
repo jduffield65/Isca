@@ -237,6 +237,11 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
     if not include_sw_phase:
         sw_fourier_phase = np.zeros(n_harmonics)
     sw_fourier = fourier.fourier_series(time, n_year_days, sw_fourier_amp, sw_fourier_phase)
+    sw_tan = np.tan(sw_fourier_phase)
+    sw_cos = np.cos(sw_fourier_phase)
+    sw_sin = np.sin(sw_fourier_phase)
+    f = 1 / (
+            n_year_days * day_seconds)  # must have frequency in units of s^{-1} to deal with phase stuff in radians
 
     if numerical or (lambda_nl is not None and not single_harmonic_nl):
         if not numerical:
@@ -251,21 +256,29 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
         # force positive phase coefficient to match analytic solution
         bounds_lower = [-np.inf] * (n_harmonics + 1) + [0] * n_harmonics
         bounds_upper = [np.inf] * (n_harmonics + 1) + [2 * np.pi] * n_harmonics
+
+        # Starting solution is 1 harmonic analytical solution
+        p0 = np.zeros(2 * n_harmonics + 1)
+        lambda_phase_const = lambda_time_lag * 2 * np.pi / n_year_days
+        lambda_cos = np.sum(lambda_const[1:] * np.cos(lambda_phase_const))
+        lambda_sin = np.sum(lambda_const[1:] * np.sin(lambda_phase_const))
+        p0[0] = (sw_fourier_amp[0] - 2 * lambda_const[0]) / np.sum(lambda_const[1:])
+        p0[n_harmonics + 1] = np.arctan(
+                (2 * np.pi * f * heat_capacity + sw_tan[0] * lambda_cos - lambda_sin) / (
+                        -2 * np.pi * f * heat_capacity * sw_tan[0] + lambda_cos - sw_tan[0] * lambda_sin))
+        p0[1] = sw_fourier_amp[1] * sw_cos[0] / np.cos(p0[n_harmonics + 1]) / (
+                                      (2 * np.pi * f * heat_capacity - lambda_sin) * np.tan(
+            p0[n_harmonics + 1]) + lambda_cos)
+
         try:
-            args_found = optimize.curve_fit(fit_func, time, sw_fourier, np.ones(2 * n_harmonics + 1),
+            args_found = optimize.curve_fit(fit_func, time, sw_fourier, p0,
                                             bounds=(bounds_lower, bounds_upper))[0]
         except RuntimeError:
             warnings.warn('Hit Runtime Error, trying without bounds')
-            args_found = optimize.curve_fit(fit_func, time, sw_fourier, np.ones(2 * n_harmonics + 1))[0]
+            args_found = optimize.curve_fit(fit_func, time, sw_fourier, p0)[0]
         temp_fourier_amp = args_found[:n_harmonics + 1]
         temp_fourier_phase = args_found[n_harmonics + 1:]
     else:
-        f = 1 / (
-                    n_year_days * day_seconds)  # must have frequency in units of s^{-1} to deal with phase stuff in radians
-        sw_tan = np.tan(sw_fourier_phase)
-        sw_cos = np.cos(sw_fourier_phase)
-        sw_sin = np.sin(sw_fourier_phase)
-
         temp_fourier_amp = np.zeros(n_harmonics + 1)
         temp_fourier_phase = np.zeros(n_harmonics)
         temp_fourier_amp[0] = (sw_fourier_amp[0] - 2 * lambda_const[0]) / np.sum(lambda_const[1:])

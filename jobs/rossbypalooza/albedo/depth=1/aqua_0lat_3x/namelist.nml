@@ -1,15 +1,15 @@
-! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
+S! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
 ! in the mixed_layer_nml namelist.
 ! It is also run for 10 years.
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'aquaplanet/no_wishe/normal_wind/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/aquaplanet/no_wishe/normal_wind/'
-   n_months_total = 84           ! Total duration of simulation in months.
-   n_months_job = 42            ! Approximate duration of each job of the simulation in months.
+   name = 'rossbypalooza/albedo/depth=1/aqua_0lat_3x'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/gpfs1/home/jamd1/Isca/jobs/rossbypalooza/albedo/depth=1/aqua_0lat_3x'
+   n_months_total = 84          ! Total duration of simulation in months.
+   n_months_job = 21            ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
-   n_nodes = 2                  ! Number of nodes to run job on (Slurm info).
+   n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'debug'          ! Queue to submit job to (Slurm info).
@@ -17,6 +17,7 @@
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
+   nodelist = 'kennedy22'
 /
 
 &main_nml
@@ -40,6 +41,8 @@
     roughness_mom = 3.21e-05
     two_stream_gray = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
+    land_option = 'input'                           ! LAND OPTION
+    land_file_name = 'INPUT/land.nc'                ! LAND OPTION
 /
 
 &vert_turb_driver_nml
@@ -59,7 +62,6 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    w_atm_const = 0.0              ! set this to 0 so WISHE is included
 /
 
 &atmosphere_nml
@@ -68,10 +70,12 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 1.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0
+    land_option = 'input',              ! LAND OPTION - Tell mixed layer to get land mask from input file
+    land_albedo_prefactor = 2                     ! LAND OPTION
 /
 
 &qe_moist_convection_nml

@@ -30,6 +30,12 @@ m_d = 18.016 / epsilon
 # Latent heat of vaporization (or condensation) at 0 Celsius. Units: Jkg^{-1}
 L_v = 2.5e6
 
+# Latent heat of sublimation. Units: Jkg^{-1}
+L_sub = 2.834E6
+
+# Latent heat of fusion. Units: Jkg^{-1}
+L_fus = L_sub - L_v
+
 # kappa is related to the ratio between heat capacity at constant volume to that at constant pressure through:
 # kappa = 1 - c_v/c_p (Isca value)
 kappa = 2/7
