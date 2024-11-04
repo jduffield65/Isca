@@ -109,6 +109,11 @@ nav:
         - Turbulence:
             - Vertical Turbulence Driver: namelists/turbulence/vert_turb_driver.md
             - Diffusivity: namelists/turbulence/diffusivity.md
+    - CESM:
+        - CESM/index.md
+        - Installation: CESM/installation.md
+        - Basics: CESM/basics.md
+        - First Run: CESM/first_run.md
     - Code:
         - CESM:
             - Load: code/cesm/load.md
