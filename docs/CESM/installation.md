@@ -142,4 +142,98 @@ I received the following message after the last of these commands, which is expe
 The following dependent module(s) are not currently loaded: cray-hdf5-parallel (required by: CESM2/2.1.3), cray-netcdf-hdf5parallel (required by: CESM2/2.1.3), cray-parallel-netodf (required by: CESM2/2.1.3)
 ```
 
+## Step 6 - Changing Input Data Configuration
+When I first installed CESM on ARCHER2, I kept getting errors when trying to 
+[download input data](./basics.md#step-7-download-input-data). These errors arose due to a problem with globus.
+
+I managed to fix it by changing the order so the `wget` protocol is used instead. This is done by modifying the 
+`$CIMEROOT/config/cesm/config_inputdata.xml` file as indicated below:
+
+=== "Before"
+    ```text
+    <?xml version="1.0"?>
+    
+    <inputdata>
+      <!-- server precidence is order in this file.  Highest preference at top -->
+      <!-- If the client doesn't have the protocol it will be skipped -->
+      <!-- chksum verification of inputfiles is possible.  If a file with name -->
+      <!-- inputdata_chksum.dat is found on the server in the directory above inputdata -->
+      <!-- it will be searched for filename and chksum of each downloaded file.  -->
+      <!-- see the file ftp://ftp.cgd.ucar.edu/cesm/inputdata_chksum.dat for proper format. -->
+      <server>
+        <comment>grid ftp requires the globus-url-copy tool on the client side </comment>
+        <protocol>gftp</protocol>
+        <address>ftp://gridanon.cgd.ucar.edu:2811/cesm/inputdata/</address>
+        <checksum>../inputdata_checksum.dat</checksum>
+      </server>
+    
+      <server>
+        <protocol>wget</protocol>
+        <address>ftp://ftp.cgd.ucar.edu/cesm/inputdata/</address>
+        <user>anonymous</user>
+        <password>user@example.edu</password>
+        <checksum>../inputdata_checksum.dat</checksum>
+      </server>
+    
+      <server>
+        <comment> ftp requires the python package ftplib </comment>
+        <protocol>ftp</protocol>
+        <address>ftp.cgd.ucar.edu/cesm/inputdata</address>
+        <user>anonymous</user>
+        <password>user@example.edu</password>
+        <checksum>../inputdata_checksum.dat</checksum>
+      </server>
+    
+      <server>
+        <protocol>svn</protocol>
+        <address>https://svn-ccsm-inputdata.cgd.ucar.edu/trunk/inputdata</address>
+      </server>
+    
+    </inputdata>
+    ```
+
+=== "After"
+    ```text
+    <?xml version="1.0"?>
+
+    <inputdata>
+      <!-- server precidence is order in this file.  Highest preference at top -->
+      <!-- If the client doesn't have the protocol it will be skipped -->
+      <!-- chksum verification of inputfiles is possible.  If a file with name -->
+      <!-- inputdata_chksum.dat is found on the server in the directory above inputdata -->
+      <!-- it will be searched for filename and chksum of each downloaded file.  -->
+      <!-- see the file ftp://ftp.cgd.ucar.edu/cesm/inputdata_chksum.dat for proper format. -->
+      <server>
+        <protocol>wget</protocol>
+        <address>ftp://ftp.cgd.ucar.edu/cesm/inputdata/</address>
+        <user>anonymous</user>
+        <password>user@example.edu</password>
+        <checksum>../inputdata_checksum.dat</checksum>
+      </server>
+    
+      <server>
+        <comment> ftp requires the python package ftplib </comment>
+        <protocol>ftp</protocol>
+        <address>ftp.cgd.ucar.edu/cesm/inputdata</address>
+        <user>anonymous</user>
+        <password>user@example.edu</password>
+        <checksum>../inputdata_checksum.dat</checksum>
+      </server>
+    
+      <server>
+        <protocol>svn</protocol>
+        <address>https://svn-ccsm-inputdata.cgd.ucar.edu/trunk/inputdata</address>
+      </server>
+    
+      <server>
+        <comment>grid ftp requires the globus-url-copy tool on the client side </comment>
+        <protocol>gftp</protocol>
+        <address>ftp://gridanon.cgd.ucar.edu:2811/cesm/inputdata/</address>
+        <checksum>../inputdata_checksum.dat</checksum>
+      </server>
+    
+    </inputdata>
+
+    ```
+
 Once this step has been completed, you are ready to run a [simple test case](./first_run.md).
