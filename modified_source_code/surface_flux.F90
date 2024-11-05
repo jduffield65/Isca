@@ -258,9 +258,18 @@ logical :: old_dtaudv              = .false.
 logical :: use_mixing_ratio        = .false.
 real    :: gust_const              =  1.0
 real    :: gust_min                =  0.0
+
 real    :: w_atm_const             =  0.0    ! JD - option for no-WISHE
-real    :: rh_flux_q               =  0.0    ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc
 logical :: mo_drag_use_w_atm_const = .false. ! JD - option to use constant wind to compute drag coeffs if no-WISHE
+! JD 05/11/2024 - fluxes only t_surf dependent (start)
+logical :: do_simple_flux_calc    =  .false.
+real    :: drag_const             =  0.0            ! approx value should be 0.0009
+real    :: rh_const               =  0.0            ! relative humidity of lowest level to use
+real    :: t_diseqb_const         =  0.0            ! constant difference between surface and lowest level temp to use
+real    :: p_surf_const           =  1.0e5          ! reference sea level pressure in spectral_dynamics_nml
+real    :: p_atm_const            =  0.99487445e5   ! lowest model level using Frierson 2006 sigma values
+! JD 05/11/2024 - fluxes only t_surf dependent (end)
+
 logical :: ncar_ocean_flux         = .false.
 logical :: ncar_ocean_flux_orig    = .false. ! for backwards compatibility
 logical :: raoult_sat_vap          = .false.
@@ -279,8 +288,13 @@ namelist /surface_flux_nml/ no_neg_q,                &
                             gust_const,              &
                             gust_min,                &
                             w_atm_const,             &
-                            rh_flux_q,               &   ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc
                             mo_drag_use_w_atm_const, &
+                            do_simple_flux_calc,     &   ! JD 05/11/2024 - fluxes only t_surf dependent (start)
+                            drag_const,              &
+                            rh_const,                &
+                            t_diseqb_const,          &
+                            p_surf_const,            &
+                            p_atm_const,             &   ! JD 05/11/2024 - fluxes only t_surf dependent (end)
                             old_dtaudv,              &
                             use_mixing_ratio,        &
                             ncar_ocean_flux,         &
@@ -404,7 +418,8 @@ subroutine surface_flux_1d (                                           &
        rho_drag, drag_t,    drag_m,   drag_q,              &
        q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
        e_sat_2m, q_sat_2m, cd_t_ignored, cd_q_ignored,     &
-       cd_m_ignored, u_star_ignored, b_star_ignored, e_sat_atm    ! JD 29/10/2024 - add e_sat_atm for const rh stuff
+       cd_m_ignored, u_star_ignored, b_star_ignored,       &
+       e_sat_atm_simple, t_atm_simple, rho_simple, th_atm_simple    ! JD 05/11/2024 - fluxes only t_surf dependent
 
   integer :: i, nbad
 
@@ -609,8 +624,31 @@ subroutine surface_flux_1d (                                           &
       rho = p_atm / (rdgas * tv_atm)
   end where
 
-  ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
-  if (w_atm_const > 0.0) then
+  if (do_simple_flux_calc) then
+       where (avail)
+         ! JD 05/11/2024 - fluxes only t_surf dependent
+         ! surface layer drag coefficients
+         cd_t = cd_t * 0 + drag_const      ! set drag coefficient to a constant
+         cd_q = cd_q * 0 + drag_const
+
+         drag_t = cd_t * w_atm_const
+         drag_q = cd_q * w_atm_const
+
+         t_atm_simple = t_surf0 - t_diseqb_const
+         rho_simple = p_atm_const / (rdgas * t_atm_simple)
+         th_atm_simple = t_atm_simple*(p_surf_const/p_atm_const)**kappa
+
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho_simple
+         flux_t = rho_drag * (t_surf0 - th_atm_simple)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*(p_surf_const/p_atm_const)**kappa     ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho_simple
+      end where
+  elseif (w_atm_const > 0.0) then
+      ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
       where (avail)
          ! surface layer drag coefficients
          drag_t = cd_t * w_atm_const
@@ -623,7 +661,7 @@ subroutine surface_flux_1d (                                           &
          dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
 
          ! evaporation
-         rho_drag  =  drag_q * rho
+         rho_drag  =  drag_q * rho_simple
       end where
   else
       where (avail)
@@ -642,23 +680,38 @@ subroutine surface_flux_1d (                                           &
       end where
   end if
 
-  ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc (start)
-  if (rh_flux_q > 0.0) then
-      call escomp (t_atm, e_sat_atm)  ! saturation vapor pressure at lowest atmospheric level
+  ! JD 05/11/2024 - fluxes only t_surf dependent
+  ! Set fixed relative humidity for latent heat calc and compute q_surf with constant pressure (start)
+  if (do_simple_flux_calc) then
+      call escomp (t_atm_simple, e_sat_atm_simple)  ! saturation vapor pressure at lowest atmospheric level
 
-      ! set atmospheric humidity used for latent heat calc to rh_flux_q multiplied by saturated specific humidity
+      ! set atmospheric humidity used for latent heat calc to rh_const multiplied by saturated specific humidity
       ! at the lowest atmospheric level
       if(use_mixing_ratio) then
           ! surface mixing ratio at saturation
-          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-e_sat_atm)
+          q_atm   = rh_const*d622*e_sat_atm_simple /(p_atm_const-e_sat_atm_simple)
+          q_sat   = d622*e_sat /(p_surf_const-e_sat )
+          q_sat1  = d622*e_sat1/(p_surf_const-e_sat1)
       elseif(do_simple) then
-          q_atm   = rh_flux_q*d622*e_sat_atm / p_atm
+          q_atm   = rh_const*d622*e_sat_atm_simple / p_atm_const
+          q_sat   = d622*e_sat / p_surf_const
+          q_sat1  = d622*e_sat1/ p_surf_const
       else
           ! surface specific humidity at saturation
-          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-d378*e_sat_atm)
+          q_atm   = rh_const*d622*e_sat_atm_simple /(p_atm_const-d378*e_sat_atm_simple)
+          q_sat   = d622*e_sat /(p_surf_const-d378*e_sat )
+          q_sat1  = d622*e_sat1/(p_surf_const-d378*e_sat1)
       endif
+
+      ! initilaize surface air humidity according to surface type - repetition of earlier code with update q_sat
+      where (land)
+    !     q_surf0 = q_surf ! land calculates it
+         q_surf0 = q_sat !s our simplified land evaporation model does not calculate q_surf, so we specify it as q_sat.
+      elsewhere
+         q_surf0 = q_sat  ! everything else assumes saturated sfc humidity
+      endwhere
   end if
- ! JD 29/10/2024 - option for fixed relative humidity for latent heat calc (end)
+  ! Set fixed relative humidity for latent heat calc and compute q_surf with constant pressure (end)
 
 !RG Add bucket - if bucket is on evaluate fluxes based on moisture availability.
 !RG Note changes to avail statements to allow bucket to be switched on or off	  
@@ -724,8 +777,13 @@ subroutine surface_flux_1d (                                           &
    end where
   endif
 
-  ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
-  if (w_atm_const > 0.0) then
+  if (do_simple_flux_calc) then
+      ! JD 05/11/2024 - fluxes only t_surf dependent
+      where (avail)
+          q_surf = q_atm + flux_q / (rho_simple*cd_q*w_atm_const)   ! surface specific humidity
+      end where
+  elseif (w_atm_const > 0.0) then
+      ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
       where (avail)
           q_surf = q_atm + flux_q / (rho*cd_q*w_atm_const)   ! surface specific humidity
       end where
@@ -784,6 +842,13 @@ subroutine surface_flux_1d (                                           &
         dtaudv_atm = -cd_m*rho*(dw_atmdv*v_dif + w_atm)
      endwhere
   endif
+
+  ! JD 05/11/2024 - fluxes only t_surf dependent
+  if (do_simple_flux_calc) then
+      where(avail)
+        rho = rho_simple   ! For output, change density to density used in calculation
+      endwhere
+  end if
 
 end subroutine surface_flux_1d
 ! </SUBROUTINE>
