@@ -196,6 +196,7 @@ jamd@ln02:/work/n02/n02/jamd/cesm/CESM2.1.3/runs/e.e20.ETEST.f19_g17.test> ./che
     SUCCESS
     ```
 
+This stage will take a while if no input data already exists, on the order of 30 minutes for 1 degree resolution.
 If the input data was downloaded successfully, running `./check_input_data` should show the following:
 
 ```bash
@@ -319,7 +320,7 @@ The [model output](./basics.md#model-output) should be located in
 corresponding to each of the [model components](./basics.md#code-components), as well as restart and
 log files:
 
-![image.png](../images/CESM/model_output.png){width="500"}
+![](../images/CESM/model_output.png){width="500"}
 
 ### Timing
 Timing information can be found at `$CASEROOT/timing/cesm_timing.$CASE.$date`. For this experiment, 

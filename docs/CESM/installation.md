@@ -19,10 +19,11 @@ source /work/n02/shared/CESM2/setup_cesm213.sh
 This script will create a directory at `$CESM_ROOT`, defaulting to `/work/$GROUP/$GROUP/$USER/cesm/CESM2.1.3`, so for me 
 with `$GROUP=n02`, and `$USER=jamd`, `$CESM_ROOT = /work/n02/n02/jamd/cesm/CESM2.1.3/`. 
 
-Note `$CESM_ROOT` and `$CESM_LOC` should both exist after running these commands and be equivalent.
+Note `$CESM_LOC = $CESM_ROOT/my_cesm_sandbox` in what follows.
 
-## Step 3 - Changes to `$CESM_ROOT/Externals.cfg`
-A couple of sections in the file `$CESM_ROOT/Externals.cfg` need modifying. First, change the CIME section from:
+## Step 3 - Changes to Externals Configuration
+A couple of sections in the file `$CESM_ROOT/my_cesm_sandbox/Externals.cfg` need modifying. 
+First, change the CIME section from:
 
 ???+ note "Editing files on ARCHER2"
     You can open or edit a file using the [nano](https://help.dreamhost.com/hc/en-us/articles/115006413028-Creating-and-editing-a-file-via-SSH).
@@ -117,8 +118,8 @@ module load CESM2/2.1.3
 cd $CIMEROOT/tools/
 ```
 
-where `$CIMEROOT = $CESM_ROOT/my_cesm_sandbox/cime`. For me, I am in the directory `/work/n02/n02/jamd/cesm/CESM2.1.3/my_cesm_sandbox/cime/tools`
-at this stage.
+where `$CIMEROOT = $CESM_ROOT/my_cesm_sandbox/cime`. 
+For me, I am in the directory `/work/n02/n02/jamd/cesm/CESM2.1.3/my_cesm_sandbox/cime/tools` at this stage.
 
 If the directory `$CIMEROOT/tools/cprnc` does not exist (it did not for me) then create and enter it:
 
@@ -141,6 +142,8 @@ I received the following message after the last of these commands, which is expe
 ```text
 The following dependent module(s) are not currently loaded: cray-hdf5-parallel (required by: CESM2/2.1.3), cray-netcdf-hdf5parallel (required by: CESM2/2.1.3), cray-parallel-netodf (required by: CESM2/2.1.3)
 ```
+
+Note that this step is not essential, so you can proceed to the next step if you encountered some issues here.
 
 ## Step 6 - Changing Input Data Configuration
 When I first installed CESM on ARCHER2, I kept getting errors when trying to 

@@ -21,7 +21,7 @@ The paths that are not case specific should be available to use in ARCHER2 after
 * `$CESM_ROOT = /work/$GROUP/$GROUP/$USER/cesm/CESM2.1.3` <br/>
 This is the overall directory containing all CESM stuff (for me, `$GROUP=n02` and `$USER=jamd`, giving: `$CESM_ROOT = /work/n02/n02/jamd/cesm/CESM2.1.3`)
 * `$CESMDATA = $CESM_ROOT/cesm_inputdata`<br/>Path to input data.
-* `$SRCROOT = $CESM_ROOT/my_cesm_sandbox`<br/>Path to CESM source code.
+* `$SRCROOT = $CESM_ROOT/my_cesm_sandbox`<br/>Path to CESM source code. `$CESM_LOC` will aslo refer to this directory.
 * `$CIMEROOT = $CESM_ROOT/my_cesm_sandbox/cime`<br/>Path to the 
 [Common Infrastructure for Modeling Earth](https://esmci.github.io/cime/versions/master/html/what_cime/index.html) part of the source code.
 * `$CASEROOT = $CESM_ROOT/runs/$CASE/`<br/>Path to a particular experiment, as indicated by `$CASE`.
