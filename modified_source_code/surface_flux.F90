@@ -262,7 +262,8 @@ real    :: gust_min                =  0.0
 real    :: w_atm_const             =  0.0    ! JD - option for no-WISHE
 logical :: mo_drag_use_w_atm_const = .false. ! JD - option to use constant wind to compute drag coeffs if no-WISHE
 ! JD 05/11/2024 - fluxes only t_surf dependent (start)
-logical :: do_simple_flux_calc    =  .false.
+logical :: do_simple_flux_calc    =  .false.        ! Do simple latent and sensible heat flux
+logical :: do_simple_flux_lhe_calc    =  .false.    ! Do normal sensible but simple latent heat flux
 real    :: drag_const             =  0.0            ! approx value should be 0.0009
 real    :: rh_const               =  0.0            ! relative humidity of lowest level to use
 real    :: t_diseqb_const         =  0.0            ! constant difference between surface and lowest level temp to use
@@ -290,6 +291,7 @@ namelist /surface_flux_nml/ no_neg_q,                &
                             w_atm_const,             &
                             mo_drag_use_w_atm_const, &
                             do_simple_flux_calc,     &   ! JD 05/11/2024 - fluxes only t_surf dependent (start)
+                            do_simple_flux_lhe_calc, &
                             drag_const,              &
                             rh_const,                &
                             t_diseqb_const,          &
@@ -647,6 +649,27 @@ subroutine surface_flux_1d (                                           &
          ! evaporation
          rho_drag  =  drag_q * rho_simple
       end where
+  elseif (do_simple_flux_lhe_calc) then
+       where (avail)
+         ! JD 05/11/2024 - latent flux only t_surf dependent but sensible heat (flux_t) is normal
+         ! surface layer drag coefficients
+         cd_q = cd_q * 0 + drag_const
+
+         drag_t = cd_t * w_atm
+         drag_q = cd_q * w_atm_const
+
+         t_atm_simple = t_surf0 - t_diseqb_const
+         rho_simple = p_atm_const / (rdgas * t_atm_simple)
+
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio     ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho_simple
+      end where
   elseif (w_atm_const > 0.0) then
       ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
       where (avail)
@@ -682,7 +705,7 @@ subroutine surface_flux_1d (                                           &
 
   ! JD 05/11/2024 - fluxes only t_surf dependent
   ! Set fixed relative humidity for latent heat calc and compute q_surf with constant pressure (start)
-  if (do_simple_flux_calc) then
+  if (do_simple_flux_calc .or. do_simple_flux_lhe_calc) then
       call escomp (t_atm_simple, e_sat_atm_simple)  ! saturation vapor pressure at lowest atmospheric level
 
       ! set atmospheric humidity used for latent heat calc to rh_const multiplied by saturated specific humidity
@@ -777,7 +800,7 @@ subroutine surface_flux_1d (                                           &
    end where
   endif
 
-  if (do_simple_flux_calc) then
+  if (do_simple_flux_calc .or. do_simple_flux_lhe_calc) then
       ! JD 05/11/2024 - fluxes only t_surf dependent
       where (avail)
           q_surf = q_atm + flux_q / (rho_simple*cd_q*w_atm_const)   ! surface specific humidity
