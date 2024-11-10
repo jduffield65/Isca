@@ -14,7 +14,9 @@ def plot_spin_up(olr: xr.DataArray, sw_net_down: xr.DataArray, t_surf: xr.DataAr
     Args:
         olr: Outgoing Longwave Radiation with time, longitude and latitude dimensions.
         sw_net_down: Net downward shortwave radiation at top of atmosphere, accounting for any reflected due to
-            the `albedo` or absorbed in the atmosphere due to shortwave optical depth.
+            the `albedo` or absorbed in the atmosphere due to shortwave optical depth.</br>
+            This can be obtained with `isca_tools.utils.radiation.frierson_net_toa_sw_dwn` for the grey gas Isca
+            simulation.
             Dimensions are time, longitude, latitude.
         t_surf: Surface temperature with time, longitude and latitude dimensions.
         ax: Axes to plot results on.
@@ -30,4 +32,7 @@ def plot_spin_up(olr: xr.DataArray, sw_net_down: xr.DataArray, t_surf: xr.DataAr
     t_surf_mean = area_weighting(t_surf).mean(dim=['lon', 'lat']) - 273.15  # In Celsius
     t_surf_mean.plot.line(ax=ax2, color='r')
     ax2.set_ylabel('Surface Temperature / $°C$', color='r')
-    ax.set_xlabel(t_surf.time.units)
+    try:
+        ax.set_xlabel(t_surf.time.units)
+    except AttributeError:
+        pass
