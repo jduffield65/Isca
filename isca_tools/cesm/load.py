@@ -1,17 +1,22 @@
 import os
 import xarray as xr
-from typing import List, Optional
-import f90nml
-import warnings
+import cftime
+from typing import Optional, List
+import fnmatch
+import numpy as np
 
 jasmin_archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'
+local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
 
 
 def load_dataset(exp_name: str, comp: str = 'atm',
                  archive_dir: str = jasmin_archive_dir,
-                 decode_times: bool = True) -> xr.Dataset:
+                 decode_times: bool = True,
+                 year_first: int = 1, year_last: int = -1,
+                 months_keep: Optional[List] = None,
+                 apply_month_shift_fix: bool = True) -> xr.Dataset:
     """
-    This loads a dataset of a given componen produced by CESM.
+    This loads a dataset of a given component produced by CESM.
 
     Args:
         exp_name: Name of folder in `archive_dir` where data for this experiment was saved.
@@ -24,16 +29,23 @@ def load_dataset(exp_name: str, comp: str = 'atm',
             * `rof`: river
         archive_dir: Directory where CESM archive data saved.
         decode_times: If `True`, will convert time to actual date.
+        year_first: First year of simulation to load.
+        year_last: Last year of simulation to load.
+        months_keep: List of months which you want to load for each year.
+            `1` refers to January.
+            If `None`, all 12 months will be loaded.
+            If directory only contains specific months, should still specify those months here.
+        apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset
 
     Returns:
         Dataset containing all diagnostics specified for the experiment.
     """
     # LHS of comp_dir_file is name of directory containing hist files for the component
     # RHS of comp_dir_file is the string indicating the component in the individual .nc files within this directory
-    comp_dir_file = {'atm': 'cam',          # atmosphere
-                     'ice': 'cice',         # ice
-                     'lnd': 'clm2',         # land
-                     'rof': 'mosart'}       # river
+    comp_dir_file = {'atm': 'cam',  # atmosphere
+                     'ice': 'cice',  # ice
+                     'lnd': 'clm2',  # land
+                     'rof': 'mosart'}  # river
 
     if comp not in comp_dir_file:
         # Generate inverse dict to comp_dir_file
@@ -47,8 +59,68 @@ def load_dataset(exp_name: str, comp: str = 'atm',
     else:
         comp_dir = os.path.join(archive_dir, exp_name, comp)
         comp_file = comp_dir_file[comp]
-    # * indicates where date index info is, so we combine all datasets
-    data_files = os.path.join(comp_dir, 'hist', f'{exp_name}.{comp_file}.h0.*.nc')
-    d = xr.open_mfdataset(data_files, decode_times=decode_times, concat_dim='time', combine='nested')
-    # TODO: give option to load in specific dates / range of dates
-    return d
+    if year_first == 1 and year_last == -1 and months_keep is None:
+        # Load all data in folder
+        # * indicates where date index info is, so we combine all datasets
+        data_files_load = os.path.join(comp_dir, 'hist', f'{exp_name}.{comp_file}.h0.*.nc')
+    else:
+        # Only load in specific years and/or months
+        data_files_all = os.listdir(os.path.join(comp_dir, 'hist'))
+        # only keep files of correct format
+        data_files_all = [file for file in data_files_all if
+                          fnmatch.fnmatch(file, f'{exp_name}.{comp_file}.h0.*.nc')]
+
+        # Extract the year and month that each file points to
+        file_year = np.asarray([int(file[-10:-6]) for file in data_files_all])
+        file_month = np.asarray([int(file[-5:-3]) for file in data_files_all])
+
+        if year_last < 0:
+            year_last_use = year_last + np.max(file_year) + 1  # i.e. -1 changes to max(file_year)
+        else:
+            year_last_use = year_last
+        if year_first < 0:
+            year_first_use = year_first + np.max(file_year) + 1  # i.e. -1 changes to max(file_year)
+        else:
+            year_first_use = year_first
+        if months_keep is None:
+            months_keep = np.arange(1, 13)  # keep all months
+
+        data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
+                           year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]
+    if apply_month_shift_fix:
+        ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim='time', combine='nested')
+        return ds_month_shift(ds, decode_times, months_keep)
+    else:
+        return xr.open_mfdataset(data_files_load, decode_times=decode_times, concat_dim='time', combine='nested')
+
+
+def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
+                   months_in_ds: Optional[List] = None):
+    """
+    When loading CESM data, for some reason the first month is marked as February, so this function
+    shifts the time variable to correct it to January.
+
+    Args:
+        ds: Dataset to apply the shift to.
+            It should have been loaded with `decode_times=False`.
+        decode_times: If `True`, will convert time to actual date.
+        months_in_ds: List of months which are in `ds` for each year.
+            `1` refers to January.
+            If `None`, will assume there are all 12 months.
+
+    Returns:
+        Dataset with first months shifted by -1 so now first month is January.
+    """
+    n_day_month = np.asarray(
+        [cftime.DatetimeNoLeap(1, i + 1, 1).daysinmonth for i in range(12)])  # number of days in each month
+    if months_in_ds is None:
+        months_in_ds = np.arange(1, 13)
+    n_day_month = n_day_month[np.asarray(months_in_ds) - 1]
+    n_months_in_ds = ds.time.size
+    n_years_in_ds = int(np.floor(n_months_in_ds / 12))
+    month_shift_array = np.concatenate((np.tile(n_day_month, n_years_in_ds),
+                                        n_day_month[:n_months_in_ds % 12]))
+    ds_new = ds.assign_coords({'time': ('time', ds.time.values - month_shift_array, ds.time.attrs)})
+    if decode_times:
+        ds_new = xr.decode_cf(ds_new)
+    return ds_new

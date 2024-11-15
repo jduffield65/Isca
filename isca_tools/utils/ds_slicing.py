@@ -1,7 +1,7 @@
-from netCDF4 import Dataset
-from typing import List, Optional
+from typing import List, Optional, Union
 import numpy as np
 import xarray as xr
+from xarray import Dataset, DataArray
 from .base import area_weighting
 
 
@@ -153,3 +153,24 @@ def area_weight_mean_lat(ds: Dataset) -> Dataset:
             var_averaged += [var]
     print(f"Variables Averaged: {var_averaged}")
     return ds
+
+
+def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat, window_lon) -> Union[Dataset, DataArray]:
+    """
+    This creates a rolling averaged version of the dataset or data-array in the spatial dimension.
+    Returned data will have first `np.ceil((window_lat-1)/2)` and last `np.floor((window_lat-1)/2)`
+    values as `nan` in latitude dimension.
+    The averaging also does not take account of area weighting in latitude dimension.
+
+    Args:
+        ds: Dataset or DataArray to find rolling mean of.
+        window_lat: Size of window for rolling average in latitude dimension.
+        window_lon: Size of window for rolling average in longitude dimension.
+
+    Returns:
+        Rolling averaged dataset or DataArray.
+
+    """
+    ds_roll = ds.pad(lon=window_lon, mode='wrap')       # first pad in lon so wraps around when doing rolling mean
+    ds_roll = ds_roll.rolling({'lon': window_lon, 'lat': window_lat}, center=True).mean()
+    return ds_roll.isel(lon=slice(window_lon, -window_lon))     # remove the padded longitude values
