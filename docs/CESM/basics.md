@@ -195,7 +195,11 @@ Within the `user_nl_xxx` files, there are three namelist variables which allow y
 [change output frequency](https://ncar.github.io/CESM-Tutorial/notebooks/namelist/output/output_cam.html#customizing-cam-output-frequency-nhtfrq) 
 (`nhtfrq`) e.g. to daily average, as well as [add extra variables or history files](https://ncar.github.io/CESM-Tutorial/notebooks/namelist/output/output_cam.html#add-extra-variables-and-history-files-fincl) 
 (`fincl`).
-[](#step-5-customize-namelists)
+
+The `print_ds_var_list` [function](../code/utils/base.md#isca_tools.utils.base.print_ds_var_list) is quite useful 
+for checking which variables are in the CESM default output, and thus to decide which to output at a different 
+frequency.
+
 ??? note "Example"
     Below I go through how to run an experiment called `e.e20.ETEST.f19_g17.test_daily_output` for 40 days while outputting
     the daily average of the following in `h1` history files which contain 10 days each:
@@ -247,7 +251,14 @@ The namelist files should be edited after [setup](#step-4-setup) but before [bui
 `_in` files only appear in `$CASEROOT` after `./case.build` and these should not be edited.
 
 Optionally, can run `./preview_namelists` from `$CASEROOT` after editing namelists, but this is done anyway in 
-`./case.build`
+`./case.build`. But if you have changed the namelists and then want to continue the same run, you can just run
+`./preview_namelists` followed by `./case.submit` with `CONTINUE_RUN=TRUE` to [continue an experiment](#restarting) 
+with modified namelists.
+
+!!! warning "Warning"
+
+    Note that you cannot change history options (i.e. customize output) on a restart and instead
+    must do a [branch run](#branch-run).
 
 ## Branch Run
 This section describes how to do a [branch run](https://ncar.github.io/CESM-Tutorial/notebooks/modifications/xml/modify_run_type/hybrid_branch_restart.html#branch). 
