@@ -11,6 +11,7 @@ local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
 
 def load_dataset(exp_name: str, comp: str = 'atm',
                  archive_dir: str = jasmin_archive_dir,
+                 hist_file: int = 0,
                  decode_times: bool = True,
                  year_first: int = 1, year_last: int = -1,
                  months_keep: Optional[List] = None,
@@ -27,15 +28,19 @@ def load_dataset(exp_name: str, comp: str = 'atm',
             * `ice`: ice
             * `lnd`: land
             * `rof`: river
+        hist_file: Which history file to load, `0` is the default monthly averaged data set.
         archive_dir: Directory where CESM archive data saved.
         decode_times: If `True`, will convert time to actual date.
-        year_first: First year of simulation to load.
-        year_last: Last year of simulation to load.
-        months_keep: List of months which you want to load for each year.
-            `1` refers to January.
-            If `None`, all 12 months will be loaded.
+        year_first: First year of simulation to load.</br>
+            Only used for monthly averaged data i.e. `hist_file=0`.
+        year_last: Last year of simulation to load.</br>
+            Only used for monthly averaged data i.e. `hist_file=0`.
+        months_keep: List of months which you want to load for each year.</br>
+            Only used for monthly averaged data i.e. `hist_file=0`.</br>
+            `1` refers to January. If `None`, all 12 months will be loaded.</br>
             If directory only contains specific months, should still specify those months here.
-        apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset
+        apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset.</br>
+            Only used for monthly averaged data i.e. `hist_file=0`.
 
     Returns:
         Dataset containing all diagnostics specified for the experiment.
@@ -62,8 +67,11 @@ def load_dataset(exp_name: str, comp: str = 'atm',
     if year_first == 1 and year_last == -1 and months_keep is None:
         # Load all data in folder
         # * indicates where date index info is, so we combine all datasets
-        data_files_load = os.path.join(comp_dir, 'hist', f'{exp_name}.{comp_file}.h0.*.nc')
+        data_files_load = os.path.join(comp_dir, 'hist', f'{exp_name}.{comp_file}.h{hist_file}.*.nc')
     else:
+        if hist_file != 0:
+            raise ValueError(f'hist_file must be 0, but got {hist_file} '
+                             f'for non-default year_first, year_last and months_keep')
         # Only load in specific years and/or months
         data_files_all = os.listdir(os.path.join(comp_dir, 'hist'))
         # only keep files of correct format
@@ -87,7 +95,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
 
         data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
                            year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]
-    if apply_month_shift_fix:
+    if apply_month_shift_fix and hist_file == 0:
         ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim='time', combine='nested')
         return ds_month_shift(ds, decode_times, months_keep)
     else:

@@ -93,7 +93,7 @@ cd $CESM_ROOT/runs/e.e20.ETEST.f19_g17.test
 
 #### Step 5 - Customize namelists
 At this stage, you need to specify the details of the experiment by [modifying the namelists](#namelists) and/or 
-customizing the output.
+[customizing the output](#customizing-output).
 
 #### Step 6 - Build
 Next, the executable should be built through `case.build`:
@@ -185,7 +185,65 @@ can be modified through the `user_nl_xxx` files in `$CASEROOT`:
 
 ![](https://ncar.github.io/CESM-Tutorial/_images/CESM_directories_and_namelists.png)
 
-This should be done after [setup](#step-4-setup) but before [build](#step-6-build). Note that the 
+This is where you modify details of the simulation e.g. $CO_2$ concentration.
+
+### Customizing Output
+By default, the simulation will just [output](https://ncar.github.io/CESM-Tutorial/notebooks/namelist/output.html) 
+the monthly average of default variables.
+
+Within the `user_nl_xxx` files, there are three namelist variables which allow you to 
+[change output frequency](https://ncar.github.io/CESM-Tutorial/notebooks/namelist/output/output_cam.html#customizing-cam-output-frequency-nhtfrq) 
+(`nhtfrq`) e.g. to daily average, as well as [add extra variables or history files](https://ncar.github.io/CESM-Tutorial/notebooks/namelist/output/output_cam.html#add-extra-variables-and-history-files-fincl) 
+(`fincl`).
+[](#step-5-customize-namelists)
+??? note "Example"
+    Below I go through how to run an experiment called `e.e20.ETEST.f19_g17.test_daily_output` for 40 days while outputting
+    the daily average of the following in `h1` history files which contain 10 days each:
+    
+    * `T`: Temperature
+    * `TS`: Surface temperature
+    * `Q`: Specific humidity
+    * `Z3`: Geopotential height
+    * `LHFLX`: Surface latent heat flux
+    * `SHFLX`: Surface sensible heat flux
+    * `FSNS`: Net solar flux at the surface
+    * `FLNS`: Net longwave flux at the surface
+    * `U10`: 10m wind speed
+
+    Go through up to [step 5](#step-5-customize-namelists) as normal:
+    ```bash
+    $CIMEROOT/scripts/create_newcase --case $CESM_ROOT/runs/e.e20.ETEST.f19_g17.test_daily_output --compset ETEST --res f19_g17 --project n02-GLOBALEX --run-unsupported
+    cd $CESM_ROOT/runs/e.e20.ETEST.f19_g17.test_daily_output
+    ./case.setup
+    ```
+
+    Now customize `$CASE_ROOT/user_nl_cam` to include the variables:
+    ```
+    ! Users should add all user specific namelist changes below in the form of 
+    ! namelist_var = new_namelist_value 
+     
+    nhtfrq = 0, -24			! Monthly average for default h0 file, daily average for h1 file
+    mfilt = 1, 10			! 1 file per month for h0, 1 file per 10 days for h1 file
+    fincl2 = 'T', 'Q', 'Z3', 'TS', 'LHFLX', 'SHFLX', 'FSNS', 'FLNS', 'U10' ! Variables to save daily in h1
+    ```
+    
+    Continue the rest of the pipeline as normal:
+    ```bash
+    ./case.build
+    ./check_input_data --download
+    ./xmlchange STOP_N=40
+    ./xmlchange STOP_OPTION=ndays
+    ./case.submit
+    ```
+
+    This produces files such as `e.e20.ETEST.f19_g17.test_daily_output.cam.h1.0001-01-01-00000.nc` 
+    in `$DOUT_S_ROOT` with the `h1` history file indicator containing the output for daily data.
+
+    This example only changes atmospheric variables, but you can [do similar things](https://ncar.github.io/CESM-Tutorial/notebooks/namelist/output/output_clm.html) 
+    for the other [components](#code-components).
+    
+
+The namelist files should be edited after [setup](#step-4-setup) but before [build](#step-6-build). Note that the 
 `_in` files only appear in `$CASEROOT` after `./case.build` and these should not be edited.
 
 Optionally, can run `./preview_namelists` from `$CASEROOT` after editing namelists, but this is done anyway in 
