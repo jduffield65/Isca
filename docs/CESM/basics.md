@@ -304,20 +304,20 @@ Once the restart files have been transferred, `xmlchange` must be used to indica
 If we are branching off from an experiment with casename `old_case` at the date `yyyy-mm-dd`, then you should run:
 
 ```bash
-./xmlchange RUN_TYPE = branch
-./xmlchange RUN_REFCASE = old_case
-./xmlchange RUN_REFDATE = yyyy-mm-dd
-./xmlchange GET_REFCASE = FALSE
+./xmlchange RUN_TYPE=branch
+./xmlchange RUN_REFCASE=old_case
+./xmlchange RUN_REFDATE=yyyy-mm-dd
+./xmlchange GET_REFCASE=FALSE
 ```
 
 ??? note "Example"
     Continuing from our previous example, you would run:
     
     ```bash
-    ./xmlchange RUN_TYPE = branch
-    ./xmlchange RUN_REFCASE = e.e20.E1850TEST.f09_g17.test
-    ./xmlchange RUN_REFDATE = 0011-01-01
-    ./xmlchange GET_REFCASE = FALSE
+    ./xmlchange RUN_TYPE=branch
+    ./xmlchange RUN_REFCASE=e.e20.E1850TEST.f09_g17.test
+    ./xmlchange RUN_REFDATE=0011-01-01
+    ./xmlchange GET_REFCASE=FALSE
     ```
 
 After this, the branch job can be [submitted](#step-8-run-model) as normal, remembering to 
