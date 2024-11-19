@@ -116,6 +116,7 @@ nav:
         - First Run: CESM/first_run.md
     - Code:
         - CESM:
+            - Base: code/cesm/base.md
             - Load: code/cesm/load.md
         - Convection:
             - Base: code/convection/base.md
