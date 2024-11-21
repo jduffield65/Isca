@@ -155,7 +155,7 @@ def area_weight_mean_lat(ds: Dataset) -> Dataset:
     return ds
 
 
-def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat, window_lon) -> Union[Dataset, DataArray]:
+def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat: int, window_lon: int) -> Union[Dataset, DataArray]:
     """
     This creates a rolling averaged version of the dataset or data-array in the spatial dimension.
     Returned data will have first `np.ceil((window_lat-1)/2)` and last `np.floor((window_lat-1)/2)`
@@ -164,8 +164,8 @@ def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat, window_lon) -> Un
 
     Args:
         ds: Dataset or DataArray to find rolling mean of.
-        window_lat: Size of window for rolling average in latitude dimension.
-        window_lon: Size of window for rolling average in longitude dimension.
+        window_lat: Size of window for rolling average in latitude dimension [number of grid points]
+        window_lon: Size of window for rolling average in longitude dimension [number of grid points].
 
     Returns:
         Rolling averaged dataset or DataArray.
@@ -174,3 +174,20 @@ def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat, window_lon) -> Un
     ds_roll = ds.pad(lon=window_lon, mode='wrap')       # first pad in lon so wraps around when doing rolling mean
     ds_roll = ds_roll.rolling({'lon': window_lon, 'lat': window_lat}, center=True).mean()
     return ds_roll.isel(lon=slice(window_lon, -window_lon))     # remove the padded longitude values
+
+
+def time_rolling(ds: Union[Dataset, DataArray], window_time: int) -> Union[Dataset, DataArray]:
+    """
+    This creates a rolling averaged version of the dataset or data-array in the time dimension. Useful for when
+    have annual average dataset.
+
+    Args:
+        ds: Dataset or DataArray to find rolling mean of.
+        window_time: Size of window for rolling average in time dimension [number of time units e.g. days]
+
+    Returns:
+        Rolling averaged dataset or DataArray.
+    """
+    ds_roll = ds.pad(time=window_time, mode='wrap')  # first pad in time so wraps around when doing rolling mean
+    ds_roll = ds_roll.rolling(time=window_time, center=True).mean()
+    return ds_roll.isel(time=slice(window_time, -window_time))  # remove the padded time values

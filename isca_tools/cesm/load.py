@@ -4,6 +4,7 @@ import cftime
 from typing import Optional, List
 import fnmatch
 import numpy as np
+import warnings
 
 jasmin_archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'
 local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
@@ -69,18 +70,21 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         # * indicates where date index info is, so we combine all datasets
         data_files_load = os.path.join(comp_dir, 'hist', f'{exp_name}.{comp_file}.h{hist_file}.*.nc')
     else:
-        if hist_file != 0:
-            raise ValueError(f'hist_file must be 0, but got {hist_file} '
-                             f'for non-default year_first, year_last and months_keep')
+        if hist_file != 0 and months_keep is not None:
+            warnings.warn(f'If h{hist_file} files not saved monthly then will not have a file for each month so '
+                          f'using months_keep={months_keep} will miss out different days in different years.')
         # Only load in specific years and/or months
         data_files_all = os.listdir(os.path.join(comp_dir, 'hist'))
         # only keep files of correct format
         data_files_all = [file for file in data_files_all if
-                          fnmatch.fnmatch(file, f'{exp_name}.{comp_file}.h0.*.nc')]
+                          fnmatch.fnmatch(file, f'{exp_name}.{comp_file}.h{hist_file}.*.nc')]
 
         # Extract the year and month that each file points to
-        file_year = np.asarray([int(file[-10:-6]) for file in data_files_all])
-        file_month = np.asarray([int(file[-5:-3]) for file in data_files_all])
+        # If not h0 files, then files have time indicated in the name, hence the different indices used for non h0 files
+        file_year = np.asarray([int(file[-10-9*int(hist_file != 0):-6-9*int(hist_file != 0)])
+                                for file in data_files_all])
+        file_month = np.asarray([int(file[-5-9*int(hist_file != 0):-3-9*int(hist_file != 0)])
+                                 for file in data_files_all])
 
         if year_last < 0:
             year_last_use = year_last + np.max(file_year) + 1  # i.e. -1 changes to max(file_year)
@@ -90,8 +94,21 @@ def load_dataset(exp_name: str, comp: str = 'atm',
             year_first_use = year_first + np.max(file_year) + 1  # i.e. -1 changes to max(file_year)
         else:
             year_first_use = year_first
+
+        if year_first_use not in file_year:
+            raise ValueError(f'year_first={year_first_use} is not in available years: {file_year}')
+        if year_last_use not in file_year:
+            raise ValueError(f'year_last={year_last_use} is not in available years: {file_year}')
+
         if months_keep is None:
             months_keep = np.arange(1, 13)  # keep all months
+        else:
+            months_error = []
+            for month in months_keep:
+                if month not in months_keep:
+                    months_error.append(month)
+            if len(months_error) > 0:
+                raise ValueError(f'months={months_error} are not in available months: {file_month}')
 
         data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
                            year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]

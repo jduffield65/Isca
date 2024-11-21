@@ -3,7 +3,7 @@ import numpy_indexed
 import xarray as xr
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 from ..utils.constants import c_p, L_v
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Union
 from scipy.stats import percentileofscore
 
 
@@ -206,8 +206,8 @@ def get_px(ds: List[xr.Dataset], mse_quant_x: np.ndarray, quant_use: np.ndarray,
     return px
 
 
-def get_quant_ind(var: xr.DataArray, percentile: int, range_below: float = 0,
-                  range_above: float = np.inf) -> np.ndarray:
+def get_quant_ind(var: Union[xr.DataArray, np.ndarray], percentile: int, range_below: float = 0,
+                  range_above: float = np.inf, av_dim: Optional[Union[str, int]]=None) -> np.ndarray:
     """
     This functions returns the indices of all occurrences whereby the value of `var` is between the
     `percentile-range_below` and `percentile+range_above` percentile.
@@ -224,6 +224,8 @@ def get_quant_ind(var: xr.DataArray, percentile: int, range_below: float = 0,
             `percentile+range_above` will be returned.
         range_above: All indices will `var` in the percentile range between `percentile-range_below` and
             `percentile+range_above` will be returned.
+        av_dim: Dimension to find quantile over, should be string if `var` is xarray or integer if `var` is numpy
+            array. If not given, will find quantile over 'lon_lat_time' or 'lon_time' dimension.
 
     Returns:
         `int [n_ind]`</br>
@@ -231,13 +233,21 @@ def get_quant_ind(var: xr.DataArray, percentile: int, range_below: float = 0,
     """
     quant_min = np.clip(percentile-range_below, 0, 100)
     quant_max = np.clip(percentile+range_above, 0, 100)
-    if 'lon_lat_time' in var.dims:
-        av_dim = 'lon_lat_time'
-    elif 'lon_time' in var.dims:
-        av_dim = 'lon_time'
+    if isinstance(var, np.ndarray):
+        quantile_thresh_min = np.quantile(var, quant_min/100, axis=av_dim)
+        quantile_thresh_max = np.quantile(var, quant_max/100, axis=av_dim)
     else:
-        raise ValueError('No suitable dimension to average over')
-    quantile_thresh_min = var.quantile(quant_min / 100, dim=av_dim, keep_attrs=True)
-    quantile_thresh_max = var.quantile(quant_max / 100, dim=av_dim, keep_attrs=True)
+        if av_dim is None:
+            if 'lon_lat_time' in var.dims:
+                av_dim = 'lon_lat_time'
+            elif 'lon_time' in var.dims:
+                av_dim = 'lon_time'
+            else:
+                raise ValueError('No suitable dimension to average over - neither lon_lat_time nor lon_time in var')
+        else:
+            if av_dim not in var.dims:
+                raise ValueError(f'No suitable dimension to average over - {av_dim} is not in var')
+        quantile_thresh_min = var.quantile(quant_min / 100, dim=av_dim, keep_attrs=True)
+        quantile_thresh_max = var.quantile(quant_max / 100, dim=av_dim, keep_attrs=True)
     quant_ind = np.where(np.logical_and(var > quantile_thresh_min, var <= quantile_thresh_max))[0]
     return quant_ind
