@@ -38,8 +38,8 @@ def apply_polyfit(x: np.ndarray, poly_coefs: np.ndarray, time: Optional[np.ndarr
     if time is None:
         return np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs))], axis=0)
     else:
-        # In this case, poly_coefs are output of polyfit_with_phase so last coefficient is the phase coefficient
-        y_approx = np.sum([poly_coefs[-i - 2] * x ** i for i in range(len(poly_coefs - 1))], axis=0)
+        # In this case, poly_coefs are output of polyfit_with_phase so first coefficient is the phase coefficient
+        y_approx = np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs) - 1)], axis=0)
         time_spacing = np.median(np.ediff1d(time))
         x_spline_fit = CubicSpline(np.append(time, time[-1] + time_spacing), np.append(x, x[0]),
                                    bc_type='periodic')
@@ -86,17 +86,18 @@ def polyfit_with_phase(x: np.ndarray, y: np.ndarray,
     time_spacing = np.median(np.ediff1d(time))
     x_spline_fit = CubicSpline(np.append(time, time[-1] + time_spacing), np.append(x, x[0]),
                                bc_type='periodic')
-    gamma_best_polyfit = apply_polyfit(x, np.polyfit(x, y, deg_phase_calc)[0])
+    y_best_polyfit = apply_polyfit(x, np.polyfit(x, y, deg_phase_calc))
     period_length = time[-1] - time[0] + time_spacing
     # Use linalg to find coefficient not polyfit as know 0th order coefficient is 0 i.e. want y=mx not y=mx+c
-    coefs[0] = np.linalg.lstsq(x_spline_fit(time - period_length / 4)[:, np.newaxis], y - gamma_best_polyfit)
+    coefs[0] = np.linalg.lstsq(x_spline_fit(time - period_length / 4)[:, np.newaxis], y - y_best_polyfit,
+                               rcond=-1)[0][0]
     y_no_phase = y - apply_polyfit(x, coefs, time)  # residual after removing phase dependent term
-    coefs[1:] = np.polyfit(x, y_no_phase, deg)[0]
+    coefs[1:] = np.polyfit(x, y_no_phase, deg)
     return coefs
 
 
-def spline_integral(x: np.ndarray[float], dy_dx: np.ndarray[float], y0: float = 0, x0: Optional[float] = None,
-                    x_return: Optional[np.ndarray[float]] = None,
+def spline_integral(x: np.ndarray, dy_dx: np.ndarray, y0: float = 0, x0: Optional[float] = None,
+                    x_return: Optional[np.ndarray] = None,
                     periodic: bool = False) -> np.ndarray:
     """
     Uses spline integration to solve for $y$ given $\\frac{dy}{dx}$ such that $y=y_0$ at $x=x_0$.
@@ -127,7 +128,7 @@ def spline_integral(x: np.ndarray[float], dy_dx: np.ndarray[float], y0: float = 
         x_return = x
     if x0 is None:
         x0 = x_return[0]
-    y = np.full_like(x_return, y0)
+    y = np.full_like(x_return, y0, dtype=float)
     for i in range(x_return.size):
         y[i] += spline_use.integrate(x0, x_return[i], extrapolate='periodic' if periodic else None)
     return y
