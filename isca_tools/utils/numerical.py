@@ -90,6 +90,44 @@ def polyfit_with_phase(x: np.ndarray, y: np.ndarray,
     period_length = time[-1] - time[0] + time_spacing
     # Use linalg to find coefficient not polyfit as know 0th order coefficient is 0 i.e. want y=mx not y=mx+c
     coefs[0] = np.linalg.lstsq(x_spline_fit(time - period_length / 4)[:, np.newaxis], y - gamma_best_polyfit)
-    y_no_phase = y - apply_polyfit(x, coefs, time)      # residual after removing phase dependent term
+    y_no_phase = y - apply_polyfit(x, coefs, time)  # residual after removing phase dependent term
     coefs[1:] = np.polyfit(x, y_no_phase, deg)[0]
     return coefs
+
+
+def spline_integral(x: np.ndarray[float], dy_dx: np.ndarray[float], y0: float = 0, x0: Optional[float] = None,
+                    x_return: Optional[np.ndarray[float]] = None,
+                    periodic: bool = False) -> np.ndarray:
+    """
+    Uses spline integration to solve for $y$ given $\\frac{dy}{dx}$ such that $y=y_0$ at $x=x_0$.
+
+    Args:
+        x: `float [n_x]`</br>
+            Values of $x$ where $\\frac{dy}{dx}$ given, and used to fit the spline.
+        dy_dx: `float [n_x]`</br>
+            Values of $\\frac{dy}{dx}$ corresponding to $x$, and used to fit the spline.
+        y0: Boundary condition, $y(x_0)=y_0$.
+        x0: Boundary condition, $y(x_0)=y_0$.</br>
+            If not given, will assume `x0=x_return[0]`.
+        x_return: `float [n_x_return]`</br>
+            Values of $y$ are returned for these $x$ values. If not given, will set to `x`.
+        periodic: Whether to use periodic boundary condition.</br>
+            If periodic expect $\\frac{dy}{dx}$ at $x=$`x[-1]+x_spacing` is equal to `dy_dx[0]`.
+
+    Returns:
+        y_return: `float [n_x_return]`</br>
+            Values of $y$ corresponding to `x_return.
+    """
+    if periodic:
+        x_spacing = np.median(np.ediff1d(x))
+        spline_use = CubicSpline(np.append(x, x[-1] + x_spacing), np.append(dy_dx, dy_dx[0]), bc_type='periodic')
+    else:
+        spline_use = CubicSpline(x, dy_dx)
+    if x_return is None:
+        x_return = x
+    if x0 is None:
+        x0 = x_return[0]
+    y = np.full_like(x_return, y0)
+    for i in range(x_return.size):
+        y[i] += spline_use.integrate(x0, x_return[i], extrapolate='periodic' if periodic else None)
+    return y
