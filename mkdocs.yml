@@ -153,5 +153,6 @@ nav:
             - Land: code/utils/land.md
             - Load: code/utils/load.md
             - Moist Physics: code/utils/moist_physics.md
+            - Numerical: code/utils/numerical.md
             - Radiation: code/utils/radiation.md
             - Statistics: code/utils/stats.md

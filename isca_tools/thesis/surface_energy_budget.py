@@ -1,5 +1,5 @@
 import numpy as np
-from ..utils import fourier
+from ..utils import fourier, numerical
 from scipy import optimize
 from scipy.interpolate import CubicSpline
 import warnings
@@ -144,7 +144,7 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
                      lambda_nl: Optional[Union[float, np.ndarray]] = None, n_harmonics: int = 2,
                      include_sw_phase: bool = False, numerical: bool = False,
                      day_seconds: float = 86400,
-                     single_harmonic_nl: bool = False) -> Tuple[
+                     single_harmonic_nl: bool = False, return_anomaly: bool = True) -> Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Seeks a fourier solution of the form $T(t) = \\frac{T_0}{2} + \\sum_{n=1}^{N} T_n\\cos(2n\\pi ft - \\phi_n)$
@@ -207,6 +207,8 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
         day_seconds: Duration of a day in seconds.
         single_harmonic_nl: If `True`, the $\lambda_{nl_j}T'^j$ terms in $\Gamma^{\\uparrow}$ will only
             use the first harmonic, not all harmonics.
+        return_anomaly: If `True`, the first return variable, `temp_fourier` will be
+            the temperature anomaly, i.e. it will not include $T_0$.
 
     Returns:
         temp_fourier: `float [n_time]`</br>
@@ -307,5 +309,8 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
                                     0.5 * lambda_nl[0] * temp_fourier_amp[1] ** 2 * np.cos(2 * temp_fourier_phase[0]))
                 sw_cos[1] -= 0.5 * lambda_nl[0] * temp_fourier_amp[1] ** 2 * np.cos(2 * temp_fourier_phase[0]
                                                                                  ) / sw_fourier_amp[2]
-    temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
+    if return_anomaly:
+        temp_fourier = fourier.fourier_series(time, n_year_days, np.append([0], temp_fourier_amp[1:]), temp_fourier_phase)
+    else:
+        temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase

@@ -176,7 +176,7 @@ def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat: int, window_lon: 
     return ds_roll.isel(lon=slice(window_lon, -window_lon))     # remove the padded longitude values
 
 
-def time_rolling(ds: Union[Dataset, DataArray], window_time: int) -> Union[Dataset, DataArray]:
+def time_rolling(ds: Union[Dataset, DataArray], window_time: int, wrap: bool = True) -> Union[Dataset, DataArray]:
     """
     This creates a rolling averaged version of the dataset or data-array in the time dimension. Useful for when
     have annual average dataset.
@@ -184,10 +184,14 @@ def time_rolling(ds: Union[Dataset, DataArray], window_time: int) -> Union[Datas
     Args:
         ds: Dataset or DataArray to find rolling mean of.
         window_time: Size of window for rolling average in time dimension [number of time units e.g. days]
+        wrap: If first time comes immediately after last time i.e. for annual mean data
 
     Returns:
         Rolling averaged dataset or DataArray.
     """
-    ds_roll = ds.pad(time=window_time, mode='wrap')  # first pad in time so wraps around when doing rolling mean
-    ds_roll = ds_roll.rolling(time=window_time, center=True).mean()
-    return ds_roll.isel(time=slice(window_time, -window_time))  # remove the padded time values
+    if wrap:
+        ds_roll = ds.pad(time=window_time, mode='wrap')  # first pad in time so wraps around when doing rolling mean
+        ds_roll = ds_roll.rolling(time=window_time, center=True).mean()
+        return ds_roll.isel(time=slice(window_time, -window_time))  # remove the padded time values
+    else:
+        return ds.rolling(time=window_time, center=True).mean()
