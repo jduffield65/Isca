@@ -6,8 +6,10 @@ import warnings
 from typing import Optional, Tuple, Union
 
 
-def get_temp_exact(time: np.ndarray, swdn_sfc: np.ndarray, gamma: np.ndarray, heat_capacity: float, temp0: float,
-                   day_seconds: int = 86400) -> np.ndarray:
+def get_temp_exact(time: np.ndarray, swdn_sfc: np.ndarray, gamma: np.ndarray, heat_capacity: float,
+                   temp0: Optional[float] = None,
+                   day_seconds: int = 86400, seek_fourier: bool = False, n_harmonics: int = 10,
+                   lambda_const_guess: float =3) -> np.ndarray:
     """
     For a given $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$,
     and downward shortwave radiation at the surface, $SW^{\\downarrow}$, this returns the exact surface
@@ -31,16 +33,55 @@ def get_temp_exact(time: np.ndarray, swdn_sfc: np.ndarray, gamma: np.ndarray, he
             Obtained from mixed layer depth of ocean using
             [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
         temp0: Temperature at `time[0]`.</br>
+            If not given, will just return the anomaly i.e. $T - \overline{T}$.
             Units: $K$.
         day_seconds: Duration of a day in seconds.
+        seek_fourier: If `True` will seek a Fourier solution of `n_harmonics` that best satisfies the differential
+            equation. Otherwise will fit a spline and integrate it.
+        n_harmonics: Number of harmonics to use in Fourier solution.
+        lambda_const_guess: If $\Gamma = \lambda_0 + \lambda T(t)$ then an analytic fourier solution exists.
+            This is a guess for $\lambda$ that will be used as starting point for seeking numerical fourier solution.
 
     Returns:
         `float [n_time]`</br>
             Exact value at temperature to satisfy the differential equation at each time.</br>
             Units: $K$.
     """
-    return numerical.spline_integral(time * day_seconds, (swdn_sfc - gamma) / heat_capacity, y0=temp0,
-                                     periodic=True)
+    dtemp_dt_exact = (swdn_sfc - gamma) / heat_capacity
+    if not seek_fourier:
+        temp_approx = numerical.spline_integral(time * day_seconds, dtemp_dt_exact,
+                                                y0=0 if temp0 is None else temp0, periodic=True)
+        if temp0 is None:
+            return temp_approx - np.mean(temp_approx)
+        else:
+            return temp_approx
+    else:
+        def fit_func_deriv(time_array, *args):
+            # first n_harmonic values in args are the temperature amplitude coefficients (excluding T_0)
+            # last n_harmonic values in args are the temperature phase coefficients
+            fourier_amp_coef = np.asarray([args[i] for i in range(n_harmonics)])
+            # make first coefficient 0 as doesn't impact on derivative
+            fourier_amp_coef = np.append([0], fourier_amp_coef)
+            fourier_phase_coef = np.asarray([args[i] for i in range(n_harmonics, len(args))])
+            return fourier.fourier_series_deriv(time_array, time_array.size, fourier_amp_coef,
+                                                fourier_phase_coef, day_seconds)
+
+        # Starting guess is linear 1 harmonic linear analytical solution given gamma=lambda_const_guess*temp
+        # so only 1st harmonic coefficients of amplitude and phase are needed, rest are set to zero
+        p0 = np.zeros(2 * n_harmonics)
+        f = 1/(time.size*day_seconds)
+        p0[n_harmonics] = np.arctan((2 * np.pi * f * heat_capacity) / lambda_const_guess)
+        sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, time.size, 1)[1]
+        p0[0] = sw_fourier_amp[1] / np.cos(p0[n_harmonics]) / (
+                (2 * np.pi * f * heat_capacity) * np.tan(p0[n_harmonics]) + lambda_const_guess)
+        args_found = optimize.curve_fit(fit_func_deriv, time, dtemp_dt_exact, p0)[0]
+        temp_fourier_amp = np.append([0], args_found[:n_harmonics])
+        temp_fourier_phase = args_found[n_harmonics:]
+        temp_approx = fourier.fourier_series(time, time.size, temp_fourier_amp, temp_fourier_phase)
+        if temp0 is None:
+            return temp_approx      # fourier solution is anomaly so just return this
+        else:
+            return temp_approx - temp_approx[0] + temp0
 
 
 def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capacity: float,
