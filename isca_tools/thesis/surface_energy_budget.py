@@ -132,7 +132,7 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
     * $i=1, 2$ with $\lambda_1=\lambda$ and $\lambda_2=\lambda_{phase}$.
     * $\Phi_{n1}=0$ and $\Phi_{n2} = n\pi/2$ (from $2n\pi / \mathcal{T} \\times \mathcal{T}/4$).
 
-    If $\lambda_{sq}\\neq 0$, an approximate numerical solution will be obtained, assuming
+    If $\lambda_{sq}\\neq 0$, an approximate analytical solution will be obtained, assuming
     $T'^2(t) \\approx (T_1\\cos(2\\pi ft - \\phi_1))^2$.
 
     Args:
@@ -144,10 +144,8 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
             [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
-        lambda_const: `float [n_lambda+1]`</br>
-            The constants $\lambda_i$ used in the approximation for
+        lambda_const: The constant $\lambda$ used in the approximation for
             $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
-            `lambda_const[0]` is $\lambda_0$ and `lambda_const[i]` is $\lambda_{i}$ for $i>0$.
         lambda_phase: The constants $\lambda_{phase}$ used in the approximation for $\Gamma^{\\uparrow}$.
         lambda_sq: The constant $\lambda_{sq}$ used in the approximation for $\Gamma^{\\uparrow}$.
         n_harmonics_sw: Number of harmonics to use to fit fourier series for $SW^{\\downarrow}$.
@@ -176,7 +174,8 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
         n_harmonics_temp = n_harmonics_sw
 
     if n_harmonics_temp == 1 and lambda_sq != 0:
-        raise ValueError('Cannot solve for non-zero lambda_sq with single harmonic')
+        raise ValueError('Cannot solve for non-zero lambda_sq with single harmonic - '
+                         'use get_temp_fourier_numerical instead')
 
     # Get fourier representation of SW radiation
     if n_harmonics_sw > n_harmonics_temp:
@@ -225,6 +224,93 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
                                                                              ) / sw_fourier_amp[2]
     temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
+
+
+def get_temp_extrema_analytic(sw_fourier_amp1: Union[float, np.ndarray], heat_capacity: float,
+                              lambda_const: Union[float, np.ndarray], lambda_phase: Union[float, np.ndarray] = 0,
+                              lambda_sq: Union[float, np.ndarray] = 0, sw_fourier_amp2: Union[float, np.ndarray] = 0,
+                              n_year_days: int = 360, day_seconds: float = 86400
+                              ) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray],
+Union[float, np.ndarray]]:
+    """
+    This will return the analytic solution for the times and amplitudes of the extrema of the fourier
+    solution of $T'$ in the following form of the surface energy budget:
+
+    $$
+    C\\frac{\partial T'}{\partial t} = F(t) - \lambda_0 - \lambda T'(t) - \lambda_{phase}T'(t-\mathcal{T}/4) -
+    \lambda_{sq} T'^2(t)
+    $$
+
+    Args:
+        sw_fourier_amp1: `float [n_regions]`</br>
+            The first harmonic amplitude fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $F_1$.
+        heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
+            Obtained from mixed layer depth of ocean using
+            [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
+        lambda_const: The constant $\lambda$ used in the approximation for
+            $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
+        lambda_phase: The constants $\lambda_{phase}$ used in the approximation for $\Gamma^{\\uparrow}$.
+        lambda_sq: The constant $\lambda_{sq}$ used in the approximation for $\Gamma^{\\uparrow}$.
+        sw_fourier_amp2: `float [n_regions]`</br>
+            The second harmonic amplitude fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $F_1$.
+        n_year_days: Number of days in a year.
+        day_seconds: Duration of a day in seconds.
+
+    Returns:
+        time_extrema1: Time in days of extrema to occur first
+        time_extrema2: Time in days of extrema to occur last
+        amp_extrema1: Absolute amplitude of extrema to occur first
+        amp_extrema2: Absolute amplitude of extrema to occur last
+    """
+    f = 1/(n_year_days*day_seconds)
+    if sw_fourier_amp2 == 0:
+        if lambda_sq != 0:
+            raise ValueError('Cannot solve for non-zero lambda_sq with single harmonic - '
+                             'get extrema numerically instead')
+        tan_phase = (2*np.pi*heat_capacity*f - lambda_phase) / lambda_const
+        time_extrema1 = np.arctan(tan_phase)/(2*np.pi) * n_year_days
+        time_extrema2 = time_extrema1 + n_year_days/2
+        amp_extrema1 = np.abs(sw_fourier_amp1/lambda_const) / (np.sqrt(1+tan_phase**2))
+        amp_extrema2 = amp_extrema1
+    return time_extrema1, time_extrema2, amp_extrema1, amp_extrema2
+
+
+def get_temp_extrema_numerical(time: np.ndarray, temp: np.ndarray, smooth_window: int = 1,
+                               smooth_method: str = 'convolve') -> Tuple[float, float, float, float]:
+    """
+    Given the temperature `temp`, this will return the times and amplitudes of the maxima and minima. The extrema
+    will be returned in time order i.e. if minima occurs first, it will be returned first.
+
+    Args:
+        time: `float [n_time]`</br>
+            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`)
+        temp: `float [n_time]`</br>
+            Value of temperature at each time. Again, assume periodic.
+        smooth_window: Number of time steps to use to smooth `temp` before finding extrema.
+            Smaller equals more accurate fit. `1` is perfect fit.
+        smooth_method: `convolve` or `spline`</br>
+            If `convolve`, will smooth via convolution with window of length `smooth_window`.
+            If `spline`, will fit a spline using every `smooth_window` values of `time`.
+
+    Returns:
+        time_extrema1: Time in days of extrema to occur first
+        time_extrema2: Time in days of extrema to occur last
+        amp_extrema1: Absolute amplitude of extrema to occur first
+        amp_extrema2: Absolute amplitude of extrema to occur last
+    """
+    time_extrema = {}
+    amp_extrema = {}
+    for key in ['min', 'max']:
+        var_use, spline_use = numerical.get_var_extrema_date(time, temp - np.mean(temp),
+                                                             smooth_window=smooth_window, type=key, max_extrema=1,
+                                                             smooth_method=smooth_method)
+        time_extrema[key] = var_use[0]
+        amp_extrema[key] = np.abs(spline_use(time_extrema[key]))
+    # Put output in time order
+    if time_extrema['min'] <= time_extrema['max']:
+        return time_extrema['min'], time_extrema['max'], amp_extrema['min'], amp_extrema['max']
+    else:
+        return time_extrema['max'], time_extrema['min'], amp_extrema['max'], amp_extrema['min']
 
 
 def gamma_linear_approx(time: np.ndarray, temp: np.ndarray,
