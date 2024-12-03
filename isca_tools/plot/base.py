@@ -3,8 +3,65 @@ import matplotlib.transforms as mtransforms
 from matplotlib.collections import LineCollection
 from typing import List, Optional, Union
 import warnings
-
 import numpy as np
+import os
+
+
+def savefig(fig: plt.Figure, file_name: str = 'output', output_dir: str = '/Users/joshduffield/Desktop/',
+            format: str = 'pdf', dpi: Union[float, str] = 800, bbox_inches: Optional[str] = 'tight',
+            pad_inches: Union[float, str] = 0.05, overwrite_file: bool = False, save_if_exists: bool = True) -> None:
+    """
+    Function to save figure, basically just calls
+    [`plt.savefig`](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.savefig.html) but has more useful
+    default values, and option to not overwrite figure if already exists.
+
+    Args:
+        fig: Matplolib figure that you would like to save
+        file_name: Name of saved figure file in `output_dir`. Should not include `format`.
+        output_dir: Directory into which figure file will be saved.
+        format: The file format, e.g. `'png'`, `'pdf'`, `'svg'`, `'jpeg'`.</br>
+            If a different format is included in `file_name`, then the format in `file_name` will be used.
+        dpi: The resolution in dots per inch. If `'figure'`, use the figure's dpi value.
+        bbox_inches: Bounding box in inches: only the given portion of the figure is saved.
+            If `'tight'`, try to figure out the tight bbox of the figure.
+        pad_inches: Amount of padding in inches around the figure when bbox_inches is 'tight'.
+            If `'layout'` use the padding from the constrained or compressed layout engine;
+            ignored if one of those engines is not in use.
+        overwrite_file: If `False` and file already exists, will add an integer (starting with `2`) to end of
+            `file_name` until find a name that does not exist. Only relevant if `save_if_exists=True`.
+        save_if_exists: If `False` and file already exists, will not save any file, otherwise will save according
+            to `overwrite_file`.
+
+    Returns:
+
+    """
+    format_array = ['png', 'pdf', 'svg', 'jpeg']
+    if format not in format_array:
+        raise ValueError(f'Format {format} is not supported, must be in {format_array}')
+
+    # If file_name contains a different format to `format`, use format in file_name
+    format_with_dot = '.' + format.replace(".", "")
+    for key in format_array:
+        if f".{key}" in file_name:
+            format_with_dot = f".{key}"
+
+    # Check to ensure don't have the format included twice
+    if format_with_dot in file_name:
+        file_name_use = file_name.replace(format_with_dot, '')
+    else:
+        file_name_use = file_name
+    file_path = os.path.join(output_dir, file_name_use + format_with_dot)
+    if os.path.isfile(file_path) and not save_if_exists:
+        return None
+    else:
+        if not overwrite_file:
+            # Add number to file name so does not overwrite existing file
+            i = 1
+            while os.path.isfile(file_path):
+                i += 1
+                file_path = os.path.join(output_dir, file_name_use + f'{i}{format_with_dot}')
+        fig.savefig(file_path, dpi=dpi, bbox_inches=bbox_inches, pad_inches=pad_inches)
+        return None
 
 
 def label_subplots(fig: plt.Figure, ax_list: Union[plt.Axes, List[plt.Axes]], labels: Optional[List[str]] = None,
@@ -27,7 +84,7 @@ def label_subplots(fig: plt.Figure, ax_list: Union[plt.Axes, List[plt.Axes]], la
     if isinstance(ax_list, plt.Axes):
         # If only provided one axes, make it into a list
         ax_list = [ax_list]
-    trans = mtransforms.ScaledTranslation(pos_x/72, pos_y/72, fig.dpi_scale_trans)
+    trans = mtransforms.ScaledTranslation(pos_x / 72, pos_y / 72, fig.dpi_scale_trans)
     if labels is None:
         labels = [f"{chr(ord('a') + i)})" for i in range(len(ax_list))]
     if len(labels) != len(ax_list):
