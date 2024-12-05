@@ -114,6 +114,54 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     return coefs
 
 
+def resample_data(time: np.ndarray, x: np.ndarray, y: np.ndarray, x_return: Optional[np.ndarray] = None,
+                  n_return: int = 360, bc_type: str = 'periodic',
+                  extrapolate: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Given that `x[i]` and `y[i]` both occur at time `time[i]`, this resamples data to return values of `y`
+    corresponding to `x_return`.
+
+    Args:
+        time: `float [n_time]`</br>
+            Times such that `x[i]` and `y[i]` correspond to time `time[i]`.
+        x: `float [n_time]`</br>
+            Value of variable $x$ at each time.
+        y: `float [n_time]`</br>
+            Value of variable $y$ at each time.
+        x_return: `float [n_return]`</br>
+            Values of $x$ for the resampled $y$ data to be returned. If not provided, will use
+            `np.linspace(x.min(), x.max(), n_return)`.
+        n_return: Number of resampled data if `x_return` is not provided.
+        bc_type: Boundary condition type in `scipy.interpolate.CubicSpline`.
+        extrapolate: Whether to extrapolate if any `x_return` outside`x` is provided.
+
+    Returns:
+        times_return: `float [n_return_out]`</br>
+            Times corresponding to `x_return`. Not necessarily `n_return` values because can have multiple $y$
+            values for each $x$.
+        x_return_out: `float [n_return_out]`</br>
+            $x$ values corresponding to `times_return`. Will only contain values in `x_return`, but may contain
+            multiple of each.
+        y_return: `float [n_return_out]`</br>
+            $y$ values corresponding to `times_return` and `x_return_out`.
+    """
+    if 'periodic' in bc_type:
+        x_spline = CubicSpline(np.append(time, [time[-1]+1]), np.append(x, x[0]),
+                               bc_type=bc_type)
+        y_spline = CubicSpline(np.append(time, [time[-1]+1]), np.append(y, y[0]),
+                               bc_type=bc_type)
+    else:
+        x_spline = CubicSpline(time, x, bc_type=bc_type)
+        y_spline = CubicSpline(time, y, bc_type=bc_type)
+    if x_return is None:
+        x_return = np.linspace(x.min(), x.max(), n_return)
+    times_return = []
+    for i in range(x_return.size):
+        times_return+= [*x_spline.solve(x_return[i], extrapolate=extrapolate)]
+    times_return = np.asarray(times_return)
+    return times_return, x_spline(times_return), y_spline(times_return)
+
+
 def spline_integral(x: np.ndarray, dy_dx: np.ndarray, y0: float = 0, x0: Optional[float] = None,
                     x_return: Optional[np.ndarray] = None,
                     periodic: bool = False) -> np.ndarray:
