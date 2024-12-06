@@ -5,26 +5,26 @@ from typing import Optional, Tuple
 import warnings
 
 
-def apply_polyfit(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
-    """
-    Given the polynomial coefficients found by `np.polyfit` for fitting a polynomial
-    of degree `len(polyfit)-1` of $x$ to $y$, this will return the approximation of $y$:
-
-    $y_{approx} = \sum_{n=0}^{n_{deg}} \lambda_n x^n$
-
-    where $\lambda_n=$`poly_coefs[-1-n]`.
-
-    Args:
-        x: `float [n_x]`</br>
-            $x$ coordinates used to approximate $y$.
-        poly_coefs: `float [n_deg+1]`</br>
-            Polynomial coefficients as output by `np.polyfit`, lowest power last.</br>
-
-    Returns:
-        y_approx: `float [n_x]`</br>
-            Polynomial approximation to $y$.
-    """
-    return np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs))], axis=0)
+# def apply_polyfit(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
+#     """
+#     Given the polynomial coefficients found by `np.polyfit` for fitting a polynomial
+#     of degree `len(polyfit)-1` of $x$ to $y$, this will return the approximation of $y$:
+#
+#     $y_{approx} = \sum_{n=0}^{n_{deg}} \lambda_n x^n$
+#
+#     where $\lambda_n=$`poly_coefs[-1-n]`.
+#
+#     Args:
+#         x: `float [n_x]`</br>
+#             $x$ coordinates used to approximate $y$.
+#         poly_coefs: `float [n_deg+1]`</br>
+#             Polynomial coefficients as output by `np.polyfit`, lowest power last.</br>
+#
+#     Returns:
+#         y_approx: `float [n_x]`</br>
+#             Polynomial approximation to $y$.
+#     """
+#     return np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs))], axis=0)
 
 
 def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
@@ -32,7 +32,7 @@ def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
     Given the polynomial coefficients found by `polyfit_phase` for fitting a polynomial
     of degree `len(polyfit)-2` of $x$ to $y$, this will return the approximation of $y$:
 
-    $y_{approx} = \lambda_{phase} x(t-T/4) + \sum_{n=0}^{n_{deg}} \lambda_n x^n$
+    $y_{approx} = \\frac{1}{2} \lambda_{phase}(x(t-T/4) - x(t+T/4)) + \sum_{n=0}^{n_{deg}} \lambda_n x^n$
 
     where $\lambda_n=$`poly_coefs[-1-n]`, $\lambda_{phase}=$`poly_coefs[0]` and
     $x$ is assumed periodic with period $T=$.
@@ -49,7 +49,8 @@ def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
             Polynomial approximation to $y$.
     """
     # In this case, poly_coefs are output of polyfit_with_phase so first coefficient is the phase coefficient
-    y_approx = np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs) - 1)], axis=0)
+    y_approx = np.polyval(poly_coefs[1:], x)
+    # y_approx = np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs) - 1)], axis=0)
     # time_spacing = np.median(np.ediff1d(time))
     # x_spline_fit = CubicSpline(np.append(time, time[-1] + time_spacing), np.append(x, x[0]),
     #                            bc_type='periodic')
@@ -57,17 +58,18 @@ def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
     shift_n_elements = int(np.round(x.size / 4))
     if shift_n_elements != x.size / 4:
         warnings.warn('Cannot shift by whole number of elements - may be better using spline')
-    return y_approx + poly_coefs[0] * np.roll(x, shift_n_elements)
+    x_shift = 0.5 * (np.roll(x, shift_n_elements) - np.roll(x, -shift_n_elements))
+    return y_approx + poly_coefs[0] * x_shift
 
 
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
-                  deg: int, time: np.ndarray,
+                  deg: int,
                   deg_phase_calc: int = 10) -> np.ndarray:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
     but also includes additional phase shift term such that the total approximation for y is:
 
-    $y_{approx} = \lambda_{phase} x(t-T/4) + \sum_{n=0}^{n_{deg}} \lambda_n x^n$
+    $y_{approx} = \\frac{1}{2} \lambda_{phase}(x(t-T/4) - x(t+T/4)) + \sum_{n=0}^{n_{deg}} \lambda_n x^n$
 
     where $\lambda_n=$`poly_coefs[-1-n]` and $\lambda_{phase}=$`poly_coefs[0]`.
     $x$ is assumed periodic with period $T=$`time[-1]-time[0]+time_spacing`.
@@ -84,10 +86,6 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         y: `float [n_x]`</br>
             $y$ coordinate correesponding to each $x$.
         deg: Degree of the fitting polynomial.
-        time: `float [n_x]`</br>
-            $x$ has the value `x[i]` at time `time[i]`. If `time` is provided, assumes $x$ is periodic
-            such that $x$ at $t=$`time[-1]+time_spacing` is equal to `x[0]`.
-            Also assumes `time_spacing` is a constant.
         deg_phase_calc: Degree of the fitting polynomial to use in the phase term calculation.
             Should be a large integer.
 
@@ -107,8 +105,9 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     shift_n_elements = int(np.round(x.size / 4))
     if shift_n_elements != x.size / 4:
         warnings.warn('Cannot shift by whole number of elements - may be better using spline')
-    y_best_polyfit = apply_polyfit(x, np.polyfit(x, y, deg_phase_calc))
-    coefs[0] = np.linalg.lstsq(np.roll(x, shift_n_elements)[:, np.newaxis], y - y_best_polyfit, rcond=-1)[0][0]
+    y_best_polyfit = np.polyval(np.polyfit(x, y, deg_phase_calc), x)
+    x_shift = 0.5 * (np.roll(x, shift_n_elements) - np.roll(x, -shift_n_elements))[:, np.newaxis]
+    coefs[0] = np.linalg.lstsq(x_shift, y - y_best_polyfit, rcond=-1)[0][0]
     y_no_phase = y - apply_polyfit_phase(x, coefs)  # residual after removing phase dependent term
     coefs[1:] = np.polyfit(x, y_no_phase, deg)
     return coefs
