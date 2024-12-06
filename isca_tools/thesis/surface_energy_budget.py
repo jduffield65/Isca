@@ -75,7 +75,7 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         dtemp_dt_fourier = fourier.fourier_series_deriv(time_array, time_array.size, fourier_amp_coef,
                                                         fourier_phase_coef, day_seconds)
         if phase_gamma_fit:
-            gamma_approx = numerical.apply_polyfit_phase(temp_anom_fourier, gamma_approx_coefs)
+            gamma_approx = numerical.polyval_phase(temp_anom_fourier, gamma_approx_coefs)
         else:
             gamma_approx = numerical.apply_polyfit(temp_anom_fourier, gamma_approx_coefs)
         return heat_capacity * dtemp_dt_fourier + gamma_approx

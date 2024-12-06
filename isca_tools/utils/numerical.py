@@ -5,29 +5,59 @@ from typing import Optional, Tuple
 import warnings
 
 
-# def apply_polyfit(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
-#     """
-#     Given the polynomial coefficients found by `np.polyfit` for fitting a polynomial
-#     of degree `len(polyfit)-1` of $x$ to $y$, this will return the approximation of $y$:
-#
-#     $y_{approx} = \sum_{n=0}^{n_{deg}} \lambda_n x^n$
-#
-#     where $\lambda_n=$`poly_coefs[-1-n]`.
-#
-#     Args:
-#         x: `float [n_x]`</br>
-#             $x$ coordinates used to approximate $y$.
-#         poly_coefs: `float [n_deg+1]`</br>
-#             Polynomial coefficients as output by `np.polyfit`, lowest power last.</br>
-#
-#     Returns:
-#         y_approx: `float [n_x]`</br>
-#             Polynomial approximation to $y$.
-#     """
-#     return np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs))], axis=0)
+def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: Optional[float]=None,
+                time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
+                time_end: Optional[float] = None) -> np.ndarray:
+    """
+    Returns the periodic variable $x(t-t_{shift})$ where $t$=`time`, and $t_{shift}=$`shift_time`.
+    If `shift_phase` is provided, will set `shift_time = shift_phase * period`.
+
+    Args:
+        x: `float [n_x]`</br>
+            $x$ variable such that `x[i]` is the value of $x$ at time `time[i]`.
+        shift_time: How much to shift $x$ by in units of `time`.
+        shift_phase: Fraction of period to shift $x$ by.
+        time: `float [n_x]`</br>
+            Time such that `x[i]` is $x$ at time `time[i]`.</n>
+            If `time` provided, will use spline to apply shift to $x$.</n>
+            If `time` not provided, assume time is `np.arange(n_x)`, and will use `np.roll` to apply shift to $x$.
+        time_start: Start time such that period is given by `time_end - time_start + 1`.
+            If not provided, will set to min value in `time`.
+        time_end: End time such that period is given by `time_end - time_start + 1`.
+            If not provided, will set to max value in `time`.
+
+    Returns:
+        x_shift: `float [n_x]`</br>
+            $x$ variable shifted in time such that `x_shift[i]` is value of $x$ at time `time[i] - shift_time`.
+    """
+    if time is not None:
+        ind = np.argsort(time)
+        if time_start is None:
+            time_start = time[ind][0]
+        if time_end is None:
+            time_end = time[ind][-1]
+        if time[ind][0] < time_start:
+            raise ValueError(f'Min time={time[ind][0]} is less than time_start={time_start}')
+        if time[ind][-1] > time_end:
+            raise ValueError(f'Max time={time[ind][-1]} is greater than time_end={time_end}')
+        x_spline_fit = CubicSpline(np.append(time[ind], time_end+time[ind][0]-time_start), np.append(x[ind], x[ind][0]),
+                                   bc_type='periodic')
+        period = time_end - time_start + 1
+        if shift_phase is not None:
+            shift_time = shift_phase * period
+        x_shift = x_spline_fit(time - shift_time)
+    else:
+        if shift_phase is not None:
+            shift_time = shift_phase * x.size
+        if int(np.round(shift_time)) != shift_time:
+            raise ValueError(f'shift_time={shift_time} is not a whole number - '
+                             f'may be better using spline by providing time.')
+        x_shift = np.roll(x, int(np.round(shift_time)))
+    return x_shift
 
 
-def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
+def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarray] = None,
+                  time_start: Optional[float] = None, time_end: Optional[float] = None) -> np.ndarray:
     """
     Given the polynomial coefficients found by `polyfit_phase` for fitting a polynomial
     of degree `len(polyfit)-2` of $x$ to $y$, this will return the approximation of $y$:
@@ -38,11 +68,19 @@ def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
     $x$ is assumed periodic with period $T=$.
 
     Args:
-        x: `float [n_x]`</br>
-            $x$ coordinates used to approximate $y$.
         poly_coefs: `float [n_deg+2]`</br>
             Polynomial coefficients as output by `polyfit_phase`, lowest power last.</br>
             $\lambda_{phase}=$`poly_coefs[0]` and $\lambda_n=$`poly_coefs[-1-n]`.
+        x: `float [n_x]`</br>
+            $x$ coordinates used to approximate $y$.
+        time: `float [n_x]`</br>
+            Time such that `x[i]` is $x$ at time `time[i]`.</n>
+            If `time` provided, will use spline to apply shift to $x$.</n>
+            If `time` not provided, assume time is `np.arange(n_x)`, and will use `np.roll` to apply shift to $x$.
+        time_start: Start time such that period is given by `time_end - time_start + 1`.
+            If not provided, will set to min value in `time`.
+        time_end: End time such that period is given by `time_end - time_start + 1`.
+            If not provided, will set to max value in `time`.
 
     Returns:
         y_approx: `float [n_x]`</br>
@@ -50,20 +88,14 @@ def apply_polyfit_phase(x: np.ndarray, poly_coefs: np.ndarray) -> np.ndarray:
     """
     # In this case, poly_coefs are output of polyfit_with_phase so first coefficient is the phase coefficient
     y_approx = np.polyval(poly_coefs[1:], x)
-    # y_approx = np.sum([poly_coefs[-i - 1] * x ** i for i in range(len(poly_coefs) - 1)], axis=0)
-    # time_spacing = np.median(np.ediff1d(time))
-    # x_spline_fit = CubicSpline(np.append(time, time[-1] + time_spacing), np.append(x, x[0]),
-    #                            bc_type='periodic')
-    # period_length = time[-1] - time[0] + time_spacing
-    shift_n_elements = int(np.round(x.size / 4))
-    if shift_n_elements != x.size / 4:
-        warnings.warn('Cannot shift by whole number of elements - may be better using spline')
-    x_shift = 0.5 * (np.roll(x, shift_n_elements) - np.roll(x, -shift_n_elements))
+    x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
+                     get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
     return y_approx + poly_coefs[0] * x_shift
 
 
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
-                  deg: int,
+                  deg: int, time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
+                  time_end: Optional[float] = None,
                   deg_phase_calc: int = 10) -> np.ndarray:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
@@ -74,18 +106,27 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     where $\lambda_n=$`poly_coefs[-1-n]` and $\lambda_{phase}=$`poly_coefs[0]`.
     $x$ is assumed periodic with period $T=$`time[-1]-time[0]+time_spacing`.
 
-    The phase component, `y_phase=`$\lambda_{phase} x(t-T/4)$, is found first from the residual of $y-y_{best}$,
-    where $y_{best}$ is the polynomial approximation of degree `deg_phase_calc`.
+    The phase component, $y_{phase}=\\frac{1}{2} \lambda_{phase}(x(t-T/4) - x(t+T/4))$, is found first from the
+    residual of $y-y_{best}$, where $y_{best}$ is the polynomial approximation of degree `deg_phase_calc`.
 
     $\sum_{n=0}^{n_{deg}} \lambda_n x^n$ is then found by doing the normal polynomial approximation of degree
     `deg` to the residual $y-y_{phase}$.
 
     Args:
         x: `float [n_x]`</br>
-            $x$ coordinates used to approximate $y$.
+            $x$ coordinates used to approximate $y$. `x[i]` is value at time `time[i]`.
+            .
         y: `float [n_x]`</br>
             $y$ coordinate correesponding to each $x$.
-        deg: Degree of the fitting polynomial.
+        deg: Degree of the fitting polynomial. If negative, will only do the phase fitting.
+        time: `float [n_x]`</br>
+            Time such that `x[i]` is $x$ and `y[i]` is $y$ at time `time[i]`.</n>
+            If time provided, will use spline to apply phase shift to $x$.</n>
+            If time not provided, assume time is `np.arange(n_x)`, and will use `np.roll` to apply phase shift to $x$.
+        time_start: Start time such that period is given by `time_end - time_start + 1`.
+            If not provided, will set to min value in `time`.
+        time_end: End time such that period is given by `time_end - time_start + 1`.
+            If not provided, will set to max value in `time`.
         deg_phase_calc: Degree of the fitting polynomial to use in the phase term calculation.
             Should be a large integer.
 
@@ -93,23 +134,14 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         poly_coefs: `float [n_deg+2]`
             Polynomial coefficients, phase first and then normal output of `np.polyfit` with lowest power last.
     """
-    coefs = np.zeros(deg + 2)  # last coef is phase coef
-    # time_spacing = np.median(np.ediff1d(time))
-    # x_spline_fit = CubicSpline(np.append(time, time[-1] + time_spacing), np.append(x, x[0]),
-    #                            bc_type='periodic')
-    # y_best_polyfit = apply_polyfit(x, np.polyfit(x, y, deg_phase_calc))
-    # period_length = time[-1] - time[0] + time_spacing
-    # # Use linalg to find coefficient not polyfit as know 0th order coefficient is 0 i.e. want y=mx not y=mx+c
-    # coefs[0] = np.linalg.lstsq(x_spline_fit(time - period_length / 4)[:, np.newaxis], y - y_best_polyfit,
-    #                            rcond=-1)[0][0]
-    shift_n_elements = int(np.round(x.size / 4))
-    if shift_n_elements != x.size / 4:
-        warnings.warn('Cannot shift by whole number of elements - may be better using spline')
+    coefs = np.zeros(np.clip(deg, 0, 1000) + 2)  # first coef is phase coef
     y_best_polyfit = np.polyval(np.polyfit(x, y, deg_phase_calc), x)
-    x_shift = 0.5 * (np.roll(x, shift_n_elements) - np.roll(x, -shift_n_elements))[:, np.newaxis]
-    coefs[0] = np.linalg.lstsq(x_shift, y - y_best_polyfit, rcond=-1)[0][0]
-    y_no_phase = y - apply_polyfit_phase(x, coefs)  # residual after removing phase dependent term
-    coefs[1:] = np.polyfit(x, y_no_phase, deg)
+    x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
+                     get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
+    coefs[[0, -1]] = np.polyfit(x_shift, y - y_best_polyfit, 1)
+    y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
+    if deg >= 0:
+        coefs[1:] += np.polyfit(x, y_no_phase, deg)
     return coefs
 
 
@@ -122,7 +154,8 @@ def resample_data(time: np.ndarray, x: np.ndarray, y: np.ndarray, x_return: Opti
 
     Args:
         time: `float [n_time]`</br>
-            Times such that `x[i]` and `y[i]` correspond to time `time[i]`.
+            Times such that `x[i]` and `y[i]` correspond to time `time[i]`. It assumes time has a spacing of 1, and
+            starts with 0, so for a 360-day year, it would be `np.arange(360)`.
         x: `float [n_time]`</br>
             Value of variable $x$ at each time.
         y: `float [n_time]`</br>
@@ -157,7 +190,7 @@ def resample_data(time: np.ndarray, x: np.ndarray, y: np.ndarray, x_return: Opti
     times_return = []
     for i in range(x_return.size):
         times_return+= [*x_spline.solve(x_return[i], extrapolate=extrapolate)]
-    times_return = np.asarray(times_return)
+    times_return = np.asarray(times_return) % time[-1]      # make return times between 0 and time[-1]
     return times_return, x_spline(times_return), y_spline(times_return)
 
 
