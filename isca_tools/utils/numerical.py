@@ -2,7 +2,6 @@ import numpy as np
 import scipy.ndimage
 from scipy.interpolate import CubicSpline
 from typing import Optional, Tuple
-import warnings
 
 
 def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: Optional[float]=None,
@@ -40,7 +39,7 @@ def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: 
             raise ValueError(f'Min time={time[ind][0]} is less than time_start={time_start}')
         if time[ind][-1] > time_end:
             raise ValueError(f'Max time={time[ind][-1]} is greater than time_end={time_end}')
-        x_spline_fit = CubicSpline(np.append(time[ind], time_end+time[ind][0]-time_start), np.append(x[ind], x[ind][0]),
+        x_spline_fit = CubicSpline(np.append(time[ind], time_end+time[ind][0]-time_start+1), np.append(x[ind], x[ind][0]),
                                    bc_type='periodic')
         period = time_end - time_start + 1
         if shift_phase is not None:
@@ -96,7 +95,8 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
                   deg: int, time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
                   time_end: Optional[float] = None,
-                  deg_phase_calc: int = 10) -> np.ndarray:
+                  deg_phase_calc: int = 10, resample: bool = False, norm: bool = True,
+                  include_phase: bool = True) -> np.ndarray:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
     but also includes additional phase shift term such that the total approximation for y is:
@@ -115,7 +115,6 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     Args:
         x: `float [n_x]`</br>
             $x$ coordinates used to approximate $y$. `x[i]` is value at time `time[i]`.
-            .
         y: `float [n_x]`</br>
             $y$ coordinate correesponding to each $x$.
         deg: Degree of the fitting polynomial. If negative, will only do the phase fitting.
@@ -129,24 +128,102 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             If not provided, will set to max value in `time`.
         deg_phase_calc: Degree of the fitting polynomial to use in the phase term calculation.
             Should be a large integer.
+        resample: If `True`, will use `resample_data_distance` to resample x and y before each calling of
+            `np.polyfit`.
+        norm: Input for `resample_data_distance`. If `True`, will normalise $x$ and $y$ so have same range before
+            resampling.
+        include_phase: If `False`, will only call `np.polyfit`, but first return value will be 0 indicating
+            no phase shift. Only makes sense to call this rather than `np.polyfit` if you want to use `resample`.
 
     Returns:
         poly_coefs: `float [n_deg+2]`
             Polynomial coefficients, phase first and then normal output of `np.polyfit` with lowest power last.
     """
     coefs = np.zeros(np.clip(deg, 0, 1000) + 2)  # first coef is phase coef
-    y_best_polyfit = np.polyval(np.polyfit(x, y, deg_phase_calc), x)
-    x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
-                     get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
-    coefs[[0, -1]] = np.polyfit(x_shift, y - y_best_polyfit, 1)
-    y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
-    if deg >= 0:
-        coefs[1:] += np.polyfit(x, y_no_phase, deg)
+    if resample:
+        x_fit, y_fit = resample_data_distance(time, x, y, norm=norm)[1:]
+    else:
+        x_fit = x
+        y_fit = y
+    if not include_phase:
+        coefs[1:] = np.polyfit(x_fit, y_fit, deg)       # don't do phase stuff so 1st value is 0
+    else:
+        y_best_polyfit = np.polyval(np.polyfit(x_fit, y_fit, deg_phase_calc), x)
+        x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
+                         get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
+        if resample:
+            x_shift_fit, y_residual_fit = resample_data_distance(time, x_shift, y - y_best_polyfit, norm=norm)[1:]
+        else:
+            x_shift_fit = x_shift
+            y_residual_fit = y - y_best_polyfit
+        coefs[[0, -1]] = np.polyfit(x_shift_fit, y_residual_fit, 1)
+        y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
+        if deg >= 0:
+            if resample:
+                x_fit, y_no_phase_fit = resample_data_distance(time, x, y_no_phase, norm=norm)[1:]
+            else:
+                x_fit = x
+                y_no_phase_fit = y_no_phase
+            coefs[1:] += np.polyfit(x_fit, y_no_phase_fit, deg)
     return coefs
 
 
-def resample_data(time: np.ndarray, x: np.ndarray, y: np.ndarray, x_return: Optional[np.ndarray] = None,
-                  n_return: int = 360, bc_type: str = 'periodic',
+def resample_data_distance(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, n_return: Optional[int] = None,
+                           bc_type: str = 'periodic', norm: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Given that `x[i]` and `y[i]` both occur at time `time[i]`, this resamples data to return `n_return` values of
+    $x$ and $y$ evenly spaced along the line connecting all (x, y) coordinates.
+
+    Args:
+        time: `float [n_time]`</br>
+            Times such that `x[i]` and `y[i]` correspond to time `time[i]`.</br>
+            If time not provided, assume time is `np.arange(n_x)`.
+        x: `float [n_time]`</br>
+            Value of variable $x$ at each time.
+        y: `float [n_time]`</br>
+            Value of variable $y$ at each time.
+        n_return:  Number of resampled data, will set to `n_time` if not provided.
+        bc_type: Boundary condition type in `scipy.interpolate.CubicSpline` for `x` and `y`.
+        norm: If `True` will normalize `x` and `y` so both have a range of 1, before calculating distance along line.
+
+    Returns:
+        times_return: `float [n_return]`</br>
+            Times of returned $x$ and $y$ such that they are evenly spaced along line connecting all input
+            (x, y) coordinates.
+        x_return_out: `float [n_return_out]`</br>
+            $x$ values corresponding to `times_return`.
+        y_return: `float [n_return_out]`</br>
+            $y$ values corresponding to `times_return` and `x_return`.
+    """
+    if n_return is None:
+        n_return = x.size
+    if time is None:
+        time = np.arange(x.size)
+    time_spacing = np.median(np.ediff1d(time))
+    # dist[i] is distance along line from (x[0], y[0]) at time=time[i]
+    if norm:
+        coords_dist_calc = np.vstack((x / (np.max(x) - np.min(x)), y / (np.max(y) - np.min(y))))
+    else:
+        coords_dist_calc = np.vstack((x, y))
+    dist = np.append(0, np.cumsum(np.sqrt(np.sum(np.diff(coords_dist_calc, axis=1) ** 2, axis=0))))
+    x_spline = CubicSpline(np.append(time, [time[-1] + time_spacing]), np.append(x, x[0]),
+                                             bc_type=bc_type)
+    y_spline = CubicSpline(np.append(time, [time[-1] + time_spacing]), np.append(y, y[0]),
+                                             bc_type=bc_type)
+    dist_spline = CubicSpline(time, dist)
+    dist_return = np.linspace(dist[0], dist[-1], n_return)
+    # Adjust first and last values by tiny amount, to ensure that within the range when trying to solve
+    small = 0.0001 * (dist_return[1]-dist_return[0])
+    dist_return[0] += small
+    dist_return[-1] -= small
+    time_resample = np.zeros(n_return)
+    for i in range(n_return):
+        time_resample[i] = dist_spline.solve(dist_return[i], extrapolate=False)[0]
+    return time_resample, x_spline(time_resample), y_spline(time_resample)
+
+
+def resample_data(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, x_return: Optional[np.ndarray] = None,
+                  n_return: Optional[int] = None, bc_type: str = 'periodic',
                   extrapolate: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Given that `x[i]` and `y[i]` both occur at time `time[i]`, this resamples data to return values of `y`
@@ -163,7 +240,8 @@ def resample_data(time: np.ndarray, x: np.ndarray, y: np.ndarray, x_return: Opti
         x_return: `float [n_return]`</br>
             Values of $x$ for the resampled $y$ data to be returned. If not provided, will use
             `np.linspace(x.min(), x.max(), n_return)`.
-        n_return: Number of resampled data if `x_return` is not provided.
+        n_return: Number of resampled data if `x_return` is not provided. Will set to `n_time` neither this
+            nor `x_return` provided.
         bc_type: Boundary condition type in `scipy.interpolate.CubicSpline`.
         extrapolate: Whether to extrapolate if any `x_return` outside`x` is provided.
 
@@ -177,10 +255,15 @@ def resample_data(time: np.ndarray, x: np.ndarray, y: np.ndarray, x_return: Opti
         y_return: `float [n_return_out]`</br>
             $y$ values corresponding to `times_return` and `x_return_out`.
     """
+    if n_return is None:
+        n_return = x.size
+    if time is None:
+        time = np.arange(x.size)
+    time_spacing = np.median(np.ediff1d(time))
     if 'periodic' in bc_type:
-        x_spline = CubicSpline(np.append(time, [time[-1]+1]), np.append(x, x[0]),
+        x_spline = CubicSpline(np.append(time, [time[-1]+time_spacing]), np.append(x, x[0]),
                                bc_type=bc_type)
-        y_spline = CubicSpline(np.append(time, [time[-1]+1]), np.append(y, y[0]),
+        y_spline = CubicSpline(np.append(time, [time[-1]+time_spacing]), np.append(y, y[0]),
                                bc_type=bc_type)
     else:
         x_spline = CubicSpline(time, x, bc_type=bc_type)
