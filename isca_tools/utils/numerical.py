@@ -95,7 +95,7 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
                   deg: int, time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
                   time_end: Optional[float] = None,
-                  deg_phase_calc: int = 10, resample: bool = False, norm: bool = True,
+                  deg_phase_calc: int = 10, resample: bool = False,
                   include_phase: bool = True) -> np.ndarray:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
@@ -128,10 +128,8 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             If not provided, will set to max value in `time`.
         deg_phase_calc: Degree of the fitting polynomial to use in the phase term calculation.
             Should be a large integer.
-        resample: If `True`, will use `resample_data_distance` to resample x and y before each calling of
+        resample: If `True`, will use `resample_data` to resample x and y before each calling of
             `np.polyfit`.
-        norm: Input for `resample_data_distance`. If `True`, will normalise $x$ and $y$ so have same range before
-            resampling.
         include_phase: If `False`, will only call `np.polyfit`, but first return value will be 0 indicating
             no phase shift. Only makes sense to call this rather than `np.polyfit` if you want to use `resample`.
 
@@ -141,7 +139,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     """
     coefs = np.zeros(np.clip(deg, 0, 1000) + 2)  # first coef is phase coef
     if resample:
-        x_fit, y_fit = resample_data_distance(time, x, y, norm=norm)[1:]
+        x_fit, y_fit = resample_data(time, x, y)[1:]
     else:
         x_fit = x
         y_fit = y
@@ -152,7 +150,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
                          get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
         if resample:
-            x_shift_fit, y_residual_fit = resample_data_distance(time, x_shift, y - y_best_polyfit, norm=norm)[1:]
+            x_shift_fit, y_residual_fit = resample_data(time, x_shift, y - y_best_polyfit)[1:]
         else:
             x_shift_fit = x_shift
             y_residual_fit = y - y_best_polyfit
@@ -160,7 +158,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
         if deg >= 0:
             if resample:
-                x_fit, y_no_phase_fit = resample_data_distance(time, x, y_no_phase, norm=norm)[1:]
+                x_fit, y_no_phase_fit = resample_data(time, x, y_no_phase)[1:]
             else:
                 x_fit = x
                 y_no_phase_fit = y_no_phase
@@ -272,7 +270,7 @@ def resample_data(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, x_re
         x_return = np.linspace(x.min(), x.max(), n_return)
     times_return = []
     for i in range(x_return.size):
-        times_return+= [*x_spline.solve(x_return[i], extrapolate=extrapolate)]
+        times_return += [*x_spline.solve(x_return[i], extrapolate=extrapolate)]
     times_return = np.asarray(times_return) % time[-1]      # make return times between 0 and time[-1]
     return times_return, x_spline(times_return), y_spline(times_return)
 
