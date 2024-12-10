@@ -4,7 +4,7 @@ from scipy.interpolate import CubicSpline
 import scipy.integrate
 
 
-def fourier_series(time: np.ndarray, period: float, coefs_amp: Union[List[float], np.ndarray],
+def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
                    coefs_phase: Union[List[float], np.ndarray]) -> np.ndarray:
     """
     For $N$ harmonics, the fourier series with frequency $f$ is:
@@ -13,8 +13,8 @@ def fourier_series(time: np.ndarray, period: float, coefs_amp: Union[List[float]
 
     Args:
         time: `float [n_time]`</br>
-            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`)
-        period: Period of fourier series in days, $1/f$
+            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`) covering entire period
+            such that period is `time[-1] - time[0] + 1`.
         coefs_amp: `float [N+1]`</br>
             The amplitude coefficients, $F_n$
         coefs_phase: `float [N]`</br>
@@ -24,6 +24,7 @@ def fourier_series(time: np.ndarray, period: float, coefs_amp: Union[List[float]
         `float [n_time]`</br>
             Value of Fourier series solution at each time
     """
+    period = time[-1] - time[0] + 1
     n_harmonics = len(coefs_amp)
     ans = 0.5 * coefs_amp[0]
     for n in range(1, n_harmonics):
@@ -31,7 +32,7 @@ def fourier_series(time: np.ndarray, period: float, coefs_amp: Union[List[float]
     return ans
 
 
-def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: Union[np.ndarray, List[float]],
+def fourier_series_deriv(time: np.ndarray, coefs_amp: Union[np.ndarray, List[float]],
                          coefs_phase: Union[np.ndarray, List[float]], day_seconds: float = 86400) -> np.ndarray:
     """
     For $N$ harmonics, the derivative of a fourier series with frequency $f$ is:
@@ -40,8 +41,8 @@ def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: Union[np.nd
 
     Args:
         time: `float [n_time]`</br>
-            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`)
-        period: Period of fourier series in days, $1/f$
+            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`) covering entire period
+            such that period is `time[-1] - time[0] + 1`.
         coefs_amp: `float [N+1]`</br>
             The amplitude coefficients, $F_n$. $F_0$ needs to be provided even though it is not used.
         coefs_phase: `float [N]`</br>
@@ -52,6 +53,7 @@ def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: Union[np.nd
         `float [n_time]`</br>
             Value of derivative to Fourier series solution at each time. Units is units of $F$ divided by seconds.
     """
+    period = time[-1] - time[0] + 1
     n_harmonics = len(coefs_amp)
     ans = np.zeros_like(time, dtype=float)
     for n in range(1, n_harmonics):
@@ -59,7 +61,7 @@ def fourier_series_deriv(time: np.ndarray, period: float, coefs_amp: Union[np.nd
     return ans / day_seconds     # convert units from per day to per second
 
 
-def get_fourier_coef(time: np.ndarray, var: np.ndarray, period: float, n: int,
+def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
                      integ_method: str = 'spline') -> [Union[float, Tuple[float, float]]]:
     """
     This calculates the analytic solution for the amplitude and phase coefficients for the `n`th harmonic
@@ -67,10 +69,10 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, period: float, n: int,
 
     Args:
         time: `float [n_time]`</br>
-            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`)
+            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`) covering entire period
+            such that period is `time[-1] - time[0] + 1`.
         var: `float [n_time]`</br>
             Variable to fit fourier series to.
-        period: Period of fourier series in days, $1/f$
         n: Harmonic to find coefficients for, if 0, will just return amplitude coefficient.
             Otherwise, will return an amplitude and phase coefficient.
         integ_method: How to perform the integration.</br>
@@ -82,6 +84,7 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, period: float, n: int,
     # Computes the analytical fourier coefficients for the n harmonic of a given function
     # With integrate method = spline works very well i.e. fit spline then use spline.integrate functionality
     # Otherwise, there are problems with the integration especially at the limits e.g. t=0 and t=T.
+    period = time[-1] - time[0] + 1
     if integ_method == 'spline':
         var = np.append(var, var[0])
         time = np.append(time, time[-1]+1)
@@ -110,7 +113,7 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, period: float, n: int,
         return amp_coef, phase_coef
 
 
-def get_fourier_fit(time: np.ndarray, var: np.ndarray, period: float, n_harmonics: int,
+def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
                     integ_method: str = 'spline') -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Obtains the Fourier series solution for $F=$`var`, using $N=$`n_harmonics`:
@@ -119,10 +122,10 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, period: float, n_harmonic
 
     Args:
         time: `float [n_time]`</br>
-            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`)
+            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`) covering entire period
+            such that period ($1/f$) is `time[-1] - time[0] + 1`.
         var: `float [n_time]`</br>
             Variable to fit fourier series to.
-        period: Period of fourier series in days, $1/f$
         n_harmonics: Number of harmonics to use to fit fourier series, $N$.
         integ_method: How to perform the integration when obtaining Fourier coefficients.</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
@@ -136,12 +139,13 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, period: float, n_harmonic
             The phase Fourier coefficients $\\Phi_n$.
     """
     # Returns the fourier fit of a function using a given number of harmonics
+    period = time[-1] - time[0] + 1
     amp_coefs = np.zeros(n_harmonics+1)
     phase_coefs = np.zeros(n_harmonics)
-    amp_coefs[0] = get_fourier_coef(time, var, period, 0, integ_method)
+    amp_coefs[0] = get_fourier_coef(time, var, 0, integ_method)
     for i in range(1, n_harmonics+1):
-        amp_coefs[i], phase_coefs[i-1] = get_fourier_coef(time, var, period, i, integ_method)
-    return fourier_series(time, period, amp_coefs, phase_coefs), amp_coefs, phase_coefs
+        amp_coefs[i], phase_coefs[i-1] = get_fourier_coef(time, var, i, integ_method)
+    return fourier_series(time, amp_coefs, phase_coefs), amp_coefs, phase_coefs
 
 
 def coef_conversion(amp_coef: Optional[Union[float, np.ndarray]] = None,

@@ -9,7 +9,7 @@ from typing import Optional, Tuple, Union
 def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: np.ndarray,
                                swdn_sfc: np.ndarray, heat_capacity: float,
                                n_harmonics: int = 2, deg_gamma_fit: int = 8, phase_gamma_fit: bool = True,
-                               day_seconds: float = 86400) -> np.ndarray:
+                               resample: bool = False, day_seconds: float = 86400) -> np.ndarray:
     """
     This uses [`scipy.optimize.curve_fit`](
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html) to numerically seek
@@ -52,6 +52,8 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         n_harmonics: Number, $N$, of harmonics in fourier solution of temperature anomaly.
         deg_gamma_fit: Power, $N_{\Gamma}$, to go up to in polyomial approximation of $\Gamma^{\\uparrow}$ seeked.
         phase_gamma_fit: If `False` will set $\lambda_{phase}=0$. Otherwise will use `polyfit_phase` to estimate it.
+        resample: If `True`, will use [`resample_data`](../utils/numerical.md#isca_tools.utils.numerical.resample_data)
+            to make data evenly spaced in $x$ before calling `np.polyfit`, when obtaining $\Gamma$ coefficients.
         day_seconds: Duration of a day in seconds.
 
     Returns:
@@ -59,10 +61,8 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
             The Fourier series solution that was found for surface temperature anomaly.</br>
             Units: $K$.
     """
-    if phase_gamma_fit:
-        gamma_approx_coefs = numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, time)
-    else:
-        gamma_approx_coefs = np.polyfit(temp_anom, gamma, deg_gamma_fit)
+    gamma_approx_coefs = numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
+                                                 include_phase=phase_gamma_fit)
 
     def fit_func(time_array, *args):
         # first n_harmonic values in args are the temperature amplitude coefficients (excluding T_0)
@@ -71,13 +71,13 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         # make first coefficient 0 so gives anomaly
         fourier_amp_coef = np.append([0], fourier_amp_coef)
         fourier_phase_coef = np.asarray([args[i] for i in range(n_harmonics, len(args))])
-        temp_anom_fourier = fourier.fourier_series(time_array, time_array.size, fourier_amp_coef, fourier_phase_coef)
-        dtemp_dt_fourier = fourier.fourier_series_deriv(time_array, time_array.size, fourier_amp_coef,
+        temp_anom_fourier = fourier.fourier_series(time_array, fourier_amp_coef, fourier_phase_coef)
+        dtemp_dt_fourier = fourier.fourier_series_deriv(time_array, fourier_amp_coef,
                                                         fourier_phase_coef, day_seconds)
         if phase_gamma_fit:
-            gamma_approx = numerical.polyval_phase(temp_anom_fourier, gamma_approx_coefs)
+            gamma_approx = numerical.polyval_phase(gamma_approx_coefs, temp_anom_fourier)
         else:
-            gamma_approx = numerical.apply_polyfit(temp_anom_fourier, gamma_approx_coefs)
+            gamma_approx = np.polyval(gamma_approx_coefs, temp_anom_fourier)
         return heat_capacity * dtemp_dt_fourier + gamma_approx
 
     # Starting guess is linear 1 harmonic linear analytical solution given gamma=lambda_const_guess*temp
@@ -85,13 +85,13 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
     p0 = np.zeros(2 * n_harmonics)
     f = 1 / (time.size * day_seconds)
     p0[n_harmonics] = np.arctan((2 * np.pi * f * heat_capacity) / gamma_approx_coefs[-2])
-    sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, time.size, 1)[1]
+    sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, 1)[1]
     p0[0] = sw_fourier_amp[1] / np.cos(p0[n_harmonics]) / (
             (2 * np.pi * f * heat_capacity) * np.tan(p0[n_harmonics]) + gamma_approx_coefs[-2])
     args_found = optimize.curve_fit(fit_func, time, swdn_sfc, p0)[0]
     temp_fourier_amp = np.append([0], args_found[:n_harmonics])
     temp_fourier_phase = args_found[n_harmonics:]
-    return fourier.fourier_series(time, time.size, temp_fourier_amp, temp_fourier_phase)
+    return fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
 
 
 def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capacity: float,
@@ -183,7 +183,7 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
     sw_fourier_amp = np.zeros(n_harmonics_temp + 1)
     sw_fourier_phase = np.zeros(n_harmonics_temp)
     sw_fourier_amp[:n_harmonics_sw + 1], sw_fourier_phase[:n_harmonics_sw] = \
-        fourier.get_fourier_fit(time, swdn_sfc, n_year_days, n_harmonics_sw)[1:]
+        fourier.get_fourier_fit(time, swdn_sfc, n_harmonics_sw)[1:]
     if not include_sw_phase:
         sw_fourier_phase = np.zeros(n_harmonics_temp)
     sw_tan = np.tan(sw_fourier_phase)
@@ -222,7 +222,7 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
                 # so is just so don't divide by zero below - exact number not important
             sw_cos[1] -= 0.5 * lambda_sq * temp_fourier_amp[1] ** 2 * np.cos(2 * temp_fourier_phase[0]
                                                                              ) / sw_fourier_amp[2]
-    temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
+    temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
 
 
@@ -437,16 +437,16 @@ def swdn_from_temp_fourier(time: np.ndarray, temp_fourier_amp: np.ndarray, temp_
         if not hasattr(lambda_nl, "__len__"):
             lambda_nl = np.asarray([lambda_nl])
     n_year_days = len(time)
-    temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
+    temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
     if single_harmonic_nl:
-        temp_anom_nl = fourier.fourier_series(time, n_year_days, [0, temp_fourier_amp[1]],
+        temp_anom_nl = fourier.fourier_series(time, [0, temp_fourier_amp[1]],
                                               [temp_fourier_phase[0]])
         gamma = gamma_linear_approx(time, temp_fourier, lambda_const,
                                     lambda_time_lag, lambda_nl, temp_anom_nl)
     else:
         gamma = gamma_linear_approx(time, temp_fourier, lambda_const,
                                     lambda_time_lag, lambda_nl)
-    dtemp_dt = fourier.fourier_series_deriv(time, n_year_days, temp_fourier_amp, temp_fourier_phase, day_seconds)
+    dtemp_dt = fourier.fourier_series_deriv(time, temp_fourier_amp, temp_fourier_phase, day_seconds)
     return heat_capacity * dtemp_dt + gamma
 
 
@@ -548,10 +548,10 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
             raise ValueError(f'Size of lambda_time_lag should be {n_lambda} not {len(lambda_time_lag)}.')
 
     # Get fourier representation of SW radiation
-    sw_fourier_amp, sw_fourier_phase = fourier.get_fourier_fit(time, swdn, n_year_days, n_harmonics)[1:]
+    sw_fourier_amp, sw_fourier_phase = fourier.get_fourier_fit(time, swdn, n_harmonics)[1:]
     if not include_sw_phase:
         sw_fourier_phase = np.zeros(n_harmonics)
-    sw_fourier = fourier.fourier_series(time, n_year_days, sw_fourier_amp, sw_fourier_phase)
+    sw_fourier = fourier.fourier_series(time, sw_fourier_amp, sw_fourier_phase)
     sw_tan = np.tan(sw_fourier_phase)
     sw_cos = np.cos(sw_fourier_phase)
     sw_sin = np.sin(sw_fourier_phase)
@@ -623,8 +623,8 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
                 sw_cos[1] -= 0.5 * lambda_nl[0] * temp_fourier_amp[1] ** 2 * np.cos(2 * temp_fourier_phase[0]
                                                                                     ) / sw_fourier_amp[2]
     if return_anomaly:
-        temp_fourier = fourier.fourier_series(time, n_year_days, np.append([0], temp_fourier_amp[1:]),
+        temp_fourier = fourier.fourier_series(time, np.append([0], temp_fourier_amp[1:]),
                                               temp_fourier_phase)
     else:
-        temp_fourier = fourier.fourier_series(time, n_year_days, temp_fourier_amp, temp_fourier_phase)
+        temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
