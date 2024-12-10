@@ -9,16 +9,24 @@ from typing import Optional, Tuple, Union
 def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: np.ndarray,
                                swdn_sfc: np.ndarray, heat_capacity: float,
                                n_harmonics: int = 2, deg_gamma_fit: int = 8, phase_gamma_fit: bool = True,
-                               resample: bool = False, day_seconds: float = 86400) -> np.ndarray:
+                               resample: bool = False,
+                               gamma_fourier_term: bool = False,
+                               day_seconds: float = 86400) -> np.ndarray:
     """
     This uses [`scipy.optimize.curve_fit`](
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html) to numerically seek
-    a fourier solution of the form $T'(t) = \\sum_{n=1}^{N} T_n\\cos(2n\\pi ft - \\phi_n)$
+    a fourier solution of the form $T'(t) = \\sum_{n=1}^{N} T_n\\cos(2n\\pi t/\mathcal{T} - \\phi_n)$
     to the linearized surface energy budget of the general form:
 
     $$
-    C\\frac{\partial T'}{\partial t} = SW^{\\downarrow}(t) - \lambda_0 - \lambda_{phase}T'(t-\mathcal{T}/4) -
-    \\sum_{j=1}^{N_{\Gamma}}\lambda_j T'^{j}(t)
+    \\begin{align}
+    \\begin{split}
+    C\\frac{\partial T'}{\partial t} = &SW^{\\downarrow}(t) - \lambda_0 -
+    \\frac{1}{2}\lambda_{phase}(T'(t-\mathcal{T}/4) - T'(t+\mathcal{T}/4)) -  \\\\
+    &\\sum_{j=1}^{N_{\Gamma}}\lambda_j T'^{j}(t) - \\sum_{n=2}^N (\Lambda_{n, cos}\\cos(2n\\pi t/\mathcal{T}) +
+    \Lambda_{n, sin}\\sin(2n\\pi t/\mathcal{T}))
+    \\end{split}
+    \\end{align}
     $$
 
     where:
@@ -27,8 +35,10 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
     * $C$ is the heat capacity of the surface
     * $\overline{T} = T_0/2$ is the mean temperature.
     * $SW^{\downarrow}$ is the downward shortwave radiation at the surface, $SW^{\downarrow}$.
-    * $\lambda_0 - \lambda_{phase}T'(t-\mathcal{T}/4) - \\sum_{j=1}^{N_{\Gamma}}\lambda_j T'^{j}(t)$ is the
-    approximation for $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$
+    * $\lambda_0 + \\frac{1}{2}\lambda_{phase}(T'(t-\mathcal{T}/4) - T'(t+\mathcal{T}/4)) +
+    \\sum_{j=1}^{N_{\Gamma}}\lambda_j T'^{j}(t) +$</br>
+    $\\sum_{n=2}^N (\Lambda_{n, cos}\\cos(2n\\pi t/\mathcal{T}) + \Lambda_{n, sin}\\sin(2n\\pi t/\mathcal{T}))$
+    is the approximation for $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.
     * $\mathcal{T}$ is the period i.e. one year.
 
 
@@ -51,9 +61,16 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
             [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
         n_harmonics: Number, $N$, of harmonics in fourier solution of temperature anomaly.
         deg_gamma_fit: Power, $N_{\Gamma}$, to go up to in polyomial approximation of $\Gamma^{\\uparrow}$ seeked.
-        phase_gamma_fit: If `False` will set $\lambda_{phase}=0$. Otherwise will use `polyfit_phase` to estimate it.
+        phase_gamma_fit: If `False` will set $\lambda_{phase}=0$.
+            Otherwise, will use [`polyfit_phase`](../utils/numerical.md#isca_tools.utils.numerical.polyfit_phase)
+            to estimate it.
         resample: If `True`, will use [`resample_data`](../utils/numerical.md#isca_tools.utils.numerical.resample_data)
             to make data evenly spaced in $x$ before calling `np.polyfit`, when obtaining $\Gamma$ coefficients.
+        gamma_fourier_term: Whether to fit the Fourier contribution
+            $\\sum_{n=2}^N (\Lambda_{n, cos}\\cos(2n\\pi t/\mathcal{T}) + \Lambda_{n, sin}\\sin(2n\\pi t/\mathcal{T}))$
+             to $\Gamma^{\\uparrow}$ with `fourier_harmonics=np.arange(2, n_harmonics+1)` in
+            [`polyfit_phase`](../utils/numerical.md#isca_tools.utils.numerical.polyfit_phase). Idea behind this
+            is to account for contribution of $\Gamma^{\\uparrow}$ that is not temperature dependent.
         day_seconds: Duration of a day in seconds.
 
     Returns:
@@ -61,8 +78,15 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
             The Fourier series solution that was found for surface temperature anomaly.</br>
             Units: $K$.
     """
-    gamma_approx_coefs = numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
-                                                 include_phase=phase_gamma_fit)
+    if gamma_fourier_term and phase_gamma_fit:
+        gamma_approx_coefs, gamma_fourier_term_coefs_amp, gamma_fourier_term_coefs_phase = \
+            numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
+                                    include_phase=phase_gamma_fit, fourier_harmonics=np.arange(2, n_harmonics+1))
+    else:
+        gamma_approx_coefs = numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
+                                                     include_phase=phase_gamma_fit)
+        gamma_fourier_term_coefs_amp = None
+        gamma_fourier_term_coefs_phase = None
 
     def fit_func(time_array, *args):
         # first n_harmonic values in args are the temperature amplitude coefficients (excluding T_0)
@@ -75,7 +99,9 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         dtemp_dt_fourier = fourier.fourier_series_deriv(time_array, fourier_amp_coef,
                                                         fourier_phase_coef, day_seconds)
         if phase_gamma_fit:
-            gamma_approx = numerical.polyval_phase(gamma_approx_coefs, temp_anom_fourier)
+            gamma_approx = numerical.polyval_phase(gamma_approx_coefs, temp_anom_fourier,
+                                                   coefs_fourier_amp=gamma_fourier_term_coefs_amp,
+                                                   coefs_fourier_phase=gamma_fourier_term_coefs_phase)
         else:
             gamma_approx = np.polyval(gamma_approx_coefs, temp_anom_fourier)
         return heat_capacity * dtemp_dt_fourier + gamma_approx

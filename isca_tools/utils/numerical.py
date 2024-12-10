@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.ndimage
 from scipy.interpolate import CubicSpline
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
+import warnings
 from ..utils.fourier import get_fourier_coef, fourier_series
 
 
@@ -57,7 +58,9 @@ def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: 
 
 
 def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarray] = None,
-                  time_start: Optional[float] = None, time_end: Optional[float] = None) -> np.ndarray:
+                  time_start: Optional[float] = None, time_end: Optional[float] = None,
+                  coefs_fourier_amp: Optional[np.ndarray] = None,
+                  coefs_fourier_phase: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Given the polynomial coefficients found by `polyfit_phase` for fitting a polynomial
     of degree `len(polyfit)-2` of $x$ to $y$, this will return the approximation of $y$:
@@ -65,7 +68,11 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
     $y_{approx} = \\frac{1}{2} \lambda_{phase}(x(t-T/4) - x(t+T/4)) + \sum_{n=0}^{n_{deg}} \lambda_n x^n$
 
     where $\lambda_n=$`poly_coefs[-1-n]`, $\lambda_{phase}=$`poly_coefs[0]` and
-    $x$ is assumed periodic with period $T=$.
+    $x$ is assumed periodic with period $T$.
+
+    If `coefs_fourier_amp` is provided, then a fourier series will also be added to $y_{approx}$:
+
+    $y_{approx} + \\frac{F_0}{2} + \\sum_{n=1}^{N} F_n\\cos(2n\\pi ft - \\Phi_n)$
 
     Args:
         poly_coefs: `float [n_deg+2]`</br>
@@ -81,23 +88,33 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
             If not provided, will set to min value in `time`.
         time_end: End time such that period is given by `time_end - time_start + 1`.
             If not provided, will set to max value in `time`.
+        coefs_fourier_amp: `float [n_harmonics+1]`</br>
+            The amplitude Fourier coefficients $F_n$.
+        coefs_fourier_phase: `float [n_harmonics]`</br>
+            The phase Fourier coefficients $\\Phi_n$.
 
     Returns:
         y_approx: `float [n_x]`</br>
-            Polynomial approximation to $y$.
+            Polynomial approximation to $y$, possibly including phase and Fourier terms.
     """
     # In this case, poly_coefs are output of polyfit_with_phase so first coefficient is the phase coefficient
     y_approx = np.polyval(poly_coefs[1:], x)
     x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
                      get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
-    return y_approx + poly_coefs[0] * x_shift
+    if coefs_fourier_amp is not None:
+        time_use = np.arange(x.size) if time is None else time
+        y_residual_fourier = fourier_series(time_use, coefs_fourier_amp, coefs_fourier_phase)
+    else:
+        y_residual_fourier = 0
+    return y_approx + poly_coefs[0] * x_shift + y_residual_fourier
 
 
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
                   deg: int, time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
                   time_end: Optional[float] = None,
                   deg_phase_calc: int = 10, resample: bool = False,
-                  include_phase: bool = True) -> np.ndarray:
+                  include_phase: bool = True, fourier_harmonics: Optional[Union[int, np.ndarray]] = None,
+                  integ_method: str = 'spline') -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
     but also includes additional phase shift term such that the total approximation for y is:
@@ -112,6 +129,13 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
 
     $\sum_{n=0}^{n_{deg}} \lambda_n x^n$ is then found by doing the normal polynomial approximation of degree
     `deg` to the residual $y-y_{phase}$.
+
+    If `fourier_harmonics` is provided, then a fourier series will also be added to $y_{approx}$ containing all
+    harmonics, $n$, in `fourier_harmonics`:
+
+    $y_{approx} + \\sum_{n} F_n\\cos(2n\\pi ft - \\Phi_n)$
+
+    The idea behind this is to account for part of $y$ not directly related to $x$.
 
     Args:
         x: `float [n_x]`</br>
@@ -133,10 +157,27 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             `np.polyfit`.
         include_phase: If `False`, will only call `np.polyfit`, but first return value will be 0 indicating
             no phase shift. Only makes sense to call this rather than `np.polyfit` if you want to use `resample`.
+        fourier_harmonics: `int [n_harmonics_include]`</br>
+            After applied polynomial of degree `deg_phase_calc` and fit the phase factor, a residual is obtained
+            `y_residual = y - y_best - y_phase`. If `fourier_harmonics` is provided, a fourier
+            series will be directly fit to this residual including all the harmonics in `fourier_harmonics`.
+            If `fourier_harmonics` is an integer, all harmonics up to and including the value will be fit.</br>
+            The final polynomial of degree `deg` will then be fit to `y - y_phase - y_fourier`.</br>
+            Idea behind this is to account for part of $y$ not directly related to $x$.
+        integ_method: How to perform the integration when calculating Fourier coefficients..</br>
+            If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
 
     Returns:
         poly_coefs: `float [n_deg+2]`
             Polynomial coefficients, phase first and then normal output of `np.polyfit` with lowest power last.
+        coefs_fourier_amp: `float [fourier_harmonics.max()+1]`</br>
+            `coefs_fourier_amp[n]` is the amplitude fourier coefficient for the $n^{th}$ harmonic.</br>
+            First value will be zero, because $0^{th}$ harmonic is just a constant and so will be found in
+            polynomial fitting.</br>
+            Only returned if `fourier_harmonics` is provided.
+        coefs_fourier_phase: `float [fourier_harmonics.max()+1]`</br>
+            `coefs_fourier_phase[n]` is the phase fourier coefficient for the $(n+1)^{th}$ harmonic.</br>
+            Only returned if `fourier_harmonics` is provided.
     """
     coefs = np.zeros(np.clip(deg, 0, 1000) + 2)  # first coef is phase coef
     if resample:
@@ -157,6 +198,25 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             y_residual_fit = y - y_best_polyfit
         coefs[[0, -1]] = np.polyfit(x_shift_fit, y_residual_fit, 1)
         y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
+
+        if fourier_harmonics is not None:
+            time_use = np.arange(x.size) if time is None else time
+            if not all(np.ediff1d(time_use) == np.ediff1d(time_use)[0]):
+                raise ValueError('Can only include Fourier with evenly spaced data')
+            if isinstance(fourier_harmonics, int):
+                # if int, use all harmonics up to value indicated but without 0th harmonic
+                fourier_harmonics = np.arange(1, fourier_harmonics+1)
+            coefs_fourier_amp = np.zeros(np.max(fourier_harmonics)+1)
+            coefs_fourier_phase = np.zeros(np.max(fourier_harmonics))
+            for n in fourier_harmonics:
+                if n==0:
+                    warnings.warn('Will not fit 0th harmonic as constant will be fit in polynomial')
+                else:
+                    coefs_fourier_amp[n], coefs_fourier_phase[n-1] = \
+                        get_fourier_coef(time_use, y_no_phase - y_best_polyfit, n, integ_method)
+            y_residual_fourier = fourier_series(time_use, coefs_fourier_amp, coefs_fourier_phase)
+            y_no_phase = y_no_phase - y_residual_fourier
+
         if deg >= 0:
             if resample:
                 x_fit, y_no_phase_fit = resample_data(time, x, y_no_phase)[1:]
@@ -164,82 +224,11 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
                 x_fit = x
                 y_no_phase_fit = y_no_phase
             coefs[1:] += np.polyfit(x_fit, y_no_phase_fit, deg)
-    return coefs
 
-
-def polyfit_phase_fourier(x: np.ndarray, y: np.ndarray,
-                          deg: int, time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
-                          time_end: Optional[float] = None,
-                          deg_phase_calc: int = 10, resample: bool = False,
-                          include_phase: bool = True) -> np.ndarray:
-    """
-    This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
-    but also includes additional phase shift term such that the total approximation for y is:
-
-    $y_{approx} = \\frac{1}{2} \lambda_{phase}(x(t-T/4) - x(t+T/4)) + \sum_{n=0}^{n_{deg}} \lambda_n x^n$
-
-    where $\lambda_n=$`poly_coefs[-1-n]` and $\lambda_{phase}=$`poly_coefs[0]`.
-    $x$ is assumed periodic with period $T=$`time[-1]-time[0]+time_spacing`.
-
-    The phase component, $y_{phase}=\\frac{1}{2} \lambda_{phase}(x(t-T/4) - x(t+T/4))$, is found first from the
-    residual of $y-y_{best}$, where $y_{best}$ is the polynomial approximation of degree `deg_phase_calc`.
-
-    $\sum_{n=0}^{n_{deg}} \lambda_n x^n$ is then found by doing the normal polynomial approximation of degree
-    `deg` to the residual $y-y_{phase}$.
-
-    Args:
-        x: `float [n_x]`</br>
-            $x$ coordinates used to approximate $y$. `x[i]` is value at time `time[i]`.
-        y: `float [n_x]`</br>
-            $y$ coordinate correesponding to each $x$.
-        deg: Degree of the fitting polynomial. If negative, will only do the phase fitting.
-        time: `float [n_x]`</br>
-            Time such that `x[i]` is $x$ and `y[i]` is $y$ at time `time[i]`.</n>
-            If time provided, will use spline to apply phase shift to $x$.</n>
-            If time not provided, assume time is `np.arange(n_x)`, and will use `np.roll` to apply phase shift to $x$.
-        time_start: Start time such that period is given by `time_end - time_start + 1`.
-            If not provided, will set to min value in `time`.
-        time_end: End time such that period is given by `time_end - time_start + 1`.
-            If not provided, will set to max value in `time`.
-        deg_phase_calc: Degree of the fitting polynomial to use in the phase term calculation.
-            Should be a large integer.
-        resample: If `True`, will use `resample_data` to resample x and y before each calling of
-            `np.polyfit`.
-        include_phase: If `False`, will only call `np.polyfit`, but first return value will be 0 indicating
-            no phase shift. Only makes sense to call this rather than `np.polyfit` if you want to use `resample`.
-
-    Returns:
-        poly_coefs: `float [n_deg+2]`
-            Polynomial coefficients, phase first and then normal output of `np.polyfit` with lowest power last.
-    """
-    # get_fourier_coef(time, y, n)
-    coefs = np.zeros(np.clip(deg, 0, 1000) + 2)  # first coef is phase coef
-    if resample:
-        x_fit, y_fit = resample_data(time, x, y)[1:]
+    if fourier_harmonics is None:
+        return coefs
     else:
-        x_fit = x
-        y_fit = y
-    if not include_phase:
-        coefs[1:] = np.polyfit(x_fit, y_fit, deg)       # don't do phase stuff so 1st value is 0
-    else:
-        y_best_polyfit = np.polyval(np.polyfit(x_fit, y_fit, deg_phase_calc), x)
-        x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
-                         get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
-        if resample:
-            x_shift_fit, y_residual_fit = resample_data(time, x_shift, y - y_best_polyfit)[1:]
-        else:
-            x_shift_fit = x_shift
-            y_residual_fit = y - y_best_polyfit
-        coefs[[0, -1]] = np.polyfit(x_shift_fit, y_residual_fit, 1)
-        y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
-        if deg >= 0:
-            if resample:
-                x_fit, y_no_phase_fit = resample_data(time, x, y_no_phase)[1:]
-            else:
-                x_fit = x
-                y_no_phase_fit = y_no_phase
-            coefs[1:] += np.polyfit(x_fit, y_no_phase_fit, deg)
-    return coefs
+        return coefs, coefs_fourier_amp, coefs_fourier_phase
 
 
 def resample_data_distance(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, n_return: Optional[int] = None,

@@ -24,7 +24,7 @@ def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
         `float [n_time]`</br>
             Value of Fourier series solution at each time
     """
-    period = time[-1] - time[0] + 1
+    period = float(time[-1] - time[0] + 1)
     n_harmonics = len(coefs_amp)
     ans = 0.5 * coefs_amp[0]
     for n in range(1, n_harmonics):
@@ -53,7 +53,7 @@ def fourier_series_deriv(time: np.ndarray, coefs_amp: Union[np.ndarray, List[flo
         `float [n_time]`</br>
             Value of derivative to Fourier series solution at each time. Units is units of $F$ divided by seconds.
     """
-    period = time[-1] - time[0] + 1
+    period = float(time[-1] - time[0] + 1)
     n_harmonics = len(coefs_amp)
     ans = np.zeros_like(time, dtype=float)
     for n in range(1, n_harmonics):
@@ -84,7 +84,7 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
     # Computes the analytical fourier coefficients for the n harmonic of a given function
     # With integrate method = spline works very well i.e. fit spline then use spline.integrate functionality
     # Otherwise, there are problems with the integration especially at the limits e.g. t=0 and t=T.
-    period = time[-1] - time[0] + 1
+    period = float(time[-1] - time[0] + 1)
     if integ_method == 'spline':
         var = np.append(var, var[0])
         time = np.append(time, time[-1]+1)
@@ -139,7 +139,6 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
             The phase Fourier coefficients $\\Phi_n$.
     """
     # Returns the fourier fit of a function using a given number of harmonics
-    period = time[-1] - time[0] + 1
     amp_coefs = np.zeros(n_harmonics+1)
     phase_coefs = np.zeros(n_harmonics)
     amp_coefs[0] = get_fourier_coef(time, var, 0, integ_method)
@@ -183,7 +182,10 @@ Union[float, np.ndarray]]:
         sin_coef = amp_coef * np.sin(phase_coef)
         return  cos_coef, sin_coef
     else:
-        phase_coef = np.arctan(sin_coef/cos_coef)
+        if cos_coef == 0:
+            phase_coef = 0
+        else:
+            phase_coef = np.arctan(sin_coef/cos_coef)
         amp_coef = cos_coef / np.cos(phase_coef)
         return amp_coef, phase_coef
 
