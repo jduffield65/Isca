@@ -183,10 +183,11 @@ Union[float, np.ndarray]]:
         return  cos_coef, sin_coef
     else:
         if cos_coef == 0:
-            phase_coef = 0
+            phase_coef = np.pi/2
+            amp_coef = sin_coef
         else:
             phase_coef = np.arctan(sin_coef/cos_coef)
-        amp_coef = cos_coef / np.cos(phase_coef)
+            amp_coef = cos_coef / np.cos(phase_coef)
         return amp_coef, phase_coef
 
 # These functions find the fourier fit numerically
