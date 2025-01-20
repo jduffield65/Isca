@@ -11,7 +11,7 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
                                n_harmonics: int = 2, deg_gamma_fit: int = 8, phase_gamma_fit: bool = True,
                                resample: bool = False,
                                gamma_fourier_term: bool = False,
-                               day_seconds: float = 86400) -> np.ndarray:
+                               day_seconds: float = 86400) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     This uses [`scipy.optimize.curve_fit`](
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html) to numerically seek
@@ -74,9 +74,13 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         day_seconds: Duration of a day in seconds.
 
     Returns:
-        `float [n_time]`</br>
+        temp_fourier `float [n_time]`</br>
             The Fourier series solution that was found for surface temperature anomaly.</br>
             Units: $K$.
+        temp_fourier_amp: `float [n_harmonics+1]`</br>
+            The amplitude Fourier coefficients for surface temperature: $T_n$.
+        temp_fourier_phase: `float [n_harmonics]`</br>
+            The phase Fourier coefficients for surface temperature: $\phi_n$.
     """
     if gamma_fourier_term and phase_gamma_fit:
         gamma_approx_coefs, gamma_fourier_term_coefs_amp, gamma_fourier_term_coefs_phase = \
@@ -117,7 +121,7 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
     args_found = optimize.curve_fit(fit_func, time, swdn_sfc, p0)[0]
     temp_fourier_amp = np.append([0], args_found[:n_harmonics])
     temp_fourier_phase = args_found[n_harmonics:]
-    return fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
+    return fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase), temp_fourier_amp, temp_fourier_phase
 
 
 def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capacity: float,
