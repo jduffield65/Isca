@@ -8,9 +8,11 @@ from typing import Optional, Tuple, Union
 
 def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: np.ndarray,
                                swdn_sfc: np.ndarray, heat_capacity: float,
-                               n_harmonics: int = 2, deg_gamma_fit: int = 8, phase_gamma_fit: bool = True,
+                               n_harmonics_sw: int = 2, n_harmonics_temp: Optional[int] = None,
+                               deg_gamma_fit: int = 8, phase_gamma_fit: bool = True,
                                resample: bool = False,
                                gamma_fourier_term: bool = False,
+                               include_sw_phase: bool = False,
                                day_seconds: float = 86400) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     This uses [`scipy.optimize.curve_fit`](
@@ -59,7 +61,12 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
             [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
-        n_harmonics: Number, $N$, of harmonics in fourier solution of temperature anomaly.
+        n_harmonics_sw: Number of harmonics to use to fit fourier series for $SW^{\\downarrow}$.
+            Cannot exceed `n_harmonics_temp` as extra harmonics would not be used.</n>
+            Set to None, to use no approximation for $SW^{\\downarrow}$ - but we weary with comparing to analytic
+            solution in this case.
+        n_harmonics_temp: Number, $N$, of harmonics in fourier solution of temperature anomaly. If not given, will
+            set to `n_harmonics_sw`.
         deg_gamma_fit: Power, $N_{\Gamma}$, to go up to in polyomial approximation of $\Gamma^{\\uparrow}$ seeked.
         phase_gamma_fit: If `False` will set $\lambda_{phase}=0$.
             Otherwise, will use [`polyfit_phase`](../utils/numerical.md#isca_tools.utils.numerical.polyfit_phase)
@@ -71,6 +78,10 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
              to $\Gamma^{\\uparrow}$ with `fourier_harmonics=np.arange(2, n_harmonics+1)` in
             [`polyfit_phase`](../utils/numerical.md#isca_tools.utils.numerical.polyfit_phase). Idea behind this
             is to account for contribution of $\Gamma^{\\uparrow}$ that is not temperature dependent.
+        include_sw_phase: If `False`, will set all phase factors, $\\varphi_n=0$, in Fourier expansion of
+            $SW^{\\downarrow}$.</br>
+            These phase factors are usually very small, and it makes the analytic solution for $T'(t)$ more simple
+            if they are set to 0, hence the option. Only use if `n_harmonics_sw` not `None`.
         day_seconds: Duration of a day in seconds.
 
     Returns:
@@ -82,10 +93,12 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
         temp_fourier_phase: `float [n_harmonics]`</br>
             The phase Fourier coefficients for surface temperature: $\phi_n$.
     """
+    if n_harmonics_temp is None:
+        n_harmonics_temp = n_harmonics_sw
     if gamma_fourier_term and phase_gamma_fit:
         gamma_approx_coefs, gamma_fourier_term_coefs_amp, gamma_fourier_term_coefs_phase = \
             numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
-                                    include_phase=phase_gamma_fit, fourier_harmonics=np.arange(2, n_harmonics+1))
+                                    include_phase=phase_gamma_fit, fourier_harmonics=np.arange(2, n_harmonics_temp+1))
     else:
         gamma_approx_coefs = numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
                                                      include_phase=phase_gamma_fit)
@@ -95,10 +108,10 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
     def fit_func(time_array, *args):
         # first n_harmonic values in args are the temperature amplitude coefficients (excluding T_0)
         # last n_harmonic values in args are the temperature phase coefficients
-        fourier_amp_coef = np.asarray([args[i] for i in range(n_harmonics)])
+        fourier_amp_coef = np.asarray([args[i] for i in range(n_harmonics_temp)])
         # make first coefficient 0 so gives anomaly
         fourier_amp_coef = np.append([0], fourier_amp_coef)
-        fourier_phase_coef = np.asarray([args[i] for i in range(n_harmonics, len(args))])
+        fourier_phase_coef = np.asarray([args[i] for i in range(n_harmonics_temp, len(args))])
         temp_anom_fourier = fourier.fourier_series(time_array, fourier_amp_coef, fourier_phase_coef)
         dtemp_dt_fourier = fourier.fourier_series_deriv(time_array, fourier_amp_coef,
                                                         fourier_phase_coef, day_seconds)
@@ -112,15 +125,24 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
 
     # Starting guess is linear 1 harmonic linear analytical solution given gamma=lambda_const_guess*temp
     # so only 1st harmonic coefficients of amplitude and phase are needed, rest are set to zero
-    p0 = np.zeros(2 * n_harmonics)
+    p0 = np.zeros(2 * n_harmonics_temp)
     f = 1 / (time.size * day_seconds)
-    p0[n_harmonics] = np.arctan((2 * np.pi * f * heat_capacity) / gamma_approx_coefs[-2])
-    sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, 1)[1]
-    p0[0] = sw_fourier_amp[1] / np.cos(p0[n_harmonics]) / (
-            (2 * np.pi * f * heat_capacity) * np.tan(p0[n_harmonics]) + gamma_approx_coefs[-2])
-    args_found = optimize.curve_fit(fit_func, time, swdn_sfc, p0)[0]
-    temp_fourier_amp = np.append([0], args_found[:n_harmonics])
-    temp_fourier_phase = args_found[n_harmonics:]
+    p0[n_harmonics_temp] = np.arctan((2 * np.pi * f * heat_capacity) / gamma_approx_coefs[-2])
+    if n_harmonics_sw is None:
+        sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, 1)[1]
+        # find temperature solution which minimises error to full insolation, no fourier approx
+        sw_fourier_fit = swdn_sfc
+    else:
+        if include_sw_phase:
+            sw_fourier_fit, sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, n_harmonics_sw)[:2]
+        else:
+            sw_fourier_amp, sw_fourier_phase = fourier.get_fourier_fit(time, swdn_sfc, n_harmonics_sw)[1:]
+            sw_fourier_fit = fourier.fourier_series(time, sw_fourier_amp, sw_fourier_phase*0)
+    p0[0] = sw_fourier_amp[1] / np.cos(p0[n_harmonics_temp]) / (
+            (2 * np.pi * f * heat_capacity) * np.tan(p0[n_harmonics_temp]) + gamma_approx_coefs[-2])
+    args_found = optimize.curve_fit(fit_func, time, sw_fourier_fit, p0)[0]
+    temp_fourier_amp = np.append([0], args_found[:n_harmonics_temp])
+    temp_fourier_phase = args_found[n_harmonics_temp:]
     return fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase), temp_fourier_amp, temp_fourier_phase
 
 
