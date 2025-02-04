@@ -20,6 +20,7 @@ jobs:
         run: pip install \
           mkdocs-material
           mkdocstrings[python]
+          --upgrade mkdocs mkdocs-material jinja2
 
       - name: Deploy docs
         run: mkdocs gh-deploy --force
