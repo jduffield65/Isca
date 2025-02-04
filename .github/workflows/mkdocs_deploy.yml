@@ -11,16 +11,15 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v2
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.12
         uses: actions/setup-python@v2
         with:
-          python-version: 3.9
+          python-version: 3.12
 
       - name: Install dependencies
         run: pip install \
           mkdocs-material
           mkdocstrings[python]
-          --upgrade mkdocs mkdocs-material jinja2
 
       - name: Deploy docs
         run: mkdocs gh-deploy --force
