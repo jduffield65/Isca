@@ -593,6 +593,7 @@ subroutine surface_flux_1d (                                           &
 			elsewhere
                 flux_q    =  bucket_depth/(max_bucket_depth_land*0.75) * rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 			end where
+            flux_q = land_evap_prefactor * flux_q   ! JD 04/02/2025 - Add option for reduced evaporation with bucket
 		elsewhere
 	        flux_q    =  rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 		end where
