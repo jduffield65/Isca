@@ -47,6 +47,6 @@ run_experiment(namelist_file, diag_table_file, slurm=True)
 # # write_land('land.nc', namelist_file, 'square', [-90, 90, 180 - 30, 180 + 30])
 # write_land('land.nc', namelist_file, 'square', [-90, 90, 180 - 15, 180 + 15])
 # show_land(os.path.join(exp_dir, 'land.nc'))
-
+#
 # from isca_tools.utils.land import get_ocean_coords
 # get_ocean_coords(namelist_file)
