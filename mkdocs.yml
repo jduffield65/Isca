@@ -34,10 +34,10 @@ plugins:
   - search
   - mkdocstrings:
         default_handler: python
-        handlers:
-            python:
-                rendering:
-                    show_root_toc_entry: false # stops extra heading in contents of Code pages
+#        handlers:
+#            python:
+#                rendering:
+#                    show_root_toc_entry: false # stops extra heading in contents of Code pages
 
 extra:
   generator: false
