@@ -1,7 +1,7 @@
 ! This runs a test 2 month experiment using input land and fixed sst files, where sst generated from observations
 &experiment_details
-   name = 'rossbypalooza/sst_observation/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/sst_observation/'
+   name = 'rossbypalooza/sst_observation/test_const_time/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/sst_observation/test_const_time/'
    n_months_total = 2           ! Total duration of simulation in months.
    n_months_job = 2             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
