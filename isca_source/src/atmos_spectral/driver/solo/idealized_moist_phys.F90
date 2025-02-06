@@ -154,6 +154,10 @@ real :: robert_bucket = 0.04   ! default robert coefficient for bucket depth LJJ
 real :: raw_bucket = 0.53       ! default raw coefficient for bucket depth LJJ
 ! end Add bucket
 
+! JD 06/02/2025 - read bucket depth from file
+logical :: do_read_bucket   = .false.           ! specify bucket depths in file (equivalent to specifying sst)
+character(len=256) :: bucket_file = 'bucket'    ! file will be called bucket.nc within INPUT
+
 namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roughness_heat,  &
                                       do_cloud_simple, do_cloud_spookie,             &
                                       two_stream_gray, do_rrtm_radiation, do_damping,&
@@ -164,7 +168,8 @@ namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roug
                                       gp_surface, convection_scheme,                 &
                                       bucket, init_bucket_depth, init_bucket_depth_land, &
                                       max_bucket_depth_land, robert_bucket, raw_bucket, &
-                                      do_socrates_radiation, do_lcl_diffusivity_depth
+                                      do_socrates_radiation, do_lcl_diffusivity_depth, &
+                                      do_read_bucket, bucket_file       ! JD 06/02/2025 - read bucket depth from file
 
 
 integer, parameter :: num_time_levels = 2 ! Add bucket - number of time levels added to allow timestepping in this module
@@ -642,7 +647,9 @@ if(mixed_layer_bc) then
   ! to quickly enter the atmosphere avoiding problems with the convection scheme
   t_surf = t_surf_init + 1.0
 
-  call mixed_layer_init(is, ie, js, je, num_levels, t_surf, bucket_depth, get_axis_id(), Time, albedo, rad_lonb_2d(:,:), rad_latb_2d(:,:), land, bucket) ! t_surf is intent(inout) ! albedo distribution set here.
+  ! JD 06/02/2025 - read bucket depth from file
+  call mixed_layer_init(is, ie, js, je, num_levels, t_surf, bucket_depth, get_axis_id(), Time, albedo, &
+          rad_lonb_2d(:,:), rad_latb_2d(:,:), land, bucket, do_read_bucket, bucket_file) ! t_surf is intent(inout) ! albedo distribution set here.
 
 elseif(gp_surface) then
   albedo=0.0
@@ -1324,7 +1331,8 @@ if(turb) then
                            drdt_surf(:,:),                                 &
                             dhdt_atm(:,:),                                 &
                             dedq_atm(:,:),                                 &
-                              albedo(:,:))
+                              albedo(:,:),                                 &
+                    bucket_depth(:,:,current), do_read_bucket, bucket_file)     ! JD 06/02/2025 - read bucket depth from file
    endif
 
    call gcm_vert_diff_up (1, 1, delta_t, Tri_surf, dt_tg(:,:,:), dt_tracers(:,:,:,nsphum), dt_tracers(:,:,:,:))
@@ -1355,27 +1363,32 @@ if(bucket) then
     future = previous
   endif
 
-   ! bucket time tendency
-   dt_bucket = depth_change_cond + depth_change_conv - depth_change_lh
-   !change in bucket depth in one leapfrog timestep [m]
+  if (do_read_bucket) then
+       ! JD 06/02/2025 - read bucket depth from file
+       ! current was updated in mixed_layer from file so just overwrite here to get next time step
+       bucket_depth(:,:,future) = bucket_depth(:,:,current)
+  else
+       ! bucket time tendency
+       dt_bucket = depth_change_cond + depth_change_conv - depth_change_lh
+       !change in bucket depth in one leapfrog timestep [m]
 
-   ! use the raw filter in leapfrog time stepping
+       ! use the raw filter in leapfrog time stepping
+       filt(:,:) = bucket_depth(:,:,previous) - 2.0 * bucket_depth(:,:,current)
 
-   filt(:,:) = bucket_depth(:,:,previous) - 2.0 * bucket_depth(:,:,current)
+       if(previous == current) then
+          bucket_depth(:,:,future ) = bucket_depth(:,:,previous) + dt_bucket
+          bucket_depth(:,:,current) = bucket_depth(:,:,current ) + robert_bucket &
+            *(bucket_depth(:,:,previous) - 2.0*bucket_depth(:,:,current) + bucket_depth(:,:,future)) * raw_bucket
+       else
+          bucket_depth(:,:,current) = bucket_depth(:,:,current ) + robert_bucket &
+            *(bucket_depth(:,:,previous) - 2.0*bucket_depth(:,:,current)) * raw_bucket
+          bucket_depth(:,:,future ) = bucket_depth(:,:,previous) + dt_bucket
+          bucket_depth(:,:,current) = bucket_depth(:,:,current) + robert_bucket * bucket_depth(:,:,future) * raw_bucket
+       endif
 
-   if(previous == current) then
-      bucket_depth(:,:,future ) = bucket_depth(:,:,previous) + dt_bucket
-      bucket_depth(:,:,current) = bucket_depth(:,:,current ) + robert_bucket &
-        *(bucket_depth(:,:,previous) - 2.0*bucket_depth(:,:,current) + bucket_depth(:,:,future)) * raw_bucket
-   else
-      bucket_depth(:,:,current) = bucket_depth(:,:,current ) + robert_bucket &
-        *(bucket_depth(:,:,previous) - 2.0*bucket_depth(:,:,current)) * raw_bucket
-      bucket_depth(:,:,future ) = bucket_depth(:,:,previous) + dt_bucket
-      bucket_depth(:,:,current) = bucket_depth(:,:,current) + robert_bucket * bucket_depth(:,:,future) * raw_bucket
-   endif
-
-   bucket_depth(:,:,future) = bucket_depth(:,:,future) + robert_bucket * (filt(:,:) + bucket_depth(:,:, future)) &
-                           * (raw_bucket - 1.0)
+       bucket_depth(:,:,future) = bucket_depth(:,:,future) + robert_bucket * (filt(:,:) + bucket_depth(:,:, future)) &
+                               * (raw_bucket - 1.0)
+  endif
 
    where (bucket_depth <= 0.) bucket_depth = 0.
 

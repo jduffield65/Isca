@@ -209,7 +209,8 @@ logical, allocatable, dimension(:,:) ::      land_mask
   type(interpolate_type),save :: sst_interp
   type(interpolate_type),save :: qflux_interp
   type(interpolate_type),save :: ice_interp
-  type(interpolate_type),save :: flux_lhe_anom_interp  
+  type(interpolate_type),save :: flux_lhe_anom_interp
+  type(interpolate_type),save :: bucket_interp  ! JD 06/02/2025 - read bucket depth from file
 
 real inv_cp_air
 
@@ -217,7 +218,8 @@ real inv_cp_air
 contains
 !=================================================================================================================================
 
-subroutine mixed_layer_init(is, ie, js, je, num_levels, t_surf, bucket_depth, axes, Time, albedo, rad_lonb_2d,rad_latb_2d, land, restart_file_bucket_depth)
+subroutine mixed_layer_init(is, ie, js, je, num_levels, t_surf, bucket_depth, axes, Time, albedo, rad_lonb_2d,rad_latb_2d, land, &
+        restart_file_bucket_depth, do_read_bucket, bucket_file)    ! JD 06/02/2025 - read bucket depth from file
 
 type(time_type), intent(in)       :: Time
 real, intent(out), dimension(:,:) :: t_surf, albedo
@@ -227,7 +229,8 @@ real, intent(in), dimension(:,:) :: rad_lonb_2d, rad_latb_2d
 integer, intent(in) :: is, ie, js, je, num_levels
 
 logical, intent(in), dimension(:,:) :: land
-logical, intent(in)                 :: restart_file_bucket_depth
+logical, intent(in)                 :: restart_file_bucket_depth, do_read_bucket       ! JD 06/02/2025 - read bucket depth from file
+character(len=256), intent(in)      :: bucket_file              ! JD 06/02/2025 - read bucket depth from file
 
 integer :: j
 real    :: rad_qwidth
@@ -318,8 +321,10 @@ call get_deg_lon(deg_lon)
         call interpolator_init( sst_interp, trim(sst_file)//'.nc', rad_lonb_2d, rad_latb_2d, data_out_of_bounds=(/CONSTANT/) )
     endif
 
-
-
+    ! JD 06/02/2025 - read bucket depth from file
+    if( do_read_bucket ) then
+        call interpolator_init( bucket_interp, trim(bucket_file)//'.nc', rad_lonb_2d, rad_latb_2d, data_out_of_bounds=(/CONSTANT/) )
+    endif
 
 if (file_exist('INPUT/mixed_layer.res.nc')) then
 
@@ -341,10 +346,22 @@ else if( do_read_sst ) then !s Added so that if we are reading sst values then w
 
    call interpolator( sst_interp, Time, t_surf, trim(sst_file) )
 
+   ! JD 06/02/2025 - read bucket depth from file
+   if( do_read_bucket ) then
+       ! Give 1st time index of bucket depth, as provided with 2 times - but interpolator needs single time
+       call interpolator( bucket_interp, Time, bucket_depth(:,:,1), trim(sst_file) )
+   end if
+
 elseif (prescribe_initial_dist) then
 !  call error_mesg('mixed_layer','mixed_layer restart file not found - initializing from prescribed distribution', WARNING)
 
     t_surf(:,:) = tconst - delta_T*((3.*sin(rad_lat_2d)**2.)-1.)/3.
+
+    ! JD 06/02/2025 - read bucket depth from file
+    if( do_read_bucket ) then
+       ! Give 1st time index of bucket depth, as provided with 2 times - but interpolator needs single time
+       call interpolator( bucket_interp, Time, bucket_depth(:,:,1), trim(bucket_file) )
+    end if
 
 else
 
@@ -583,7 +600,8 @@ subroutine mixed_layer (                                               &
      drdt_surf,                                                        &
      dhdt_atm,                                                         &
      dedq_atm,                                                         &
-     albedo_out)
+     albedo_out,                                                       &
+     bucket_depth, do_read_bucket, bucket_file)             ! JD 06/02/2025 - read bucket depth from file
 
 ! ---- arguments -----------------------------------------------------------
 type(time_type), intent(in)         :: Time, Time_next
@@ -597,6 +615,12 @@ real, intent(in)                    :: dt
 real, intent(out), dimension(:,:)   :: albedo_out
 type(surf_diff_type), intent(inout) :: Tri_surf
 logical, dimension(size(land_mask,1),size(land_mask,2)) :: land_ice_mask
+
+! JD 06/02/2025 - read bucket depth from file
+real, intent(out), dimension(:,:)   :: bucket_depth         ! only 2D as just given current value
+logical, intent(in)                 :: do_read_bucket       ! If True, will overwrite bucket_depth with future value
+character(len=256), intent(in)      :: bucket_file
+
 
 !local variables
 
@@ -755,6 +779,12 @@ if(id_flux_lhe > 0) used = send_data(id_flux_lhe, HLV * flux_q_total, Time_next)
 if(id_flux_oceanq > 0)   used = send_data(id_flux_oceanq, ocean_qflux, Time_next)
 
 if(id_delta_t_surf > 0)   used = send_data(id_delta_t_surf, delta_t_surf, Time_next)
+
+! JD 06/02/2025 - read bucket depth from file
+if(do_read_bucket) then !mj sst read from input file
+     ! read at the new time, as that is what we are stepping to
+     call interpolator( bucket_interp, Time_next, bucket_depth, trim(bucket_file) )
+end if
 
 end subroutine mixed_layer
 
