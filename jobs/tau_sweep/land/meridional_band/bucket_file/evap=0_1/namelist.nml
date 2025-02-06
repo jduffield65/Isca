@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'tau_sweep/land/meridional_band/bucket_evap/evap=0_1/k=1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/bucket_evap/evap=0_1/k=1'
+   name = 'tau_sweep/land/meridional_band/bucket_file/evap=0_1/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/bucket_file/evap=0_1/'
    n_months_total = 2           ! Total duration of simulation in months.
    n_months_job = 2             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -45,6 +45,7 @@
     bucket = .true.                                 ! LAND BUCKET OPTION
     init_bucket_depth_land = 0.10                   ! LAND BUCKET OPTION
     max_bucket_depth_land = 0.15                    ! LAND BUCKET OPTION - as in Manabe (1969) and Byrne & O'G (2013)
+    do_read_bucket = .true.                         ! LAND BUCKET OPTION - read depth from file
 /
 
 &vert_turb_driver_nml
