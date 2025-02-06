@@ -69,7 +69,7 @@ def write_land(file_name: str, namelist_file: str, land_mode: Optional[str] = No
     namelist = load_namelist(namelist_file=namelist_file)
     # Load in grid file containing longitude/latitude info for the resolution used for this experiment
     res = int(namelist['experiment_details']['resolution'][1:])  # resolution for experiment read in
-    grid_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'time_series', 'grid_files')
+    grid_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'run', 'grid_files')
     grid_file = os.path.join(grid_dir, f"t{res}_grid.nc")
 
     resolution_file = Dataset(grid_file, 'r', format='NETCDF3_CLASSIC')

@@ -1,9 +1,7 @@
-! This experiment has prescribed bucket depth which varies spatially but not with time
-
-! This section gives info to give to Slurm when running experiment
+! This runs a test 2 month experiment using input land and fixed sst files, where sst generated from observations
 &experiment_details
-   name = 'tau_sweep/land/meridional_band/bucket_file/const_time/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/tau_sweep/land/meridional_band/bucket_file/const_time/'
+   name = 'rossbypalooza/sst_observation/'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/sst_observation/'
    n_months_total = 2           ! Total duration of simulation in months.
    n_months_job = 2             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -15,6 +13,10 @@
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
+/
+
+&constants_nml
+    omega = 7.2921150e-05         ! Default Earth value
 /
 
 &main_nml
@@ -40,10 +42,6 @@
     convection_scheme = 'SIMPLE_BETTS_MILLER'
     land_option = 'input'                           ! LAND OPTION
     land_file_name = 'INPUT/land.nc'                ! LAND OPTION
-    bucket = .true.                                 ! LAND BUCKET OPTION
-    init_bucket_depth_land = 0.10                   ! LAND BUCKET OPTION
-    max_bucket_depth_land = 0.15                    ! LAND BUCKET OPTION - as in Manabe (1969) and Byrne & O'G (2013)
-    do_read_bucket = .true.                         ! LAND BUCKET OPTION - read depth from file
 /
 
 &vert_turb_driver_nml
@@ -63,7 +61,6 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    land_evap_prefactor = 0.1                       ! LAND OPTION
 /
 
 &atmosphere_nml
@@ -72,10 +69,16 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 5.0                                 ! different from frierson_test_case value of 2.5
     evaporation = .true.
+    do_read_sst = .true.                        ! TO keep SST fixed
+    do_sc_sst = .true.                          ! TO keep SST fixed
+    sst_file = 'sst'                            ! TO SPECIFY SST
+    specify_sst_over_ocean_only = .true.        ! TO SPECIFY SST
     prescribe_initial_dist = .true.
     tconst = 285.0
+    land_option = 'input',                      ! LAND OPTION - Tell mixed layer to get land mask from input file
+    land_h_capacity_prefactor = 0.1             ! LAND OPTION
 /
 
 &qe_moist_convection_nml
