@@ -235,6 +235,11 @@ def write_var(file_name: str, exp_dir: str,
     Output file will contain array of dimension `[n_time_out, n_pressure_out, n_lat_out, n_lon_out]`. With the
     time and pressure dimension only included if `time_var` and `pressure_var` are specified.
 
+    ??? note "Var saved in Isca output data"
+        Note that Isca does interpolation on these files, e.g. if provide `var` at day 0 and day 1, the value of `var`
+        output by Isca will be given for time=0.5 days, and will be an average between day 0 and day 1, because
+        the day=0.5 value is an average of all time steps between day 0 and day 1.
+
     ??? note "Pressure values"
         The `'_exp.nc'` files in the `grid_files` folder for each resolution contain only 2 pressure values.
         To change this, the `'_exp.nc'` files will be need to be created again using different pressure levels
@@ -256,8 +261,8 @@ def write_var(file_name: str, exp_dir: str,
             Latitudes in degrees, that provided variable info for in `var_array`.
         lon_var: `float [n_lon_in]`.</br>
             Longitudes in degrees (from 0 to 360), that provided variable info for in `var_array`.
-        time_var: `float [n_time_in]`.</br>
-            Time in days, that provided variable info for in `var_array`.
+        time_var: `int [n_time_in]`.</br>
+            Time in days, that provided variable info for in `var_array`. First day would be 0, second day 1...
         pressure_var: `float [n_pressure_in]`.</br>
             Pressure in hPa, that provided variable info for in `var_array`.
         lat_interpolate: Output file will have `var` defined at `lat_out`, with `n_lat_out` latitudes, specified by
@@ -365,6 +370,11 @@ def write_var(file_name: str, exp_dir: str,
     out_file = Dataset(file_name, 'a', format='NETCDF3_CLASSIC')
 
     if time_var is not None:
+        if time_var.size != var_array.shape[0]:
+            raise ValueError(f'time_var has {time_var.size} dimensions, but first dimension of var_array has '
+                             f'{var_array.shape[0]} elements')
+        if time_var.dtype != int:
+            raise ValueError(f"time_var={time_var} must be an integer type. 0 refers to first day.")
         var_dims = ('time',) + var_dims
         # Load in namelist file to get details about the calendar used for the experiment
         calendar = namelist['main_nml']['calendar']
@@ -386,7 +396,7 @@ def write_var(file_name: str, exp_dir: str,
         start_time = f'{current_date[3]:02d}:{current_date[4]:02d}:{current_date[5]:02d}'
         duration_days = namelist['experiment_details']['n_months_total'] * namelist['main_nml']['days']
         # last value in day_number must be more than last day in simulation so can interpolate variable value on all days.
-        day_number = np.arange(0, duration_days + 1, 1)
+        day_number = np.arange(0, duration_days+1)
         time_units = f"days since {current_date[0]:04d}-{current_date[1]:02d}-{current_date[2]:02d} {start_time}"
 
         times = out_file.createVariable('time', 'd', ('time',))
