@@ -6,11 +6,14 @@ from typing import Tuple, Union, Optional
 
 
 def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: float,
-                          pressure_surf: float, pressure_ft: float) -> float:
+                          pressure_surf: float, pressure_ft: float, epsilon: float = 0) -> float:
     """
     Adiabatic Free Troposphere temperature, $T_{A,FT}$, is defined such that surface moist static energy, $h$
     is equal to the saturated moist static energy, $h^*$, evaluated at $T_A$ and free troposphere pressure,
     $p_{FT}$ i.e. $h(T_s, q_s, p_s) = h^*(T_{A}, p_{FT})$.
+
+    This develops this to the more general case, to find $T_A$ such that
+    $h(T_s, q_s, p_s) = h^*(T_{A}, p_{FT}) + \epsilon$, where $\epsilon$ quantifies the CAPE.
 
     Using the following approximate relationship between $z_A$ and $T_A$:
 
@@ -19,9 +22,10 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
     where $R^{\dagger} = \\ln(p_s/p_{FT})/2$, we can obtain $T_A$
     by solving the following equation for modified MSE, $h^{\\dagger}$:
 
-    $$h^{\\dagger} = (c_p - R^{\\dagger})T_s + L_v q_s \\approx
+    $$h^{\\dagger} = (c_p - R^{\\dagger})T_s + L_v q_s - \epsilon \\approx
     (c_p + R^{\\dagger})T_A + L_vq^*(T_A, p_{FT})$$
 
+    Where the temperature differs from the adiabatic temperature if $\epsilon \\neq 0$.
     This function returns the LHS minus the RHS of this equation to then give to `scipy.optimize.fsolve` to find
     $T_A$.
 
@@ -36,22 +40,27 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
             Pressure at near-surface in *Pa*.
         pressure_ft:
             Pressure at free troposphere level in *Pa*.
+        epsilon:
+            Proxy for CAPE in *kJ/kg*. Quantifies how much larger near-surface MSE is than free tropospheric saturated.
 
     Returns:
         MSE discrepancy: difference between surface and free troposphere saturated adiabatic MSE.
     """
     R_mod = R * np.log(pressure_surf / pressure_ft) / 2
-    mse_mod_surf = moist_static_energy(temp_surf, sphum_surf, height=0, c_p_const=c_p - R_mod)
+    mse_mod_surf = moist_static_energy(temp_surf, sphum_surf, height=0, c_p_const=c_p - R_mod) - epsilon
     mse_mod_ft = moist_static_energy(temp_ft_adiabat, sphum_sat(temp_ft_adiabat, pressure_ft), height=0,
                                      c_p_const=c_p + R_mod)
     return mse_mod_surf - mse_mod_ft
 
 
 def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, pressure_ft: float,
-                     guess_temp_adiabat: float = 273) -> float:
+                     guess_temp_adiabat: float = 273, epsilon: float = 0) -> float:
     """
     This returns the adiabatic temperature at `pressure_ft`, $T_{A, FT}$, such that surface moist static
-    energy equals free troposphere saturated moist static energy: $h(T_s, q_s, p_{FT}) = h^*(T_{A}, p_{FT})$.
+    energy equals free troposphere saturated moist static energy
+    (plus any additional CAPE, quantified through $\epsilon$):
+
+    $h(T_s, q_s, p_{FT}) = h^*(T_{A}, p_{FT}) + \epsilon$.
 
     Args:
         temp_surf:
@@ -64,20 +73,25 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
             Pressure at free troposphere level in *Pa*.
         guess_temp_adiabat:
             Initial guess for what adiabatic temperature at `pressure_ft` should be.
+        epsilon:
+            Proxy for CAPE in *kJ/kg*. Quantifies how much larger near-surface MSE is than free tropospheric saturated.
 
     Returns:
         Adiabatic temperature at `pressure_ft` in Kelvin.
     """
     return scipy.optimize.fsolve(temp_adiabat_fit_func, guess_temp_adiabat,
-                                 args=(temp_surf, sphum_surf, pressure_surf, pressure_ft))
+                                 args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))
 
 
 def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf: float, z_ft: Optional[float],
-                               pressure_surf: float, pressure_ft: float) -> float:
+                               pressure_surf: float, pressure_ft: float, epsilon: float = 0) -> float:
     """
     Adiabatic Near-surface temperature, $T_{A,s}$, is defined such that surface moist static energy, $h$
     evaluated at $T_{A, s}$ is equal to the saturated free tropospheric moist static energy, $h^*$,
     and free troposphere pressure, $p_{FT}$ i.e. $h(T_{A,s}, r_s, p_s) = h^*(T_{FT}, z_{FT}, p_{FT})$.
+
+    This develops this to the more general case, to find $T_{A, s}$ such that
+    $h(T_{A,s}, r_s, p_s) = h^*(T_{FT}, z_{FT}, p_{FT}) + \epsilon$, where $\epsilon$ quantifies the CAPE.
 
     Args:
         temp_surf_adiabat: float
@@ -90,6 +104,8 @@ def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf
             Pressure at near-surface in *Pa*.
         pressure_ft:
             Pressure at free troposphere level in *Pa*.
+        epsilon:
+            Proxy for CAPE in *kJ/kg*. Quantifies how much larger near-surface MSE is than free tropospheric saturated.
 
     Returns:
         MSE discrepancy: difference between adiabatic surface and free troposphere saturated MSE.
@@ -99,20 +115,24 @@ def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf
         R_mod = R * np.log(pressure_surf / pressure_ft) / 2
         mse_surf = moist_static_energy(temp_surf_adiabat, rh_surf * sphum_sat(temp_surf_adiabat, pressure_surf),
                                        height=0, c_p_const=c_p - R_mod)
-        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod)
+        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod) + epsilon
     else:
         mse_surf = moist_static_energy(temp_surf_adiabat, rh_surf * sphum_sat(temp_surf_adiabat, pressure_surf),
                                        height=0)
-        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft)
+        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft) + epsilon
     return mse_surf - mse_sat_ft
 
 
 def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[float],
                           pressure_surf: float, pressure_ft: float, rh_form: bool = True,
-                          guess_temp_surf: float = 283) -> float:
+                          guess_temp_surf: float = 283, epsilon=0) -> float:
     """
     This returns the temperature at `pressure_surf`, $T_s$, such that near-surface moist static
-    energy equals free troposphere saturated moist static energy: $h(T_s, q_s, p_{FT}) = h^*(T_{FT}, p_{FT})$
+    energy equals free troposphere saturated moist static energy
+    (plus any additional CAPE quantified through $\epsilon$):
+
+    $h(T_s, q_s, p_{FT}) = h^*(T_{FT}, p_{FT}) + \epsilon$
+
     given the near-surface specific humidity $q_s$ or relative humidity $r_s$.
 
     Args:
@@ -132,21 +152,24 @@ def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[f
             Otherwise, will return for a given specific humidity.
         guess_temp_surf:
             Initial guess for what adiabatic temperature at `pressure_surf` should be.
+        epsilon:
+            Proxy for CAPE in *kJ/kg*. Quantifies how much larger near-surface MSE is than free tropospheric saturated.
 
     Returns:
         Convectively maintained temperature at `pressure_surf` in Kelvin.
     """
     if rh_form:
         return scipy.optimize.fsolve(temp_adiabat_surf_fit_func, guess_temp_surf,
-                                     args=(temp_ft, humidity_surf, z_ft, pressure_surf, pressure_ft))
+                                     args=(temp_ft, humidity_surf, z_ft, pressure_surf, pressure_ft, epsilon))
     else:
         if z_ft is None:
             R_mod = R * np.log(pressure_surf / pressure_ft) / 2
             mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0,
-                                             c_p_const=c_p+R_mod) * 1000
+                                             c_p_const=c_p+R_mod) * 1000 + epsilon * 1000
             return (mse_ft_sat - L_v * humidity_surf)/(c_p-R_mod)
         else:
-            mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft) * 1000
+            mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft) * 1000 + \
+                         epsilon*1000
             return (mse_ft_sat - L_v * humidity_surf)/c_p
 
 
