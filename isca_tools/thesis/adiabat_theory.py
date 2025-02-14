@@ -279,7 +279,7 @@ def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: 
 def get_theory_prefactor_terms(temp: Union[np.ndarray, float], pressure_surf: float,
                                pressure_ft: float, sphum: Optional[Union[np.ndarray, float]] = None
                                ) -> Tuple[float, Union[float, np.ndarray], Union[float, np.ndarray],
-Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
+Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
     """
     Returns prefactors to do modified moist static energy, $\delta h^{\dagger}$ taylor expansions.
 
@@ -318,6 +318,10 @@ Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
             $T_s^2\\frac{d^3(h^{\\dagger}+\epsilon)}{dT_s^3}(T, p_s)$ if `sphum` given, otherwise
             $T_{FT}^2\\frac{d^3h^{\\dagger}}{dT_{FT}^3}(T, p_{FT})$.</br>
             Units: *J/kg/K*
+        mu: `float` or `float [n_temp]`</br>
+            $\\mu = 1 - \\frac{c_p - R^{\\dagger}}{c_p - R^{\\dagger} + L_v \\alpha_s q_s} =
+            \\frac{L_v \\alpha_s q_s}{\\beta_{s1}}$</br>
+            If `sphum` is not given, will set to `np.nan`.</br>
 
     """
     R_mod = R * np.log(pressure_surf / pressure_ft) / 2
@@ -326,16 +330,19 @@ Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
         c_p_use = c_p + R_mod
         pressure_use = pressure_ft
         sphum = sphum_sat(temp, pressure_use)
+        mu = np.nan * sphum
     else:
         c_p_use = c_p - R_mod
         pressure_use = pressure_surf
-
+        mu = None       # set so compute later
     alpha = clausius_clapeyron_factor(temp, pressure_use)
     beta_1 = c_p_use + L_v * alpha * sphum
     beta_2 = L_v * alpha * sphum * (alpha * temp - 2)
     beta_3 = L_v * alpha * sphum * ((alpha * temp) ** 2 - 6 * alpha * temp + 6)
     q_sat = sphum_sat(temp, pressure_use)
-    return R_mod, q_sat, alpha, beta_1, beta_2, beta_3
+    if isinstance(mu, type(None)):
+        mu = L_v * sphum * alpha / beta_1
+    return R_mod, q_sat, alpha, beta_1, beta_2, beta_3, mu
 
 
 def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_surf: float,
@@ -405,10 +412,9 @@ def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_s
             respectively.
     """
     # Get parameters required for prefactors in the theory
-    _, _, _, beta_ft1, beta_ft2, beta_ft3 = get_theory_prefactor_terms(temp_ft, pressure_surf, pressure_ft)
-    _, q_sat_surf, alpha_s, beta_s1, beta_s2, beta_s3 = get_theory_prefactor_terms(temp_surf, pressure_surf,
+    _, _, _, beta_ft1, beta_ft2, beta_ft3, _ = get_theory_prefactor_terms(temp_ft, pressure_surf, pressure_ft)
+    _, q_sat_surf, alpha_s, beta_s1, beta_s2, beta_s3, mu = get_theory_prefactor_terms(temp_surf, pressure_surf,
                                                                                    pressure_ft, sphum)
-    mu = L_v * sphum * alpha_s / beta_s1
     rh = sphum / q_sat_surf
 
     # Record coefficients of each term in equation for delta T_s(x)
@@ -556,7 +562,7 @@ def mse_mod_anom_change_ft_expansion(temp_ft_mean: np.ndarray, temp_ft_quant: np
         temp_ft_anom0 = temp_ft_anom[0]
 
     # Parameters needed for taylor expansions - most compute using adiabatic temperature in free troposphere.
-    R_mod, _, _, beta_1, beta_2, beta_3 = get_theory_prefactor_terms(temp_ft_mean[0], pressure_surf, pressure_ft)
+    R_mod, _, _, beta_1, beta_2, beta_3, _ = get_theory_prefactor_terms(temp_ft_mean[0], pressure_surf, pressure_ft)
 
     # Compute modified MSE - need in units of J/kg at the moment hence multiply by 1000
     if mse_mod_mean_change is None:
@@ -688,7 +694,7 @@ def mse_mod_change_surf_expansion(temp_surf: np.ndarray, sphum_surf: np.ndarray,
             The sum of all these prefactors multiplied by the changes equals the full theory.
             Units of prefactors are *kJ/kg* divided by units of the change term.
     """
-    _, _, _, beta_s1, beta_s2, _ = get_theory_prefactor_terms(temp_surf[0], pressure_surf, pressure_ft, sphum_surf[0])
+    _, _, _, beta_s1, beta_s2, _, _ = get_theory_prefactor_terms(temp_surf[0], pressure_surf, pressure_ft, sphum_surf[0])
 
     delta_temp = temp_surf[1] - temp_surf[0]
     rh = sphum_surf / sphum_sat(temp_surf, pressure_surf)
@@ -873,10 +879,10 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
     else:
         temp_mean_ft_beta_use = temp_ft_mean[0]
     gamma = get_gamma_factors(temp_surf_mean[0], sphum_mean[0], temp_mean_ft_beta_use, pressure_surf, pressure_ft)
-    _, _, alpha_s, beta_s1, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
+    _, _, alpha_s, beta_s1, _, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
                                                                   sphum_mean[0])
     if non_linear:
-        _, _, alpha_s_x, beta_s1_x, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
+        _, _, alpha_s_x, beta_s1_x, _, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
                                                                       sphum_quant[0])
         mu_x = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x
         mu = L_v * alpha_s * sphum_mean[0] / beta_s1
@@ -885,7 +891,7 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
         mu_x = 0
 
     if z_form:
-        R_mod, _, _, beta_ft1, _, _ = get_theory_prefactor_terms(temp_mean_ft_beta_use, pressure_surf, pressure_ft)
+        R_mod, _, _, beta_ft1, _, _, _ = get_theory_prefactor_terms(temp_mean_ft_beta_use, pressure_surf, pressure_ft)
         temp_ft_anom_change = g/R_mod * np.diff(z_ft_quant - z_ft_mean[:, np.newaxis], axis=0)[0]
         # Need to multiply all mu and gamma factors by beta_s1/(beta_s1+beta_ft1) if z form of theory
         mu = mu * beta_s1 / (beta_s1+beta_ft1)
