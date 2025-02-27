@@ -137,6 +137,7 @@ nav:
             - Create Files: code/run/create_files.md
         - Thesis:
             - Adiabat Theory: code/thesis/adiabat_theory.md
+            - Adiabat Theory 2: code/thesis/adiabat_theory2.md
             - Aquaplanet Theory: code/thesis/aquaplanet_theory.md
             - Extratropics Land Theory: code/thesis/extrop_land_theory.md
             - Surface Energy Budget: code/thesis/surface_energy_budget.md
