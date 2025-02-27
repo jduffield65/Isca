@@ -24,6 +24,9 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     \\end{align}
     $$
 
+    These $\gamma$ parameters quantify the significance of different physical mechanisms in causing a change
+    in the near-surface temperature distribution.
+
     Terms in equation:
         * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
             \\left(c_p + R^{\dagger}\\right) T_{FT} + L_v q^*_{FT} + A_z$
@@ -131,12 +134,132 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
                             r_quant: np.ndarray, temp_ft_quant: np.ndarray,
                             epsilon_quant: np.ndarray,
                             pressure_surf: float, pressure_ft: float,
-                            epsilon_ref: Optional[np.ndarray],
+                            epsilon_ref: Optional[np.ndarray] = None,
                             z_approx_ref: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict, dict, dict]:
+    """
+    Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
+    to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by:
+
+    $$
+    \\begin{align}
+    \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} &= \gamma_{\delta T_{FT}}\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
+    - \gamma_{\delta \Delta r}\\frac{\\tilde{T}_s}{\delta \\tilde{T}_s} \delta \\left(\\frac{\delta \Delta r_s[x]}{\\tilde{r}_s}\\right)
+    + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s} \\\\
+    &+ \gamma_{\Delta T_s} \\frac{\Delta T_s(x)}{\\tilde{T}_s}
+    - \gamma_{\Delta r} \\frac{\Delta r[x]}{\\tilde{r}_s}
+    - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}
+    - \gamma_{\delta \\tilde{r}}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta \\tilde{r}_s}{\delta \\tilde{T}_s}
+    \\end{align}
+    $$
+
+    where the dimensionless $\gamma$ parameters quantify the significance of different physical mechanisms in causing
+    a change in the near-surface temperature distribution. These are given by the `get_sensitivity_factors` function.
+
+    The approximations which cause $\\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s}$ to differ from the exact
+    scale factor are given in `get_approx_terms`.
+
+    Reference Quantities:
+        The reference quantities, $\\tilde{\chi}$ are free to be chosen by the user. For ease of interpretation,
+        I propose the following, where $\overline{\chi}$ is the mean value of $\chi$ across all days:
+
+        * $\\tilde{T}_s = \overline{T_s}; \delta \\tilde{T}_s = \delta \overline{T_s}$
+        * $\\tilde{r}_s = \overline{r_s}; \delta \\tilde{r}_s = 0$
+        * $\\tilde{\epsilon} = 0; \delta \\tilde{\epsilon} = 0$
+        * $\\tilde{A}_z = \overline{A}_z; \delta \\tilde{A}_z = 0$
+
+        Given the choice of these four reference variables and their changes with warming, the reference free
+        troposphere temperature, $\\tilde{T}_{FT}$, can be computed according to the definition of $\\tilde{h}^{\dagger}$:
+
+        $\\tilde{h}^{\dagger} = (c_p - R^{\dagger})\\tilde{T}_s + L_v \\tilde{q}_s - \\tilde{\epsilon} =
+            (c_p + R^{\dagger}) \\tilde{T}_{FT} + L_v q^*(\\tilde{T}_{FT}, p_{FT}) + \\tilde{A}_z$
+
+        Poor choice of reference quantities may cause the theoretical scale factor to be a bad approximation. If this
+        is the case, `get_approx_terms` can be used to investigate what is causing the theory to break down.
+
+    Terms in equation:
+        * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
+            (c_p + R^{\dagger}) T_{FT} + L_v q^*_{FT} + A_z$
+            where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$.
+        * $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE (at $p_s$) and
+            $h^*_{FT}$ is free tropospheric saturated MSE (at $p_{FT}$).
+        * $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
+        * $\\Delta \chi[x] = \chi[x] - \\tilde{\chi}$
+        * $\chi[x]$ is the value of $\chi$ averaged over all days
+            where near-surface temperature, $T_s$, is between percentile $x-0.5$ and $x+0.5$.
+        * $\\tilde{\chi}$ is the reference value of $\chi$, which is free to be chosen.
+        * $\\beta_{FT1} = \\frac{\partial h^{\\dagger}}{\partial T_{FT}} = c_p + R^{\dagger} + L_v \\alpha_{FT} q_{FT}^*$
+        * $\\beta_{FT2} = T_{FT} \\frac{\partial^2h^{\\dagger}}{\partial T_{FT}^2} =
+            T_{FT}\\frac{d\\beta_{FT1}}{d T_{FT}} = L_v \\alpha_{FT} q_{FT}^*(\\alpha_{FT} T_{FT} - 2)$
+        * $\\beta_{s1} = \\frac{\partial h^{\dagger}}{\partial T_s} = c_p - R^{\dagger} + L_v \\alpha_s q_s$
+        * $\\beta_{s2} = T_s \\frac{\partial^2 h^{\dagger}}{\partial T_s^2} =
+            T_s\\frac{\partial \\beta_{s1}}{\partial T_s} = L_v \\alpha_s q_s(\\alpha_s T_s - 2)$
+        * $\mu=\\frac{L_v \\alpha_s q_s}{\\beta_{s1}}$
+        * $q = rq^*$ where $q$ is the specific humidity, $r$ is relative humidity and $q^*(T, p)$
+            is saturation specific humidity which is a function of temperature and pressure.
+        * $\\alpha(T, p)$ is the clausius clapeyron parameter which is a function of temperature and pressure,
+            such that $\partial q^*/\partial T = \\alpha q^*$.
+
+    Args:
+        temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
+            Reference near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+        temp_surf_quant: `float [n_exp, n_quant]` $T_s(x)$ </br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+        r_ref: `float [n_exp]` $\\tilde{r}_s$</br>
+            Reference near surface relative humidity of each simulation. Units: dimensionless (from 0 to 1).
+        r_quant: `float [n_exp, n_quant]` $r_s[x]$</br>
+            `r_quant[i, j]` is near-surface relative humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: dimensionless.
+        temp_ft_quant: `float [n_exp, n_quant]` $T_{FT}[x]$</br>
+            `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        epsilon_quant: `float [n_exp, n_quant]` $\epsilon[x]$</br>
+            `epsilon_quant[i, j]` is $\epsilon = h_s - h^*_{FT}$, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kJ/kg*.
+        pressure_surf:
+            Pressure at near-surface, $p_s$, in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level, $p_{FT}$, in *Pa*.
+        epsilon_ref: `float [n_exp]` $\\tilde{\epsilon}_s$</br>
+            Reference value of $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE and
+            $h^*_{FT}$ is saturated MSE at `pressure_ft`. If not given, weill set to 0. Units: *kJ/kg*.
+        z_approx_ref: `float [n_exp]` $\\tilde{A}_z$</br>
+            The exact equation for modified MSE is given by: $h^{\dagger} = (c_p - R^{\dagger})T_s + L_v q_s
+            - \epsilon = (c_p + R^{\dagger})T_{FT} + L_vq^*(T_{FT}, p_{FT}) + A_z$
+            where $R^{\dagger} = R\\ln(p_s/p_{FT})/2$ and $A_z$ quantifies the error due to
+            approximation of geopotential height, as relating to temperature.</br>
+            Here you have the option of specifying the reference $A_z$ for each simulation. If not provided,
+            will set to 0. Units: *kJ/kg*.
+
+    Returns:
+        scale_factor: `float [n_quant]`</br>
+            `scale_factor[i]` refers to the theoretical temperature difference between experiments
+            for percentile `quant_use[i]`, relative to the reference temperature change, $\delta \\tilde{T_s}$.
+        gamma: This is the dictionary output by `get_sensitivity_factors`
+        info_var: For each `key` in `gamma`, this dictionary has an entry for the same `key` which equals the dimensionless
+            variable which multiplies `gamma[key]` in the equation for $\\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s}$:
+
+            * `temp_ft_change`: $\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}$
+            * `r_anom_change`: $\\frac{\\tilde{T}_s}{\delta \\tilde{T}_s} \delta \\left(\\frac{\delta \Delta r_s[x]}{\\tilde{r}_s}\\right)$
+            * `epsilon_change`: $\\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s}$
+            * `temp_anom`: $\\frac{\Delta T_s(x)}{\\tilde{T}_s}$
+            * `r_anom`: $\\frac{\Delta r[x]}{\\tilde{r}_s}$
+            * `epsilon_anom`: $\\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
+            * `r_ref_change`: $\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta \\tilde{r}_s}{\delta \\tilde{T}_s}$
+
+            All are arrays of size `float [n_quant]`, except `r_ref_change` which is just a single `float`.
+        info_cont: Dictionary containing `gamma[key] x info_var[key]` for each `key` in `gamma`. This gives
+            the contribution from each physical mechanism to the overall scale factor.
+
+    """
     n_exp = temp_surf_ref.size
     if epsilon_ref is None:
         epsilon_ref = np.zeros(n_exp)
-    gamma = get_sensitivity_factors(temp_surf_ref, r_ref, epsilon_ref, pressure_surf, pressure_ft, z_approx_ref)
+    gamma = get_sensitivity_factors(temp_surf_ref, r_ref, pressure_surf, pressure_ft, epsilon_ref, z_approx_ref)
     sphum_ref = r_ref * sphum_sat(temp_surf_ref, pressure_surf)
     _, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf_ref, pressure_surf, pressure_ft,
                                                                   sphum_ref)
@@ -166,7 +289,7 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                      r_quant: np.ndarray, temp_ft_quant: np.ndarray,
                      epsilon_quant: np.ndarray,
                      pressure_surf: float, pressure_ft: float,
-                     epsilon_ref: Optional[np.ndarray],
+                     epsilon_ref: Optional[np.ndarray] = None,
                      z_approx_ref: Optional[np.ndarray] = None) -> Tuple[dict, dict]:
     """
     Function which returns terms quantifying the errors associated with various approximations, grouped together in
