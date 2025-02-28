@@ -83,7 +83,7 @@
 
 &qe_moist_convection_nml
     tmax = 350.0
-    tmin = 160.0
+    tmin = 110.0            ! Had to lower from 160 because got error
     rhbm = 0.7
 /
 
