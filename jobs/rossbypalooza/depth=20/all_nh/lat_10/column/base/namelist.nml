@@ -6,16 +6,16 @@
 &experiment_details
    name = 'rossbypalooza/depth=20/all_nh/lat_10/column/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/column/base'
-   n_months_total = 2          ! Total duration of simulation in months.
-   n_months_job = 2            ! Approximate duration of each job of the simulation in months.
+   n_months_total = 180         ! Total duration of simulation in months.
+   n_months_job = 180           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 1                 ! Number of cores for each node to run job on (Slurm info) - SINGLE COLUMN ONLY WORKS WITH 1 core
+   n_cores = 1                  ! Number of cores for each node to run job on (Slurm info) - SINGLE COLUMN ONLY WORKS WITH 1 core
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
-   partition = 'debug'          ! Queue to submit job to (Slurm info).
+   partition = 'small'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
-   max_walltime = '02:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
+   max_walltime = '48:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
 /
 
@@ -26,7 +26,7 @@
 &main_nml
     calendar = 'thirty_day'
     current_date = 1, 1, 1, 0, 0, 0
-    days = 2
+    days = 30
     dt_atmos = 720
     hours = 0
     minutes = 0
@@ -135,7 +135,7 @@
 ! Set column namelist to replicate spectral_dynamics_nml for previous experiments
 ! column_nml does not allow for setting damping_order or water_correction_limit
 &column_nml
-    lon_max = 128                       ! Number of columns in longitude - same as T42 resolution
+    lon_max = 1                         ! All longitudes the same, so only consider 1 for speed
     lat_max = 64                        ! Number of columns in latitude - same as T42 resolution
     reference_sea_level_press = 1.0e5   ! This and below is just same value set in spectral_dynamics_nml for previous experiments
     num_levels = 25                     ! How many pressure levels to use

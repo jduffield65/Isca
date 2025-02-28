@@ -68,17 +68,34 @@ def write_land(file_name: str, namelist_file: str, land_mode: Optional[str] = No
     # TODO: can probably extend the 'square' option to give a sequence of squares.
     namelist = load_namelist(namelist_file=namelist_file)
     # Load in grid file containing longitude/latitude info for the resolution used for this experiment
-    res = int(namelist['experiment_details']['resolution'][1:])  # resolution for experiment read in
     grid_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'run', 'grid_files')
-    grid_file = os.path.join(grid_dir, f"t{res}_grid.nc")
+    nlat_res_dict = {32: 'T21', 64: 'T42', 128: 'T85'}
 
-    resolution_file = Dataset(grid_file, 'r', format='NETCDF3_CLASSIC')
-    lons = resolution_file.variables['lon'][:]
-    lats = resolution_file.variables['lat'][:]
-    # lonb = resolution_file.variables['lonb'][:]
-    # latb = resolution_file.variables['latb'][:]
-    nlon = lons.shape[0]
-    nlat = lats.shape[0]
+    if 'column_nml' in namelist:
+        # If use single column, then specify number of lon/lat coordinates so cannot read from resolution file
+        nlon = int(namelist['column_nml']['lon_max'])
+        nlat = int(namelist['column_nml']['lat_max'])
+        lons = np.arange(nlon) * 360 / nlon  # from column_grid.F90 file
+        if nlat in nlat_res_dict:
+            grid_file = os.path.join(grid_dir, f"{nlat_res_dict[nlat].lower()}_grid.nc")
+            resolution_file = Dataset(grid_file, 'r', format='NETCDF3_CLASSIC')
+            lats = resolution_file.variables['lat'][:]
+        else:
+            raise ValueError(f"Don't know latitude grid for nlat={nlat}")
+            # Complicated computation of lat coordinates for non-regular grid, something like below
+            # from column_grid.F90 file
+            # np.rad2deg(np.arcsin(np.cos(np.pi * (np.arange(1, nlat + 1) - 0.25) / (nlat + 0.5))))
+    else:
+        res = int(namelist['experiment_details']['resolution'][1:])  # resolution for experiment read in
+        grid_file = os.path.join(grid_dir, f"t{res}_grid.nc")
+        resolution_file = Dataset(grid_file, 'r', format='NETCDF3_CLASSIC')
+        lons = resolution_file.variables['lon'][:]
+        lats = resolution_file.variables['lat'][:]
+        nlon = lons.shape[0]
+        nlat = lats.shape[0]
+        # lonb = resolution_file.variables['lonb'][:]
+        # latb = resolution_file.variables['latb'][:]
+
 
     # make 2d arrays of latitude and longitude
     lon_array, lat_array = np.meshgrid(lons, lats)
