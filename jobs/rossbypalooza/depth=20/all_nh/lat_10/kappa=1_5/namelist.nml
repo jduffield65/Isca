@@ -4,13 +4,13 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'rossbypalooza/depth=20/all_nh/lat_10/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/base'
-   n_months_total = 180         ! Total duration of simulation in months.
-   n_months_job = 180           ! Approximate duration of each job of the simulation in months.
+   name = 'rossbypalooza/depth=20/all_nh/lat_10/kappa=1_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/kappa=1_5'
+   n_months_total = 180          ! Total duration of simulation in months.
+   n_months_job = 180            ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info).
+   n_cores = 16                  ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'small'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
@@ -83,7 +83,7 @@
 
 &qe_moist_convection_nml
     tmax = 350.0
-    tmin = 110.0            ! Low because can get error
+    tmin = 110.0                    ! Low because can get error
     rhbm = 0.7
 /
 
@@ -115,7 +115,7 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 1                         ! FRIERSON kappa optical depth parameter
+    odp = 1.5                       ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
