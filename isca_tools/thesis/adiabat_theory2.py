@@ -2,7 +2,7 @@ import numpy as np
 import scipy.optimize
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 from ..utils.constants import c_p, L_v, R, g
-from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat
+from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat, get_p_x
 from typing import Tuple, Union, Optional
 
 
@@ -541,3 +541,100 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     for key in approx_terms:
         approx_terms[key] = approx_terms[key] / (beta_s1[0] * np.diff(temp_surf_ref, axis=0).squeeze())
     return approx_terms, approx
+
+
+def decompose_var_x_change(var_av: np.ndarray, var_x: np.ndarray, var_p: np.ndarray,
+                          quant_p: np.ndarray = np.arange(100, dtype=int), simple: bool = True
+                          ) -> Tuple[np.ndarray, np.ndarray, dict]:
+    """
+    We can decompose the change in variable $\chi$, conditioned on near-surface temperature
+    percentile $x$ into the change in the corresponding percentile of $\chi$: $p_x$, but accounting
+    for how $p_x$ changes with warming:
+
+    $\delta \chi[x] \\approx \delta \chi(p_x) + \overline{\eta}\delta p_x +
+    \Delta \eta(p_x)\delta p_x + \delta \eta(p_x) \delta p_x$
+
+    where:
+
+    * $p_x$ is defined such that $T_{FT}(x) = T_{FT}[p_x]$ and $\overline{p}$ such that
+    $\overline{T_{FT}} = T_{FT}[\overline{p}]$.
+    * $\eta(p_x) = \\frac{\\partial T_{FT}}{\\partial p}\\bigg|_{p_x}$;
+    $\overline{\eta} = \\frac{\\partial T_{FT}}{\\partial p}\\bigg|_{\overline{p}}$ and
+    $\Delta \eta(p_x) = \eta(p_x) - \overline{\eta}$.
+    * $\delta \Delta p_x = \delta (p_x - \overline{p})$
+    * $\delta \Delta T_{FT}[p_x] = \delta (T_{FT}[p_x] - T_{FT}[\overline{p}])$ keeping $p_x$ and $\overline{p}$
+    constant.
+    * $\Delta (\delta \eta(p_x) \delta p_x) = \delta \eta(p_x) \delta p_x - \delta \overline{\eta}\delta \overline{p}$
+
+    The only approximation in the above is saying that $\eta(p)$ is constant between $p=p_x$ and $p=p_x+\delta p_x$.
+    Keeping only the first two terms on the RHS, also provides a good approximation.
+    This is achieved by setting `simple=True`.
+
+    Args:
+        var_av: `float [n_exp]`</br>
+            Average free tropospheric temperature for each experiment, likely to be $T_{FT}(x=50)$.
+        var_x: `float [n_exp, n_quant_x]`</br>
+            Free tropospheric temperature conditioned on near-surface temperature percentile, $x$, for each
+            experiment: $T_{FT}(x)$. $x$ can differ from `quant_px`, but likely to be the same: `np.arange(100)`.
+        var_p: `float [n_exp, n_quant_p]`</br>
+            `temp_ft_p[i, j]` is the $p=$`quant_p[j]`$^{th}$ percentile of free tropospheric temperature for
+            experiment `i`: $T_{FT}[p]$.
+        quant_p: `float [n_quant_p]`</br>
+            Corresponding quantiles to `temp_ft_p`.
+        simple: If `True`, `temp_ft_change_theory` will be
+            $\delta \Delta T_{FT}[p_x] + \overline{\eta}\delta \Delta p_x$. If `False`, will also include
+            $\Delta \eta(p_x) \delta \overline{p} + \Delta \eta(p_x)\Delta p_x + \Delta (\delta \eta(p_x) \delta p_x)$.
+
+    Returns:
+        var_x_change: `float [n_quant_x]`</br>
+            Simulated $\delta \Delta T_{FT}(x)$
+        var_x_change_theory: `float [n_quant_x]`</br>
+            Theoretical $\delta \Delta T_{FT}(x)$
+        var_x_change_cont: Dictionary recording the five terms in the theory for $\delta \Delta T_{FT}(x)$.
+            The key name indicates which variable is causing the $x$ variation:
+
+            * `var_p`: $\delta T_{FT}(p_x)$
+            * `p_x`: $\overline{\eta}\delta p_x$
+            * `nl_eta0`: $\Delta \eta(p_x) \delta p_x$
+            * `nl_change`: $\delta \eta(p_x) \delta p_x$
+            * `approx_integral`: $\int_{p_x}^{p_x + \delta p_x} \eta(p) + \delta \eta(p) dp -
+                (\eta(p_x) + \delta \eta(p_x))\delta p_x$
+
+    """
+    n_exp, n_quant_x = var_x.shape
+
+    # Get FT percentile corresponding to each FT temperature conditioned on near-surface percentile
+    p_av_ind = np.zeros(n_exp, dtype=int)
+    p_x = np.zeros((n_exp, n_quant_x))
+    p_x_ind = np.zeros((n_exp, n_quant_x), dtype=int)
+    for i in range(n_exp):
+        p_av_ind[i] = get_p_x(var_av[i], var_p[i], quant_p)[1]
+        p_x[i], p_x_ind[i] = get_p_x(var_x[i], var_p[i], quant_p)
+
+    # Get eta on corresponding to p_x in the reference (coldest) simulation
+    eta_av0 = np.zeros(n_exp)
+    eta_px0 = np.zeros((n_exp, n_quant_x))
+    for i in range(n_exp):
+        eta_use = np.gradient(var_p[i], quant_p)
+        eta_av0[i] = eta_use[p_av_ind[0]]
+        for j in range(n_quant_x):
+            eta_px0[i, j] = eta_use[p_x_ind[0, j]]
+
+    # Isolate x dependence into different terms
+    eta_px0_anom = eta_px0 - eta_av0[:, np.newaxis]
+    var_x_change = var_x[1] - var_x[0]
+    var_x_change_cont = {'var_p': var_p[1, p_x_ind[0]] - var_p[0, p_x_ind[0]],
+                         'p_x': eta_av0[0] * (p_x[1] - p_x[0]),
+                         'nl_eta0': eta_px0_anom[0] * (p_x[1] - p_x[0]),
+                         'nl_change': (eta_px0[1] - eta_px0[0]) * (p_x[1] - p_x[0])}
+
+    # This residual term is due to error in integral approximation where assume integrand constant
+    var_x_change_cont['approx_integral'] = var_x_change - sum(var_x_change_cont.values())
+
+    # Theory is sum of terms
+    var_x_change_theory = var_x_change_cont['var_p'] + var_x_change_cont['p_x']
+    if not simple:
+        var_x_change_theory = var_x_change_theory + \
+                                var_x_change_cont['nl_eta0'] + var_x_change_cont['nl_change']
+
+    return var_x_change, var_x_change_theory, var_x_change_cont
