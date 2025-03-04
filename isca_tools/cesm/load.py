@@ -120,7 +120,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
 
 
 def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
-                   months_in_ds: Optional[List] = None):
+                   months_in_ds: Optional[List] = None) -> xr.Dataset:
     """
     When loading CESM data, for some reason the first month is marked as February, so this function
     shifts the time variable to correct it to January.

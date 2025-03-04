@@ -125,7 +125,7 @@ def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf
 
 def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[float],
                           pressure_surf: float, pressure_ft: float, rh_form: bool = True,
-                          guess_temp_surf: float = 283, epsilon=0) -> float:
+                          guess_temp_surf: float = 283, epsilon: float = 0) -> float:
     """
     This returns the temperature at `pressure_surf`, $T_s$, such that near-surface moist static
     energy equals free troposphere saturated moist static energy
@@ -174,7 +174,8 @@ def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[f
 
 
 def get_z_ft_approx(temp_surf: Union[float, np.ndarray], temp_ft: Union[float, np.ndarray],
-                    pressure_surf: float, pressure_ft: float, z_surf: Union[float, np.ndarray] = 0):
+                    pressure_surf: float, pressure_ft: float,
+                    z_surf: Union[float, np.ndarray] = 0) -> Union[float, np.ndarray]:
     """
     Returns an approximation for geopotential height, $z_{FT}$ at pressure $p_{FT}$ according to:
 

@@ -6,7 +6,7 @@ import cftime
 
 class FakeDT(object):
     def __init__(self, dates: np.ndarray, units: str ='hours since 1800-01-01 00:00:00',
-                 calendar='standard'):
+                 calendar: str ='standard'):
         """
         An object created to mimic the behavior of a *pandas* `DatetimeIndex` object, but
         one that allows for dates from non-standard calendars (e.g. 360 day or no leap).

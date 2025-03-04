@@ -126,7 +126,7 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
     return flux_surf - flux_toa
 
 
-def get_heat_capacity(c_p: float, density: float, layer_depth: float):
+def get_heat_capacity(c_p: float, density: float, layer_depth: float) -> float:
     """
     Given heat capacity un units of $JK^{-1}kg^{-1}$, this returns heat capacity in units of $JK^{-1}m^{-2}$.
 

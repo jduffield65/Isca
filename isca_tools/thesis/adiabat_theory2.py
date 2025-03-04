@@ -15,12 +15,12 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     $$
     \\begin{align}
     \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} &= \gamma_{\delta T_{FT}}\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
-    - \gamma_{\delta \Delta r}\\frac{\\tilde{T}_s}{\delta \\tilde{T}_s} \delta \\left(\\frac{\delta \Delta r_s[x]}{\\tilde{r}_s}\\right)
+    - \gamma_{\delta r}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}
     + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s} \\\\
     &+ \gamma_{\Delta T_s} \\frac{\Delta T_s(x)}{\\tilde{T}_s}
     - \gamma_{\Delta r} \\frac{\Delta r[x]}{\\tilde{r}_s}
     - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}
-    - \gamma_{\delta \\tilde{r}}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta \\tilde{r}_s}{\delta \\tilde{T}_s}
+    - \gamma_{\delta \\tilde{r}}\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}
     \\end{align}
     $$
 
@@ -77,7 +77,7 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
             $\\delta \\tilde{r}_s = \delta \\tilde{\epsilon} = 0$.
 
             * `temp_ft_change`: $\gamma_{\delta T_{FT}} = \\frac{\\tilde{\\beta}_{FT1}}{\\tilde{\\beta}_{s1}}$
-            * `r_anom_change`: $\gamma_{\delta \Delta r} = \\frac{L_v\\tilde{q}_s}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
+            * `r_change`: $\gamma_{\delta r} = \\frac{L_v\\tilde{q}_s}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
             * `epsilon_change`: $\gamma_{\delta \epsilon} = 1$
             * `temp_anom`: $\gamma_{\Delta T_s} = \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
                 \\frac{\\tilde{\\beta}_{s1} \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}} -
@@ -86,8 +86,7 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
                 \\frac{L_v \\tilde{q}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
             * `epsilon_anom`: $\gamma_{\Delta \epsilon} = \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
                 \\frac{\\tilde{\\beta}_{s1} \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
-            * `r_ref_change`: $\gamma_{\delta \\tilde{r}} = \\frac{L_v\\tilde{q}_s}{\\tilde{\\beta}_{s1} \\tilde{T}_s} +
-                \\tilde{\mu} \\frac{\delta \\tilde{T}_s}{\\tilde{T}_s}$
+            * `r_ref_change`: $\gamma_{\delta \\tilde{r}} = \\tilde{\mu}$
     """
     n_exp = temp_surf_ref.size
     if z_approx_ref is None:
@@ -115,7 +114,7 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
 
     gamma = {}
     gamma['temp_ft_change'] = beta_ft1[0]/beta_s1[0]
-    gamma['r_anom_change'] = L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0])
+    gamma['r_change'] = L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0])
     gamma['epsilon_change'] = 1
     # gamma['epsilon_anom'] just becomes (beta_ft2/beta_ft1) ((beta_s1*T_s) / (beta_ft1*T_ft))
     # if r_ref_change = epsilon_ref_change = 0
@@ -124,9 +123,8 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     gamma['temp_anom'] = gamma['epsilon_anom'] - beta_s2[0]/beta_s1[0] * (1 + r_ref_change/r_ref[0]) \
                          - mu[0] * temp_surf_ref[0]/r_ref[0] * r_ref_change/temp_surf_ref_change
     gamma['r_anom'] = mu[0] * (1 + r_ref_change/r_ref[0]) \
-                      + L_v * sphum_ref[0]/(beta_s1[0] * r_ref[0]) * r_ref_change/temp_surf_ref_change \
                       - gamma['epsilon_anom'] * L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0])
-    gamma['r_ref_change'] = L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0]) + mu[0] * temp_surf_ref_change/temp_surf_ref[0]
+    gamma['r_ref_change'] = mu[0]
     return gamma
 
 
@@ -143,12 +141,12 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     $$
     \\begin{align}
     \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} &= \gamma_{\delta T_{FT}}\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
-    - \gamma_{\delta \Delta r}\\frac{\\tilde{T}_s}{\delta \\tilde{T}_s} \delta \\left(\\frac{\delta \Delta r_s[x]}{\\tilde{r}_s}\\right)
+    - \gamma_{\delta r}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}
     + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s} \\\\
     &+ \gamma_{\Delta T_s} \\frac{\Delta T_s(x)}{\\tilde{T}_s}
     - \gamma_{\Delta r} \\frac{\Delta r[x]}{\\tilde{r}_s}
     - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}
-    - \gamma_{\delta \\tilde{r}}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta \\tilde{r}_s}{\delta \\tilde{T}_s}
+    - \gamma_{\delta \\tilde{r}}\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}
     \\end{align}
     $$
 
@@ -244,12 +242,12 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             variable which multiplies `gamma[key]` in the equation for $\\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s}$:
 
             * `temp_ft_change`: $\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}$
-            * `r_anom_change`: $\\frac{\\tilde{T}_s}{\delta \\tilde{T}_s} \delta \\left(\\frac{\delta \Delta r_s[x]}{\\tilde{r}_s}\\right)$
+            * `r_change`: $\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}$
             * `epsilon_change`: $\\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s}$
             * `temp_anom`: $\\frac{\Delta T_s(x)}{\\tilde{T}_s}$
             * `r_anom`: $\\frac{\Delta r[x]}{\\tilde{r}_s}$
             * `epsilon_anom`: $\\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
-            * `r_ref_change`: $\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta \\tilde{r}_s}{\delta \\tilde{T}_s}$
+            * `r_ref_change`: $\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}$
 
             All are arrays of size `float [n_quant]`, except `r_ref_change` which is just a single `float`.
         info_cont: Dictionary containing `gamma[key] x info_var[key]` for each `key` in `gamma`. This gives
@@ -266,15 +264,15 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     temp_surf_ref_change = np.diff(temp_surf_ref, axis=0).squeeze()
     # Get non-dimensional variables which multiply gamma
     # Multiply epsilon by 1000 to get in correct units of J/kg
-    info_var = {'r_ref_change': np.diff(r_ref, axis=0).squeeze()/r_ref[0] * temp_surf_ref[0]/temp_surf_ref_change,
+    info_var = {'r_ref_change': np.diff(r_ref, axis=0).squeeze()/r_ref[0],
                 'temp_ft_change': np.diff(temp_ft_quant, axis=0).squeeze()/temp_surf_ref_change,
-                'r_anom_change': np.diff(r_quant/r_ref[:, np.newaxis], axis=0).squeeze() * temp_surf_ref[0]/temp_surf_ref_change,
+                'r_change': np.diff(r_quant, axis=0).squeeze()/r_ref[0, np.newaxis] * temp_surf_ref[0]/temp_surf_ref_change,
                 'epsilon_change': np.diff(epsilon_quant, axis=0).squeeze()*1000/beta_s1[0]/temp_surf_ref_change,
                 'temp_anom': (temp_surf_quant[0]-temp_surf_ref[0]) / temp_surf_ref[0],
                 'r_anom': (r_quant[0]-r_ref[0]) / r_ref[0],
                 'epsilon_anom': (epsilon_quant[0]-epsilon_ref[0])*1000 / beta_s1[0] / temp_surf_ref[0]}
     # All gamma are positive, so sign below is to multiply gamma in equation
-    coef_sign = {'r_ref_change': -1, 'temp_ft_change': 1, 'r_anom_change': -1, 'epsilon_change': 1,
+    coef_sign = {'r_ref_change': -1, 'temp_ft_change': 1, 'r_change': -1, 'epsilon_change': 1,
                  'temp_anom': 1, 'r_anom': -1, 'epsilon_anom': -1}
 
     # Get contribution from each term
@@ -301,7 +299,7 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     $$
     \\begin{align}
     \\frac{\delta T_s(x)}{\delta \\tilde{T}_s} &= \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} + A_{\delta \Delta T_{FT}}
-    + A_{\delta \Delta T_s} + A_{\delta \Delta r}[x] + A_{\delta \Delta T_s \delta \Delta r}[x] \\\\
+    + A_{\delta \Delta T_s} + A_{\delta r}[x] + A_{\delta \Delta T_s \delta r}[x] \\\\
     &+ A_{\Delta T_s \Delta r}[x] + A_{\Delta}[x] + \\tilde{A}_{\delta} + A_{NL}[x]
     \\end{align}
     $$
@@ -379,10 +377,10 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                 Involves contribution from $\delta \Delta T_{FT}[x]$.
             * `temp_s_anom_change`: $A_{\delta \Delta T_s}$</br>
                 Involves contribution from $\delta \Delta T_s(x)$.
-            * `r_anom_change`: $A_{\delta \Delta r}[x]$</br>
-                Involves contribution from $\delta \Delta r_s[x]$.
-            * `temp_s_r_anom_change`: $A_{\delta \Delta T_s \delta \Delta r}[x]$</br>
-                Involves contribution from $\delta \Delta T_s(x) \Delta r_s[x]$.
+            * `r_change`: $A_{\delta r}[x]$</br>
+                Involves contribution from $\delta r_s[x]$ and $\delta \\tilde{r}_s$.
+            * `temp_s_anom_r_change`: $A_{\delta \Delta T_s \delta r}[x]$</br>
+                Involves contribution from $\delta \Delta T_s(x) \delta (r_s[x]/\\tilde{r}_s)$.
             * `anom_temp_s_r`: $A_{\Delta T_s \Delta r}[x]$</br>
                 Involves contribution from $\Delta T_s(x) \Delta r_s[x]$ in the current climate.
             * `anom`: $A_{\Delta}[x]$</br> Groups together errors due to approximation of anomaly in current climate.
@@ -531,10 +529,18 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     approx_terms['temp_s_anom_change'] = - approx['s_anom_change_temp_cont'] - (
             (mu*beta_s1/r_ref)[0]*r_anom[0] + (1+r_anom[0]/r_ref[0])*np.diff(beta_s1, axis=0).squeeze()
     )* np.diff(temp_surf_anom, axis=0).squeeze()
-    approx_terms['r_anom_change'] = -approx['s_anom_change_r_cont'] - (L_v * np.diff(sphum_ref, axis=0).squeeze() +
+
+    # r_change1 term
+    approx_terms['r_change'] = -approx['s_anom_change_r_cont'] - (L_v * np.diff(sphum_ref, axis=0).squeeze() +
                                       (mu[0]*beta_s1[0] + np.diff(beta_s1, axis=0).squeeze()) * temp_surf_anom[0]
                                       ) * np.diff(r_anom/r_ref[:, np.newaxis], axis=0).squeeze()
-    approx_terms['temp_s_r_anom_change'] = -approx['s_anom_change_temp_r_cont'] - (
+    # Add r_change2 term
+    approx_terms['r_change'] -= L_v * sphum_ref[0] * (
+            np.diff(r_anom / r_ref[:, np.newaxis], axis=0).squeeze() + r_anom[0] *
+            (np.diff(r_ref, axis=0).squeeze() / r_ref[0] ** 2)
+            - np.diff(r_anom, axis=0).squeeze() / r_ref[0])
+
+    approx_terms['temp_s_anom_r_change'] = -approx['s_anom_change_temp_r_cont'] - (
             mu[0]*beta_s1[0] + np.diff(beta_s1, axis=0).squeeze()
     ) * np.diff(r_anom/r_ref[:, np.newaxis], axis=0).squeeze() * np.diff(temp_surf_anom, axis=0).squeeze()
     # Convert into scaling factor K/K units
@@ -556,48 +562,48 @@ def decompose_var_x_change(var_av: np.ndarray, var_x: np.ndarray, var_p: np.ndar
 
     where:
 
-    * $p_x$ is defined such that $T_{FT}(x) = T_{FT}[p_x]$ and $\overline{p}$ such that
-    $\overline{T_{FT}} = T_{FT}[\overline{p}]$.
-    * $\eta(p_x) = \\frac{\\partial T_{FT}}{\\partial p}\\bigg|_{p_x}$;
-    $\overline{\eta} = \\frac{\\partial T_{FT}}{\\partial p}\\bigg|_{\overline{p}}$ and
-    $\Delta \eta(p_x) = \eta(p_x) - \overline{\eta}$.
-    * $\delta \Delta p_x = \delta (p_x - \overline{p})$
-    * $\delta \Delta T_{FT}[p_x] = \delta (T_{FT}[p_x] - T_{FT}[\overline{p}])$ keeping $p_x$ and $\overline{p}$
-    constant.
-    * $\Delta (\delta \eta(p_x) \delta p_x) = \delta \eta(p_x) \delta p_x - \delta \overline{\eta}\delta \overline{p}$
+    * $p_x$ is defined such that $\chi[x] = \chi(p_x)$ and $\overline{p}$ such that
+    $\overline{\chi} = \chi[\overline{p}]$.
+    * $\eta(p_x) = \\frac{\\partial \chi}{\\partial p}\\bigg|_{p_x}$;
+        $\overline{\eta} = \\frac{\\partial \chi}{\\partial p}\\bigg|_{\overline{p}}$ and
+        $\Delta \eta(p_x) = \eta(p_x) - \overline{\eta}$.
+    * $\delta \chi(p_x) = \chi^{hot}(p^{cold}_x) - \chi^{cold}(p^{cold}_x)$ i.e. keep $p_x$ constant, at its value
+        in the colder simulation.
 
-    The only approximation in the above is saying that $\eta(p)$ is constant between $p=p_x$ and $p=p_x+\delta p_x$.
+    The only approximation in the above is saying that $\eta(p) + \delta \eta(p)$ is constant between
+    $p=p_x$ and $p=p_x+\delta p_x$.
     Keeping only the first two terms on the RHS, also provides a good approximation.
     This is achieved by setting `simple=True`.
 
     Args:
         var_av: `float [n_exp]`</br>
-            Average free tropospheric temperature for each experiment, likely to be $T_{FT}(x=50)$.
+            Average of variable $\chi$ for each experiment, ikely to be mean or median.
         var_x: `float [n_exp, n_quant_x]`</br>
-            Free tropospheric temperature conditioned on near-surface temperature percentile, $x$, for each
-            experiment: $T_{FT}(x)$. $x$ can differ from `quant_px`, but likely to be the same: `np.arange(100)`.
+            Variable $\chi$ conditioned on near-surface temperature percentile, $x$, for each
+            experiment: $\chi[x]$. $x$ can differ from `quant_px`, but likely to be the same: `np.arange(1, 100)`.
         var_p: `float [n_exp, n_quant_p]`</br>
-            `temp_ft_p[i, j]` is the $p=$`quant_p[j]`$^{th}$ percentile of free tropospheric temperature for
-            experiment `i`: $T_{FT}[p]$.
+            `var_p[i, j]` is the $p=$`quant_p[j]`$^{th}$ percentile of variable $\chi$ for
+            experiment `i`: $\chi(p)$.
         quant_p: `float [n_quant_p]`</br>
-            Corresponding quantiles to `temp_ft_p`.
+            Corresponding quantiles to `var_p`.
         simple: If `True`, `temp_ft_change_theory` will be
-            $\delta \Delta T_{FT}[p_x] + \overline{\eta}\delta \Delta p_x$. If `False`, will also include
-            $\Delta \eta(p_x) \delta \overline{p} + \Delta \eta(p_x)\Delta p_x + \Delta (\delta \eta(p_x) \delta p_x)$.
+            $\delta \chi(p_x) + \overline{\eta}\delta p_x$. If `False`, will also include
+            $\Delta \eta(p_x) \delta p_x + \delta \eta(p_x) \delta p_x$.
 
     Returns:
         var_x_change: `float [n_quant_x]`</br>
-            Simulated $\delta \Delta T_{FT}(x)$
+            Simulated $\delta \chi[x]$
         var_x_change_theory: `float [n_quant_x]`</br>
-            Theoretical $\delta \Delta T_{FT}(x)$
-        var_x_change_cont: Dictionary recording the five terms in the theory for $\delta \Delta T_{FT}(x)$.
-            The key name indicates which variable is causing the $x$ variation:
+            Theoretical $\delta \chi[x]$
+        var_x_change_cont: Dictionary recording the five terms in the theory for $\delta \Delta \chi(x)$.
+            The sum of all these terms should match the simulated `var_x_change`.
 
-            * `var_p`: $\delta T_{FT}(p_x)$
+            * `var_p`: $\delta \chi(p_x)$
             * `p_x`: $\overline{\eta}\delta p_x$
             * `nl_eta0`: $\Delta \eta(p_x) \delta p_x$
             * `nl_change`: $\delta \eta(p_x) \delta p_x$
-            * `approx_integral`: $\int_{p_x}^{p_x + \delta p_x} \eta(p) + \delta \eta(p) dp -
+            * `approx_integral`: Accounts for approximation made during the integral:
+                $\int_{p_x}^{p_x + \delta p_x} \eta(p) + \delta \eta(p) dp -
                 (\eta(p_x) + \delta \eta(p_x))\delta p_x$
 
     """

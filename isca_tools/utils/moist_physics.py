@@ -95,7 +95,8 @@ def moist_static_energy(temp: np.ndarray, sphum: np.ndarray, height: Union[np.nd
         temp: `float [n_lat, n_p_levels]`. Temperature at each coordinate considered. Units: *Kelvin*.
         sphum: `float [n_lat, n_p_levels]`. Specific humidity at each coordinate considered. Units: *kg/kg*.
         height: `float [n_lat, n_p_levels]` or `float`. Geopotential height of each level considered.
-        Just a `float` if only one pressure level considered for each latitude e.g. common to use 2m values. Units: *m*.
+            Just a `float` if only one pressure level considered for each latitude e.g. common to use 2m values.
+            Units: *m*.
         c_p_const: Heat capacity constant in units of J/K/kg.
             This gives the option to easily modify the moist static energy but almost always be kept at default `c_p`.
 

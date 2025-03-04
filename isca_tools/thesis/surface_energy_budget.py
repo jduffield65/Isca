@@ -60,7 +60,7 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
             Units: $Wm^{-2}$.
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
-            [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
         n_harmonics_sw: Number of harmonics to use to fit fourier series for $SW^{\\downarrow}$.
             Cannot exceed `n_harmonics_temp` as extra harmonics would not be used.</n>
             Set to None, to use no approximation for $SW^{\\downarrow}$ - but we weary with comparing to analytic
@@ -204,7 +204,7 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
             Units: $Wm^{-2}$.
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
-            [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
         lambda_const: The constant $\lambda$ used in the approximation for
             $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
         lambda_phase: The constants $\lambda_{phase}$ used in the approximation for $\Gamma^{\\uparrow}$.
@@ -316,7 +316,7 @@ Union[float, np.ndarray]]:
             The first harmonic amplitude fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $F_1$.
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
-            [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
         lambda_const: The constant $\lambda$ used in the approximation for
             $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
         lambda_phase: The constants $\lambda_{phase}$ used in the approximation for $\Gamma^{\\uparrow}$.
@@ -482,7 +482,7 @@ def swdn_from_temp_fourier(time: np.ndarray, temp_fourier_amp: np.ndarray, temp_
             The phase Fourier coefficients for surface temperature: $\phi_n$.
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
-            [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
         lambda_const: `float [n_lambda+1]`</br>
             The constants $\lambda_i$ used in the approximation for
             $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
@@ -569,7 +569,7 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
             Units: $Wm^{-2}$.
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
-            [`get_heat_capacity`](/code/utils/radiation/#isca_tools.utils.radiation.get_heat_capacity).
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
         lambda_const: `float [n_lambda+1]`</br>
             The constants $\lambda_i$ used in the approximation for
             $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>

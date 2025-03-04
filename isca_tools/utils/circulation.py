@@ -59,7 +59,7 @@ def get_u_thermal(temp: np.ndarray, p: np.ndarray, lat: np.ndarray, ax_p: int = 
             Must be $0$ or $1$.
 
     Returns:
-         `float [n_lat, ...]`.</br>
+        `float [n_lat, ...]`.</br>
             Thermal wind at pressure level given by `p[-1]`. Units: *m/s*.
     """
     if len(p) > 1:
