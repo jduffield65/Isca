@@ -550,8 +550,100 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
 
 
 def decompose_var_x_change(var_av: np.ndarray, var_x: np.ndarray, var_p: np.ndarray,
-                          quant_p: np.ndarray = np.arange(100, dtype=int), simple: bool = True
-                          ) -> Tuple[np.ndarray, np.ndarray, dict]:
+                           quant_p: np.ndarray = np.arange(100, dtype=int), simple: bool = True
+                           ) -> Tuple[np.ndarray, np.ndarray, dict]:
+    """
+    We can decompose the change in variable $\chi$, conditioned on near-surface temperature
+    percentile $x$ into the change in the corresponding percentile of $\chi$: $p_x$, but accounting
+    for how $p_x$ changes with warming:
+
+    $\delta \chi[x] \\approx \delta \chi(p_x) + \overline{\eta}\delta p_x +
+    \Delta \eta(p_x)\delta p_x + \delta \eta(p_x) \delta p_x$
+
+    where:
+
+    * $p_x$ is defined such that $\chi[x] = \chi(p_x)$ and $\overline{p}$ such that
+    $\overline{\chi} = \chi[\overline{p}]$.
+    * $\eta(p_x) = \\frac{\\partial \chi}{\\partial p}\\bigg|_{p_x}$;
+        $\overline{\eta} = \\frac{\\partial \chi}{\\partial p}\\bigg|_{\overline{p}}$ and
+        $\Delta \eta(p_x) = \eta(p_x) - \overline{\eta}$.
+    * $\delta \chi(p_x) = \chi^{hot}(p^{cold}_x) - \chi^{cold}(p^{cold}_x)$ i.e. keep $p_x$ constant, at its value
+        in the colder simulation.
+
+    The only approximation in the above is saying that $\eta(p) + \delta \eta(p)$ is constant between
+    $p=p_x$ and $p=p_x+\delta p_x$.
+    Keeping only the first two terms on the RHS, also provides a good approximation.
+    This is achieved by setting `simple=True`.
+
+    Args:
+        var_av: `float [n_exp]`</br>
+            Average of variable $\chi$ for each experiment, ikely to be mean or median.
+        var_x: `float [n_exp, n_quant_x]`</br>
+            Variable $\chi$ conditioned on near-surface temperature percentile, $x$, for each
+            experiment: $\chi[x]$. $x$ can differ from `quant_px`, but likely to be the same: `np.arange(1, 100)`.
+        var_p: `float [n_exp, n_quant_p]`</br>
+            `var_p[i, j]` is the $p=$`quant_p[j]`$^{th}$ percentile of variable $\chi$ for
+            experiment `i`: $\chi(p)$.
+        quant_p: `float [n_quant_p]`</br>
+            Corresponding quantiles to `var_p`.
+        simple: If `True`, `temp_ft_change_theory` will be
+            $\delta \chi(p_x) + \overline{\eta}\delta p_x$. If `False`, will also include
+            $\Delta \eta(p_x) \delta p_x + \delta \eta(p_x) \delta p_x$.
+
+    Returns:
+        var_x_change: `float [n_quant_x]`</br>
+            Simulated $\delta \chi[x]$
+        var_x_change_theory: `float [n_quant_x]`</br>
+            Theoretical $\delta \chi[x]$
+        var_x_change_cont: Dictionary recording the five terms in the theory for $\delta \Delta \chi(x)$.
+            The sum of all these terms should match the simulated `var_x_change`.
+
+            * `var_p`: $\delta \chi(p_x)$
+            * `p_x`: $\overline{\eta}\delta p_x$
+            * `nl_eta0`: $\Delta \eta(p_x) \delta p_x$
+            * `nl_change`: $\delta \eta(p_x) \delta p_x$
+            * `approx_integral`: Accounts for approximation made during the integral:
+                $\int_{p_x}^{p_x + \delta p_x} \eta(p) + \delta \eta(p) dp -
+                (\eta(p_x) + \delta \eta(p_x))\delta p_x$
+
+    """
+    n_exp, n_quant_x = var_x.shape
+    # Get FT percentile corresponding to each FT temperature conditioned on near-surface percentile
+    p_av_ind = np.zeros(n_exp, dtype=int)
+    p_x = np.zeros((n_exp, n_quant_x))
+    for i in range(n_exp):
+        p_av_ind[i] = get_p_x(var_av[i], var_p[i], quant_p)[1]
+        p_x[i] = get_p_x(var_x[i], var_p[i], quant_p)[0]
+
+    # Interpolation so can use p_x which are not integers
+    var_p_interp_func = [scipy.interpolate.interp1d(quant_p, var_p[i], fill_value='extrapolate') for i in range(n_exp)]
+    # Sanity check that interpolation function works
+    for i in range(n_exp):
+        if not np.allclose(var_p_interp_func[i](p_x[i]), var_x[i]):
+            raise ValueError(f'Error in interpolation for experiment {i}')
+
+
+    # Isolate x dependence into different terms
+    # Use var_x sometimes and var_p sometimes, so sum of these contributions exactly equal var_x_change
+    # I.e. exploit that var_x[0] = var_p_interp_func[0](p_x[0]) and var_x[1] = var_p_interp_func[1](p_x[1])
+    var_x_change = var_x[1] - var_x[0]
+    var_x_change_cont = {'dist': var_p_interp_func[1](p_x[0]) - var_x[0],
+                         'p_x': var_p_interp_func[0](p_x[1]) - var_x[0],
+                         'nl': var_x[1] - var_p_interp_func[0](p_x[1]) -
+                               (var_p_interp_func[1](p_x[0]) - var_x[0])}
+
+    # Theory is sum of terms
+    var_x_change_theory = var_x_change_cont['dist'] + var_x_change_cont['p_x']
+    if not simple:
+        var_x_change_theory = var_x_change_theory + \
+                                var_x_change_cont['nl']
+
+    return var_x_change, var_x_change_theory, var_x_change_cont
+
+
+def decompose_var_x_change_integrate(var_av: np.ndarray, var_x: np.ndarray, var_p: np.ndarray,
+                                     quant_p: np.ndarray = np.arange(100, dtype=int), simple: bool = True
+                                     ) -> Tuple[np.ndarray, np.ndarray, dict]:
     """
     We can decompose the change in variable $\chi$, conditioned on near-surface temperature
     percentile $x$ into the change in the corresponding percentile of $\chi$: $p_x$, but accounting
