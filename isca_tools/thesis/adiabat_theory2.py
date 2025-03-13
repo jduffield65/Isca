@@ -133,7 +133,8 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
                             epsilon_quant: np.ndarray,
                             pressure_surf: float, pressure_ft: float,
                             epsilon_ref: Optional[np.ndarray] = None,
-                            z_approx_ref: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict, dict, dict]:
+                            z_approx_ref: Optional[np.ndarray] = None,
+                            include_non_linear: bool = False) -> Tuple[np.ndarray, dict, dict, dict]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
     to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by:
@@ -232,6 +233,11 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             approximation of geopotential height, as relating to temperature.</br>
             Here you have the option of specifying the reference $A_z$ for each simulation. If not provided,
             will set to 0. Units: *kJ/kg*.
+        include_non_linear: If `True`, will include the approximate values of
+            $A_{\delta \Delta T_{FT}}$, $A_{\delta r}[x]$ and $A_{\Delta T_s \Delta r}[x]$ in `info_cont` with the
+            names `nl_temp_ft_anom_change`, `nl_r_change` and `nl_anom_temp_s_r` respectively.
+            These are obtained using `get_approx_terms` with `simple=True`.
+            These will also be included in the `scale_factor` theory.
 
     Returns:
         scale_factor: `float [n_quant]`</br>
@@ -251,7 +257,9 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
 
             All are arrays of size `float [n_quant]`, except `r_ref_change` which is just a single `float`.
         info_cont: Dictionary containing `gamma[key] x info_var[key]` for each `key` in `gamma`. This gives
-            the contribution from each physical mechanism to the overall scale factor.
+            the contribution from each physical mechanism to the overall scale factor.</br>
+            If `include_non_linear=True`, will also include `nl_temp_ft_anom_change`, `nl_r_change`
+            and `nl_anom_temp_s_r` which arise from including the most significant approximations.
 
     """
     n_exp = temp_surf_ref.size
@@ -279,6 +287,15 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     info_cont = {}
     for key in gamma:
         info_cont[key] = coef_sign[key] * gamma[key] * info_var[key]
+
+    if include_non_linear:
+        # Add non-linear terms
+        approx_var = get_approx_terms(temp_surf_ref, temp_surf_quant, r_ref, r_quant, temp_ft_quant,
+                                      epsilon_quant, pressure_surf, pressure_ft, epsilon_ref,
+                                      z_approx_ref, simple=True)[0]
+        for key in ['temp_ft_anom_change', 'r_change', 'anom_temp_s_r']:
+            info_cont['nl_'+key] = approx_var[key]
+
     final_answer = np.asarray(sum([info_cont[key] for key in info_cont]))
     return final_answer, gamma, info_var, info_cont
 
