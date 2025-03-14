@@ -105,7 +105,7 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
             # If epsilon_ref_change non-zero, then must have non-zero temp_surf_ref_change, and its value does matter.
             if epsilon_ref[1] != epsilon_ref[0]:
                 raise ValueError('Cannot have epsilon_ref different for each experiment if only one temp_surf_ref provided')
-    elif not isinstance(temp_surf_ref, (list, np.ndarray)) or isinstance(r_ref, (list, np.ndarray)):
+    elif not isinstance(temp_surf_ref, (list, np.ndarray)) and isinstance(r_ref, (list, np.ndarray)):
         raise ValueError('`temp_surf_ref` and `r_ref` must be of same type: either both float or both number')
     n_exp = temp_surf_ref.size
 
