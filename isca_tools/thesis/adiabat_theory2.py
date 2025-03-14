@@ -16,10 +16,10 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     \\begin{align}
     \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} &= \gamma_{\delta T_{FT}}\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
     - \gamma_{\delta r}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}
-    + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s} \\\\
+    + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{c_p \delta \\tilde{T}_s} \\\\
     &+ \gamma_{\Delta T_s} \\frac{\Delta T_s(x)}{\\tilde{T}_s}
     - \gamma_{\Delta r} \\frac{\Delta r[x]}{\\tilde{r}_s}
-    - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}
+    - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{c_p \\tilde{T}_s}
     - \gamma_{\delta \\tilde{r}}\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}
     \\end{align}
     $$
@@ -78,14 +78,14 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
 
             * `temp_ft_change`: $\gamma_{\delta T_{FT}} = \\frac{\\tilde{\\beta}_{FT1}}{\\tilde{\\beta}_{s1}}$
             * `r_change`: $\gamma_{\delta r} = \\frac{L_v\\tilde{q}_s}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
-            * `epsilon_change`: $\gamma_{\delta \epsilon} = 1$
+            * `epsilon_change`: $\gamma_{\delta \epsilon} = \\frac{c_p}{\\tilde{\\beta}_{s1}}$
             * `temp_anom`: $\gamma_{\Delta T_s} = \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
                 \\frac{\\tilde{\\beta}_{s1} \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}} -
                 \\frac{\\tilde{\\beta}_{s2}}{\\tilde{\\beta}_{s1}}$
             * `r_anom`: $\gamma_{\Delta r} = \\tilde{\mu} - \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
                 \\frac{L_v \\tilde{q}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
             * `epsilon_anom`: $\gamma_{\Delta \epsilon} = \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
-                \\frac{\\tilde{\\beta}_{s1} \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
+                \\frac{c_p \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
             * `r_ref_change`: $\gamma_{\delta \\tilde{r}} = \\tilde{\mu}$
     """
     n_exp = temp_surf_ref.size
@@ -115,8 +115,8 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     gamma = {}
     gamma['temp_ft_change'] = beta_ft1[0]/beta_s1[0]
     gamma['r_change'] = L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0])
-    gamma['epsilon_change'] = 1
-    # gamma['epsilon_anom'] just becomes (beta_ft2/beta_ft1) ((beta_s1*T_s) / (beta_ft1*T_ft))
+    gamma['epsilon_change'] = c_p / beta_s1[0]
+    # gamma['epsilon_anom'] just becomes (beta_ft2/beta_ft1) ((c_p*T_s) / (beta_ft1*T_ft))
     # if r_ref_change = epsilon_ref_change = 0
     gamma['epsilon_anom'] = beta_ft2[0] / beta_ft1[0] ** 2 / temp_ft_ref[0] \
                             * temp_surf_ref[0] * mse_mod_ref_change0 / temp_surf_ref_change
@@ -125,6 +125,8 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     gamma['r_anom'] = mu[0] * (1 + r_ref_change/r_ref[0]) \
                       - gamma['epsilon_anom'] * L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0])
     gamma['r_ref_change'] = mu[0]
+    # account for new non-dimensional form of gamma so divide epsilon by c_p not beta_s1 in sf equation
+    gamma['epsilon_anom'] *= c_p / beta_s1[0]
     return gamma
 
 
@@ -143,10 +145,10 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     \\begin{align}
     \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} &= \gamma_{\delta T_{FT}}\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
     - \gamma_{\delta r}\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}
-    + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s} \\\\
+    + \gamma_{\delta \epsilon} \\frac{\delta \epsilon[x]}{c_p \delta \\tilde{T}_s} \\\\
     &+ \gamma_{\Delta T_s} \\frac{\Delta T_s(x)}{\\tilde{T}_s}
     - \gamma_{\Delta r} \\frac{\Delta r[x]}{\\tilde{r}_s}
-    - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}
+    - \gamma_{\Delta \epsilon} \\frac{\Delta \epsilon[x]}{c_p \\tilde{T}_s}
     - \gamma_{\delta \\tilde{r}}\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}
     \\end{align}
     $$
@@ -252,7 +254,7 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             * `epsilon_change`: $\\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s}$
             * `temp_anom`: $\\frac{\Delta T_s(x)}{\\tilde{T}_s}$
             * `r_anom`: $\\frac{\Delta r[x]}{\\tilde{r}_s}$
-            * `epsilon_anom`: $\\frac{\Delta \epsilon[x]}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
+            * `epsilon_anom`: $\\frac{\Delta \epsilon[x]}{c_p \\tilde{T}_s}$
             * `r_ref_change`: $\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}$
 
             All are arrays of size `float [n_quant]`, except `r_ref_change` which is just a single `float`.
@@ -275,10 +277,10 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     info_var = {'r_ref_change': np.diff(r_ref, axis=0).squeeze()/r_ref[0],
                 'temp_ft_change': np.diff(temp_ft_quant, axis=0).squeeze()/temp_surf_ref_change,
                 'r_change': np.diff(r_quant, axis=0).squeeze()/r_ref[0, np.newaxis] * temp_surf_ref[0]/temp_surf_ref_change,
-                'epsilon_change': np.diff(epsilon_quant, axis=0).squeeze()*1000/beta_s1[0]/temp_surf_ref_change,
+                'epsilon_change': np.diff(epsilon_quant, axis=0).squeeze()*1000/c_p/temp_surf_ref_change,
                 'temp_anom': (temp_surf_quant[0]-temp_surf_ref[0]) / temp_surf_ref[0],
                 'r_anom': (r_quant[0]-r_ref[0]) / r_ref[0],
-                'epsilon_anom': (epsilon_quant[0]-epsilon_ref[0])*1000 / beta_s1[0] / temp_surf_ref[0]}
+                'epsilon_anom': (epsilon_quant[0]-epsilon_ref[0])*1000 / c_p / temp_surf_ref[0]}
     # All gamma are positive, so sign below is to multiply gamma in equation
     coef_sign = {'r_ref_change': -1, 'temp_ft_change': 1, 'r_change': -1, 'epsilon_change': 1,
                  'temp_anom': 1, 'r_anom': -1, 'epsilon_anom': -1}
