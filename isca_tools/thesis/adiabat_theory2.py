@@ -6,9 +6,10 @@ from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat, get_p_
 from typing import Tuple, Union, Optional
 
 
-def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressure_surf: float, pressure_ft: float,
-                            epsilon_ref: Optional[np.ndarray] = None,
-                            z_approx_ref: Optional[np.ndarray] = None) -> dict:
+def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Union[np.ndarray, float],
+                            pressure_surf: float, pressure_ft: float,
+                            epsilon_ref: Optional[Union[np.ndarray, float]] = None,
+                            z_approx_ref: Optional[Union[np.ndarray, float]] = None) -> dict:
     """
     Calculates the dimensionless sensitivity $\gamma$ parameters such that the theoretical scaling factor is given by:
 
@@ -53,23 +54,28 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     Args:
         temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
             Reference near surface temperature of each simulation, corresponding to a different
-            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+            optical depth, $\kappa$. Units: *K*. It is assumed that `n_exp=2`.</br>
+            If provide just one value, will assume `r_ref` for both experiments is the same, and thus
+            the value of `temp_surf_ref` in the second (warmer) experiment does not make a difference.
         r_ref: `float [n_exp]` $\\tilde{r}_s$</br>
-            Reference near surface relative humidity of each simulation. Units: dimensionless (from 0 to 1).
+            Reference near surface relative humidity of each simulation. Units: dimensionless (from 0 to 1).</br>
+            If provide just one value, will assume it is the same for both experiments.
         pressure_surf:
             Pressure at near-surface, $p_s$, in *Pa*.
         pressure_ft:
             Pressure at free troposphere level, $p_{FT}$, in *Pa*.
         epsilon_ref: `float [n_exp]` $\\tilde{\epsilon}_s$</br>
             Reference value of $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE and
-            $h^*_{FT}$ is saturated MSE at `pressure_ft`. If not given, weill set to 0. Units: *kJ/kg*.
+            $h^*_{FT}$ is saturated MSE at `pressure_ft`. If not given, weill set to 0. Units: *kJ/kg*.</br>
+            If provide just one value, will assume it is the same for both experiments.
         z_approx_ref: `float [n_exp]` $\\tilde{A}_z$</br>
             The exact equation for modified MSE is given by: $h^{\dagger} = (c_p - R^{\dagger})T_s + L_v q_s
             - \epsilon = (c_p + R^{\dagger})T_{FT} + L_vq^*(T_{FT}, p_{FT}) + A_z$
             where $R^{\dagger} = R\\ln(p_s/p_{FT})/2$ and $A_z$ quantifies the error due to
             approximation of geopotential height, as relating to temperature.</br>
             Here you have the option of specifying the reference $A_z$ for each simulation. If not provided,
-            will set to 0. Units: *kJ/kg*.
+            will set to 0. Units: *kJ/kg*.</br>
+            If provide just one value, will assume it is the same for both experiments.
 
     Returns:
         gamma: Dictionary containing sensitivity parameters. All are a single dimensionless `float`.
@@ -88,11 +94,33 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
                 \\frac{c_p \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
             * `r_ref_change`: $\gamma_{\delta \\tilde{r}} = \\tilde{\mu}$
     """
+    if isinstance(temp_surf_ref, (float, int)) and isinstance(r_ref, (float, int)):
+        # If give numbers, then set r_ref change to be zero, and
+        # Cannot set temp_surf_ref_change to 0, as divide by zero in gamma['epsilon_anom'] equation
+        temp_surf_ref_change = 1        # arbitrarily have temp_diff=1K, could be anything, as does not contribute if r_ref_change=0
+        temp_surf_ref = np.asarray([temp_surf_ref, temp_surf_ref+temp_surf_ref_change])
+        r_ref_change = 0
+        r_ref = np.asarray([r_ref, r_ref+r_ref_change])
+        if isinstance(epsilon_ref, (list, np.ndarray)):
+            # If epsilon_ref_change non-zero, then must have non-zero temp_surf_ref_change, and its value does matter.
+            if epsilon_ref[1] != epsilon_ref[0]:
+                raise ValueError('Cannot have epsilon_ref different for each experiment if only one temp_surf_ref provided')
+    elif not isinstance(temp_surf_ref, (list, np.ndarray)) or isinstance(r_ref, (list, np.ndarray)):
+        raise ValueError('`temp_surf_ref` and `r_ref` must be of same type: either both float or both number')
     n_exp = temp_surf_ref.size
+
     if z_approx_ref is None:
         z_approx_ref = np.zeros(n_exp)
+    elif isinstance(z_approx_ref, (float, int)):
+        # If give float, set same for both experiments (doesn't actually influence anything as temp_ft_ref[1] not used)
+        z_approx_ref = np.full(n_exp, z_approx_ref)
+
     if epsilon_ref is None:
         epsilon_ref = np.zeros(n_exp)
+    elif isinstance(epsilon_ref, (float, int)):
+        # If give float, set same for both experiments (use epsilon_ref_change in mse_mod_ref_change0).
+        epsilon_ref = np.full(n_exp, epsilon_ref)
+
     sphum_ref = r_ref * sphum_sat(temp_surf_ref, pressure_surf)
     temp_ft_ref = np.zeros(n_exp)
     for i in range(n_exp):
@@ -104,12 +132,12 @@ def get_sensitivity_factors(temp_surf_ref: np.ndarray, r_ref: np.ndarray, pressu
     _, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf_ref, pressure_surf, pressure_ft,
                                                                   sphum_ref)
     # Change in mse_mod, taking linear taylor expansion
-    mse_mod_ref_change0 = beta_s1[0] * (1 + mu[0] * (np.diff(r_ref, axis=0).squeeze()/r_ref[0])
-                                        ) * np.diff(temp_surf_ref, axis=0).squeeze() \
-                          + L_v * sphum_ref[0] * (np.diff(r_ref, axis=0).squeeze()/r_ref[0]) \
-                          - np.diff(epsilon_ref*1000, axis=0).squeeze()
     temp_surf_ref_change = np.diff(temp_surf_ref, axis=0).squeeze()
     r_ref_change = np.diff(r_ref, axis=0).squeeze()
+    mse_mod_ref_change0 = beta_s1[0] * (1 + mu[0] * (r_ref_change/r_ref[0])
+                                        ) * temp_surf_ref_change \
+                          + L_v * sphum_ref[0] * (r_ref_change/r_ref[0]) \
+                          - np.diff(epsilon_ref*1000, axis=0).squeeze()
 
 
     gamma = {}
