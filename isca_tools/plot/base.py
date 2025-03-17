@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 from matplotlib.collections import LineCollection
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 import warnings
 import numpy as np
 import os
@@ -32,8 +32,6 @@ def savefig(fig: plt.Figure, file_name: str = 'output', output_dir: str = '/User
         save_if_exists: If `False` and file already exists, will not save any file, otherwise will save according
             to `overwrite_file`.
 
-    Returns:
-
     """
     format_array = ['png', 'pdf', 'svg', 'jpeg']
     if format not in format_array:
@@ -52,7 +50,7 @@ def savefig(fig: plt.Figure, file_name: str = 'output', output_dir: str = '/User
         file_name_use = file_name
     file_path = os.path.join(output_dir, file_name_use + format_with_dot)
     if os.path.isfile(file_path) and not save_if_exists:
-        return None
+        pass
     else:
         if not overwrite_file:
             # Add number to file name so does not overwrite existing file
@@ -61,11 +59,12 @@ def savefig(fig: plt.Figure, file_name: str = 'output', output_dir: str = '/User
                 i += 1
                 file_path = os.path.join(output_dir, file_name_use + f'{i}{format_with_dot}')
         fig.savefig(file_path, dpi=dpi, bbox_inches=bbox_inches, pad_inches=pad_inches)
-        return None
+    return None
 
 
 def label_subplots(fig: plt.Figure, ax_list: Union[plt.Axes, List[plt.Axes]], labels: Optional[List[str]] = None,
-                   fontsize: float = 9, fontcolor: str = 'k', box_alpha: float = 1, pos_x=10, pos_y=-5):
+                   fontsize: float = 9, fontcolor: str = 'k', box_alpha: float = 1,
+                   pos_x: float=5, pos_y: float=-5) -> None:
     """
     This adds a label to each subplot in the top right corner.
 
@@ -93,6 +92,96 @@ def label_subplots(fig: plt.Figure, ax_list: Union[plt.Axes, List[plt.Axes]], la
         ax.text(0.0, 1.0, labels[i], transform=ax.transAxes + trans,
                 fontsize=fontsize, verticalalignment='top', color=fontcolor,
                 bbox=dict(facecolor='1', edgecolor='none', pad=3.0, alpha=box_alpha))
+    return None
+
+
+def get_fig_n_rows_cols(fig: plt.Figure) -> Tuple[int, int]:
+    """
+    Returns the number of rows and columns of subplots in a figure.
+
+    Args:
+        fig: Figure to find subplot arrangement for.
+
+    Returns:
+        n_row: Number of rows of subplots.
+        n_col: Number of columns of subplots.
+    """
+    # Get the axes objects from the figure
+    axes = fig.axes
+
+    # To determine the number of rows and columns, we need to find the grid shape
+    # by considering the number of axes and their positions
+
+    # Sort axes by their x and y positions to infer the grid structure
+    sorted_axes = sorted(axes, key=lambda ax: (ax.get_position().y0, ax.get_position().x0))
+
+    # Assuming the grid is arranged row-wise (top-to-bottom, left-to-right)
+    # Calculate number of rows and columns based on sorted axes positions
+    n_col = len(set(ax.get_position().x0 for ax in sorted_axes))  # Number of unique x positions
+    n_row = len(set(ax.get_position().y0 for ax in sorted_axes))  # Number of unique y positions
+    return n_row, n_col
+
+
+def fig_resize(fig: plt.Figure, width_fig_desired: Optional[float]=None, ar: float=4/3) -> None:
+    """
+    Change height of figure such that aspect ratio of each subplot is set to `ar`, while the width is maintained
+    at the same value.
+
+    Args:
+        fig: Figure to resize.
+        width_fig_desired: Width of figure after resize in inches. If not provided, will keep current width.
+        ar: Desired aspect ratio (width/height) of each subplot within `fig`.
+
+    """
+    if width_fig_desired is None:
+        width_fig_desired = fig.get_size_inches()[0]
+    n_row, n_col = get_fig_n_rows_cols(fig)
+    width_subplot_desired = (width_fig_desired / n_col)
+    height_subplot_desired = width_subplot_desired / ar  # height of each subplot
+    height_fig_desired = height_subplot_desired * n_row
+    fig.set_size_inches(width_fig_desired, height_fig_desired)
+    return None
+
+
+def update_fontsize(fig: plt.Figure, base_fontsize: float=8, base_ax_width: float=2.464) -> None:
+    """
+    Resize fontsize based on subplot width, given that `base_fontsize` is a good fontsize for a subplot
+    of width `base_ax_width` inches.
+
+    Args:
+        fig: Figure to change fontsize for.
+        base_fontsize: A good fontsize for a subplot of width `base_ax_width` inches.
+        base_ax_width: A subplot of width `base_ax_width` inches, looks good with fontsize set to `base_fontsize`.
+
+    """
+    ax_width = fig.axes[0].get_position().width * fig.get_size_inches()[0]      # use first axes to get subplot width
+    scale_factor = ax_width/base_ax_width
+    new_fontsize = scale_factor * base_fontsize
+    for text in fig.findobj(plt.Text):  # Find all text objects
+        text.set_fontsize(new_fontsize)
+    return None
+
+
+def update_linewidth(fig: plt.Figure, base_linewidth: float=1, base_ax_width: float=2.464) -> None:
+    """
+    Resize linewidths based on subplot width, given that `base_linewidth` is a good linewidth for a subplot
+    of width `base_ax_width` inches.
+
+    Args:
+        fig: Figure to change linewidth for.
+        base_linewidth: A good linewidth for a subplot of width `base_ax_width` inches.
+        base_ax_width: A subplot of width `base_ax_width` inches, looks good with linewidth set to `base_linewidth`.
+
+    """
+    ax_width = fig.axes[0].get_position().width * fig.get_size_inches()[0]  # use first axes to get subplot width
+    scale_factor = ax_width / base_ax_width
+    new_linewidth = base_linewidth * scale_factor
+
+    # Set new line width for the plot
+    for ax in fig.axes:
+        for line in ax.get_lines():
+            line.set_linewidth(new_linewidth)
+    return None
 
 
 def colored_line(x: np.ndarray, y: np.ndarray, c: np.ndarray, ax: plt.Axes, **lc_kwargs) -> LineCollection:
