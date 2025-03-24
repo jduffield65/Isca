@@ -5,11 +5,104 @@ from ..utils.constants import c_p, L_v, R, g
 from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat, get_p_x
 from typing import Tuple, Union, Optional
 
+def get_cape_approx(temp_surf: float, r_surf: float, pressure_surf: float, pressure_ft: float,
+                    temp_ft: Optional[float] = None, epsilon: Optional[float] = None,
+                    z_approx: Optional[float] = None) -> Tuple[float, float]:
+    """
+    Calculates an approximate value of CAPE using a single pressure level in the free troposphere, $p_{FT}$:
+
+    $$CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$$
+
+    where $R^{\dagger} = R\\ln(p_s/p_{FT})/2$ and $T_{FT,\epsilon=0}$ is the free tropospheric temperature which
+    would occur if $\epsilon=0$, all else the same.
+    I.e. this is the parcel rather than environmental temperature at $p_{FT}$.
+
+    ??? note "Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$"
+        $T_{FT}$ is exactly related to the surface through the modified MSE relation:
+
+        $$h^{\dagger} = (c_p - R^{\dagger})T_s + L_v r_s q^*(T_s, p_s) - \epsilon
+        = (c_p + R^{\dagger})T_{FT} + L_vq^*(T_{FT}, p_{FT}) + A_z$$
+
+        So only two of the three variables $T_{FT}$, $\epsilon$ and $A_z$ are required. The other will be computed from
+        this equation.
+
+        Similarly, $T_{FT,\epsilon=0}$ will be computed from the following equation where all variables have the same
+        value as for the $T_{FT}$ equation:
+
+        $$h^{\dagger}_{\epsilon=0} = (c_p - R^{\dagger})T_s + L_v r_s q^*(T_s, p_s)
+        = (c_p + R^{\dagger})T_{FT,\epsilon=0} + L_vq^*(T_{FT,\epsilon=0}, p_{FT}) + A_z$$
+
+    ??? note "Terms in equation"
+        * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
+            \\left(c_p + R^{\dagger}\\right) T_{FT} + L_v q^*_{FT} + A_z$
+            where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$,
+            and $A_z$ quantifies the error in this replacement.
+        * $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE (at $p_s$) and
+            $h^*_{FT}$ is free tropospheric saturated MSE (at $p_{FT}$).
+        * $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
+        * $q = rq^*$ where $q$ is the specific humidity, $r$ is relative humidity and $q^*(T, p)$
+            is saturation specific humidity which is a function of temperature and pressure.
+        * $A_z$ quantifies the error due to
+            approximation of geopotential height, as relating to temperature.
+
+    Args:
+        temp_surf: Temperature at `pressure_surf` in Kelvin.
+        r_surf: Relative humidity at `pressure_surf` in Kelvin.
+        pressure_surf:
+            Pressure at near-surface, $p_s$, in *Pa*.
+        pressure_ft:
+            Pressure at free troposphere level, $p_{FT}$, in *Pa*.
+        temp_ft:
+            Temperature at `pressure_ft` in Kelvin.
+            If not provided, will be computed using `epsilon` and `approx_z`
+            (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).
+        epsilon:
+            $\epsilon = h_s - h^*_{FT}$, if not provided, will be computed using `temp_ft` and `approx_z`
+            (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).</br>
+            Units: *kJ/kg*.
+        z_approx:
+            $A_z$ quantifies the error due to approximation of replacing geopotential height with temperature.
+            If not provided, will be computed using `temp_ft` and `epsilon`
+            (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).</br>
+            Units: *kJ/kg*.</br>
+
+    Returns:
+        cape: $CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$ in units of *kJ/kg*
+        temp_ft_parcel: $T_{FT,\epsilon=0}$ in units of Kelvin.
+    """
+    R_mod = R * np.log(pressure_surf/pressure_ft)/2
+    sphum_surf = r_surf * sphum_sat(temp_surf, pressure_surf)
+    if z_approx is None:
+        if (temp_ft is None) or (epsilon is None):
+            raise ValueError("If approx_z not provided, must provide both temp_ft and epsilon")
+        z_approx = moist_static_energy(temp_surf, sphum_surf, height=0, c_p_const=c_p - R_mod) - epsilon \
+                   - moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod)
+    elif temp_ft is None:
+        if (z_approx is None) or (epsilon is None):
+            raise ValueError("If temp_ft not provided, must provide both epsilon and approx_z")
+        temp_ft = get_temp_adiabat(temp_surf, sphum_surf, pressure_surf,
+                                   pressure_ft, epsilon=epsilon + z_approx)
+    elif epsilon is None:
+        if (temp_ft is None) or (z_approx is None):
+            raise ValueError("If epsilon not provided, must provide both temp_ft and approx_z")
+    else:
+        # If provide all values, do sanity check that temp_ft is same as computed from epsilon and approx_z
+        temp_ft_calc = get_temp_adiabat(temp_surf, sphum_surf,
+                                        pressure_surf, pressure_ft, epsilon=epsilon + z_approx)
+        if not np.isclose(temp_ft, temp_ft_calc):
+            raise ValueError(f"temp_ft={temp_ft}K provided does not match temp_ft_calc={temp_ft_calc}K "
+                             f"computed using epsilon and approx_z.")
+
+    temp_ft_parcel = get_temp_adiabat(temp_surf, sphum_surf, pressure_surf,
+                                      pressure_ft, epsilon=z_approx)
+    return R_mod*(temp_ft_parcel - temp_ft) / 1000, temp_ft_parcel
+
 
 def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Union[np.ndarray, float],
                             pressure_surf: float, pressure_ft: float,
                             epsilon_ref: Optional[Union[np.ndarray, float]] = None,
-                            z_approx_ref: Optional[Union[np.ndarray, float]] = None) -> dict:
+                            z_approx_ref: Optional[Union[np.ndarray, float]] = None,
+                            cape_form: bool = False) -> dict:
     """
     Calculates the dimensionless sensitivity $\gamma$ parameters such that the theoretical scaling factor is given by:
 
@@ -28,7 +121,7 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
     These $\gamma$ parameters quantify the significance of different physical mechanisms in causing a change
     in the near-surface temperature distribution.
 
-    Terms in equation:
+    ??? note "Terms in equation"
         * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
             \\left(c_p + R^{\dagger}\\right) T_{FT} + L_v q^*_{FT} + A_z$
             where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$.
@@ -50,6 +143,14 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
             is saturation specific humidity which is a function of temperature and pressure.
         * $\\alpha(T, p)$ is the clausius clapeyron parameter which is a function of temperature and pressure,
             such that $\partial q^*/\partial T = \\alpha q^*$.
+
+    If `cape_form=True`, will replace both $\epsilon$ terms with a single $CAPE$ change:
+    $\gamma_{\delta T_{FT}}\\frac{\delta CAPE[x]}{R^{\dagger}\delta \overline{T}_s}$.
+
+    ??? note "Definition of CAPE"
+        $CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$ where $T_{FT,\epsilon=0}$ is the free tropospheric
+        temperature which would occur if $\epsilon=0$, all else the same. I.e. this is the parcel rather
+        than environmental temperature at $p_{FT}$.
 
     Args:
         temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
@@ -76,6 +177,8 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
             Here you have the option of specifying the reference $A_z$ for each simulation. If not provided,
             will set to 0. Units: *kJ/kg*.</br>
             If provide just one value, will assume it is the same for both experiments.
+        cape_form: If `True`, scaling factor is in $CAPE$ rather than $\epsilon$ form, so a single `cape_change`
+            value returned, instead of the `epsilon_change` and `epsilon_anom` values.
 
     Returns:
         gamma: Dictionary containing sensitivity parameters. All are a single dimensionless `float`.
@@ -84,15 +187,18 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
 
             * `temp_ft_change`: $\gamma_{\delta T_{FT}} = \\frac{\\tilde{\\beta}_{FT1}}{\\tilde{\\beta}_{s1}}$
             * `r_change`: $\gamma_{\delta r} = \\frac{L_v\\tilde{q}_s}{\\tilde{\\beta}_{s1} \\tilde{T}_s}$
-            * `epsilon_change`: $\gamma_{\delta \epsilon} = \\frac{c_p}{\\tilde{\\beta}_{s1}}$
+            * `epsilon_change`: $\gamma_{\delta \epsilon} = \\frac{c_p}{\\tilde{\\beta}_{s1}}$.
+                Only returned if `cape_form=False`.
             * `temp_anom`: $\gamma_{\Delta T_s} = \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
                 \\frac{\\tilde{\\beta}_{s1} \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}} -
                 \\frac{\\tilde{\\beta}_{s2}}{\\tilde{\\beta}_{s1}}$
             * `r_anom`: $\gamma_{\Delta r} = \\tilde{\mu} - \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
                 \\frac{L_v \\tilde{q}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
             * `epsilon_anom`: $\gamma_{\Delta \epsilon} = \\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
-                \\frac{c_p \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$
+                \\frac{c_p \\tilde{T}_s}{\\tilde{\\beta}_{FT1}\\tilde{T}_{FT}}$.
+                Only returned if `cape_form=False`.
             * `r_ref_change`: $\gamma_{\delta \\tilde{r}} = \\tilde{\mu}$
+            * `cape_change`: The same as $\gamma_{\delta T_{FT}}$. Only returned if `cape_form=True`.
     """
     if isinstance(temp_surf_ref, (float, int)) and isinstance(r_ref, (float, int)):
         # If give numbers, then set r_ref change to be zero, and
@@ -153,8 +259,13 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
     gamma['r_anom'] = mu[0] * (1 + r_ref_change/r_ref[0]) \
                       - gamma['epsilon_anom'] * L_v * sphum_ref[0]/(beta_s1[0] * temp_surf_ref[0])
     gamma['r_ref_change'] = mu[0]
-    # account for new non-dimensional form of gamma so divide epsilon by c_p not beta_s1 in sf equation
-    gamma['epsilon_anom'] *= c_p / beta_s1[0]
+    if cape_form:
+        # delete epsilon contributions, and replace with single cape change
+        del gamma['epsilon_change'], gamma['epsilon_anom']
+        gamma['cape_change'] = gamma['temp_ft_change'] * 1
+    else:
+        # account for new non-dimensional form of gamma so divide epsilon by c_p not beta_s1 in sf equation
+        gamma['epsilon_anom'] *= c_p / beta_s1[0]
     return gamma
 
 
@@ -164,7 +275,8 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
                             pressure_surf: float, pressure_ft: float,
                             epsilon_ref: Optional[np.ndarray] = None,
                             z_approx_ref: Optional[np.ndarray] = None,
-                            include_non_linear: bool = False) -> Tuple[np.ndarray, dict, dict, dict]:
+                            include_non_linear: bool = False,
+                            cape_form: bool = False) -> Tuple[np.ndarray, dict, dict, dict]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
     to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by:
@@ -187,7 +299,7 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     The approximations which cause $\\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s}$ to differ from the exact
     scale factor are given in `get_approx_terms`.
 
-    Reference Quantities:
+    ??? note "Reference Quantities"
         The reference quantities, $\\tilde{\chi}$ are free to be chosen by the user. For ease of interpretation,
         I propose the following, where $\overline{\chi}$ is the mean value of $\chi$ across all days:
 
@@ -202,10 +314,13 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         $\\tilde{h}^{\dagger} = (c_p - R^{\dagger})\\tilde{T}_s + L_v \\tilde{q}_s - \\tilde{\epsilon} =
             (c_p + R^{\dagger}) \\tilde{T}_{FT} + L_v q^*(\\tilde{T}_{FT}, p_{FT}) + \\tilde{A}_z$
 
+        If `cape_form=True`, the reference CAPE, $\\widetilde{CAPE}$, will also be computed from these four variables
+        using `get_cape_approx`. This will be 0 if $\\tilde{\epsilon}=0$.
+
         Poor choice of reference quantities may cause the theoretical scale factor to be a bad approximation. If this
         is the case, `get_approx_terms` can be used to investigate what is causing the theory to break down.
 
-    Terms in equation:
+    ??? note "Terms in equation"
         * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
             (c_p + R^{\dagger}) T_{FT} + L_v q^*_{FT} + A_z$
             where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$.
@@ -227,6 +342,14 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             is saturation specific humidity which is a function of temperature and pressure.
         * $\\alpha(T, p)$ is the clausius clapeyron parameter which is a function of temperature and pressure,
             such that $\partial q^*/\partial T = \\alpha q^*$.
+
+    If `cape_form=True`, will replace both $\epsilon$ terms with a single $CAPE$ anomaly change:
+    $\gamma_{\delta T_{FT}}\\frac{\delta \Delta CAPE[x]}{R^{\dagger}\delta \overline{T}_s}$.
+
+    ??? note "Definition of CAPE"
+        $CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$ where $T_{FT,\epsilon=0}$ is the free tropospheric
+        temperature which would occur if $\epsilon=0$, all else the same. I.e. this is the parcel rather
+        than environmental temperature at $p_{FT}$.
 
     Args:
         temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
@@ -268,6 +391,9 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             names `nl_temp_ft_anom_change`, `nl_r_change` and `nl_anom_temp_s_r` respectively.
             These are obtained using `get_approx_terms` with `simple=True`.
             These will also be included in the `scale_factor` theory.
+        cape_form: If `True`, scaling factor is in $CAPE$ rather than $\epsilon$ form, so a single `cape_anom_change`
+            value returned in all dictionaries, instead of the `epsilon_change` and `epsilon_anom` values.
+            `scale_factor` will also be adjusted to reflect this form.
 
     Returns:
         scale_factor: `float [n_quant]`</br>
@@ -280,10 +406,13 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             * `temp_ft_change`: $\\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}$
             * `r_change`: $\\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}$
             * `epsilon_change`: $\\frac{\delta \epsilon[x]}{\\tilde{\\beta}_{s1} \delta \\tilde{T}_s}$
+                Only returned if `cape_form=False`.
             * `temp_anom`: $\\frac{\Delta T_s(x)}{\\tilde{T}_s}$
             * `r_anom`: $\\frac{\Delta r[x]}{\\tilde{r}_s}$
             * `epsilon_anom`: $\\frac{\Delta \epsilon[x]}{c_p \\tilde{T}_s}$
+                Only returned if `cape_form=False`.
             * `r_ref_change`: $\\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}$
+            * `cape_anom_change`: $\\frac{\delta \Delta CAPE[x]}{R^{\dagger} \delta \\tilde{T}_s}$
 
             All are arrays of size `float [n_quant]`, except `r_ref_change` which is just a single `float`.
         info_cont: Dictionary containing `gamma[key] x info_var[key]` for each `key` in `gamma`. This gives
@@ -292,26 +421,41 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             and `nl_anom_temp_s_r` which arise from including the most significant approximations.
 
     """
-    n_exp = temp_surf_ref.size
+    n_exp, n_quant = temp_surf_quant.shape
     if epsilon_ref is None:
         epsilon_ref = np.zeros(n_exp)
-    gamma = get_sensitivity_factors(temp_surf_ref, r_ref, pressure_surf, pressure_ft, epsilon_ref, z_approx_ref)
+    gamma = get_sensitivity_factors(temp_surf_ref, r_ref, pressure_surf, pressure_ft, epsilon_ref, z_approx_ref,
+                                    cape_form)
     sphum_ref = r_ref * sphum_sat(temp_surf_ref, pressure_surf)
-    _, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf_ref, pressure_surf, pressure_ft,
-                                                                  sphum_ref)
+    R_mod, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf_ref, pressure_surf, pressure_ft,
+                                                                      sphum_ref)
     temp_surf_ref_change = np.diff(temp_surf_ref, axis=0).squeeze()
     # Get non-dimensional variables which multiply gamma
     # Multiply epsilon by 1000 to get in correct units of J/kg
     info_var = {'r_ref_change': np.diff(r_ref, axis=0).squeeze()/r_ref[0],
                 'temp_ft_change': np.diff(temp_ft_quant, axis=0).squeeze()/temp_surf_ref_change,
                 'r_change': np.diff(r_quant, axis=0).squeeze()/r_ref[0, np.newaxis] * temp_surf_ref[0]/temp_surf_ref_change,
-                'epsilon_change': np.diff(epsilon_quant, axis=0).squeeze()*1000/c_p/temp_surf_ref_change,
                 'temp_anom': (temp_surf_quant[0]-temp_surf_ref[0]) / temp_surf_ref[0],
-                'r_anom': (r_quant[0]-r_ref[0]) / r_ref[0],
-                'epsilon_anom': (epsilon_quant[0]-epsilon_ref[0])*1000 / c_p / temp_surf_ref[0]}
+                'r_anom': (r_quant[0]-r_ref[0]) / r_ref[0]}
+    if cape_form:
+        cape_ref = np.zeros(n_exp)
+        cape_quant = np.zeros((n_exp, n_quant))
+        for i in range(n_exp):
+            if epsilon_ref[i] != 0: # if epsilon_ref=0, then cape_ref=0 too
+                # For ref, don't have temp_ft so compute from z_approx and epsilon
+                cape_ref[i] = get_cape_approx(temp_surf_ref[i], r_ref[i], pressure_surf, pressure_ft,
+                                              epsilon=epsilon_ref[i], z_approx=z_approx_ref[i])[0]
+            for j in range(n_quant):
+                # For quant, don't have z_approx so compute from temp_ft and epsilon
+                cape_quant[i, j] = get_cape_approx(temp_surf_quant[i, j], r_quant[i, j], pressure_surf, pressure_ft,
+                                                   epsilon=epsilon_quant[i, j], temp_ft=temp_ft_quant[i, j])[0]
+        info_var['cape_change'] = np.diff(cape_quant, axis=0).squeeze()*1000 / R_mod / temp_surf_ref_change
+    else:
+        info_var['epsilon_change'] = np.diff(epsilon_quant, axis=0).squeeze()*1000/c_p/temp_surf_ref_change
+        info_var['epsilon_anom'] = (epsilon_quant[0]-epsilon_ref[0])*1000 / c_p / temp_surf_ref[0]
     # All gamma are positive, so sign below is to multiply gamma in equation
     coef_sign = {'r_ref_change': -1, 'temp_ft_change': 1, 'r_change': -1, 'epsilon_change': 1,
-                 'temp_anom': 1, 'r_anom': -1, 'epsilon_anom': -1}
+                 'temp_anom': 1, 'r_anom': -1, 'epsilon_anom': -1, 'cape_change': 1}
 
     # Get contribution from each term
     info_cont = {}
@@ -322,7 +466,7 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         # Add non-linear terms
         approx_var = get_approx_terms(temp_surf_ref, temp_surf_quant, r_ref, r_quant, temp_ft_quant,
                                       epsilon_quant, pressure_surf, pressure_ft, epsilon_ref,
-                                      z_approx_ref, simple=True)[0]
+                                      z_approx_ref, simple=True, cape_form=cape_form)[0]
         for key in ['temp_ft_anom_change', 'r_change', 'anom_temp_s_r']:
             info_cont['nl_'+key] = approx_var[key]
 
@@ -336,7 +480,7 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                      pressure_surf: float, pressure_ft: float,
                      epsilon_ref: Optional[np.ndarray] = None,
                      z_approx_ref: Optional[np.ndarray] = None,
-                     simple: bool = False) -> Tuple[dict, dict]:
+                     simple: bool = False, cape_form: bool = False) -> Tuple[dict, dict]:
     """
     Function which returns terms quantifying the errors associated with various approximations, grouped together in
     $A$ variables that go into the derivation of the theoretical scaling factor,
@@ -356,7 +500,7 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     [Jupyter notebook](https://github.com/jduffield65/Isca/blob/main/jobs/tau_sweep/land/meridional_band/publish_figures/theory_approximations2.ipynb)
     that goes through each step of the derivation.
 
-    Terms in equation:
+    ??? note "Terms in equation"
         * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
             \\left(c_p + R^{\dagger}\\right) T_{FT} + L_v q^*_{FT} + A_z$
             where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$.
@@ -390,6 +534,10 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
         *  $\delta \Delta T_{FT}'[x]$ is referred to as `temp_ft_anom_change_mod` in the code, and is defined through:</br>
             $\\tilde{\\beta}_{FT1}\delta \Delta T_{FT}'[x] = \\tilde{\\beta}_{FT1} \delta T_{FT}[x] - \delta \\tilde{h}^{\dagger}_0$</br>
             The idea being that $\delta \\tilde{T}_{FT} \\approx \delta \\tilde{h}^{\dagger}_0 / \\tilde{\\beta}_{FT1}$.
+
+    If `cape_form=True`, $A_{\Delta}$ will be modified, and an additional term $A_{CAPE}[x]$ is introduced for
+    the equation to remain exact, given that the theoretical scaling factor $\delta \hat{T}_s(x)/\delta \\tilde{T}_s$
+    is modified.
 
     Args:
         temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
@@ -432,6 +580,9 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
             The approximate terms correspond to non-linear combinations of different physical mechanisms, e.g.
             combined effect of relative humidity anomaly in current climate and free tropospheric change with warming:
             $\Delta r_s[x] \delta \Delta T_{FT}[x]$.
+        cape_form: If `True`, $A_{\Delta}$ will be modified, and an additional term $A_{CAPE}[x]$ is introduced for
+            the equation to remain exact, given that the theoretical scaling factor
+            $\delta \hat{T}_s(x)/\delta \\tilde{T}_s$ is modified.
 
     Returns:
         approx_terms: Dictionary containing approximations associated with final scaling factor,
@@ -469,12 +620,20 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                 Involves contribution from $\Delta T_s(x) \Delta r_s[x]$ in the current climate.
             * `anom`: $A_{\Delta}[x]$</br> Groups together errors due to approximation of anomaly in current climate.
                 Excludes those in $A_{\Delta T_s \Delta r}$.
+                If `cape_form=True`, will be modified to exclude any contribution from $\Delta \epsilon$.
             * `ref_change`: $\\tilde{A}_{\delta}$</br>
                 Groups together errors due to change with warming of the reference day quantities.
             * `z_anom_change`: $\delta \Delta A_z[x]$</br>
                 Quantifies how error due to approximation of geopotential height changes with warming.
             * `nl`: $A_{NL}[x]$</br>
                 Residual non-linear errors that don't directly correspond to any of the above.
+            * `cape`: $A_{CAPE}[x]$</br>
+                Includes the error contribution which arises due to the conversion between $\epsilon$ and $CAPE$.</br>
+                $A_{CAPE}[x] = \\frac{\delta \\tilde{\\beta}_{FT1}}{R^{\dagger}}(\\widetilde{CAPE} + \delta CAPE[x]) +
+                \delta (A_{FT\Delta,\epsilon=0}[x]-A_{FT\Delta}[x]) -
+                \\frac{\delta \\tilde{\\beta}_{FT1}}{\\tilde{\\beta}_{FT1}}
+                \\left(A_{FT\Delta,\epsilon=0}[x]-A_{FT\Delta}[x] - \\tilde{A}_{\epsilon}\\right)$</br>
+                Will only be included if `cape_form=True`.
         approx: Approximation, $A$, terms which arise through the derivation of the theory.
             All have units of *J/kg*, except `ft_beta` and `s_beta` which are both dimensionless:
 
@@ -509,7 +668,16 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                 $\delta \\tilde{\\beta}_{s1} = \\tilde{\\beta}_{s2}(1 + \\tilde{A}_{FT\\beta})\\left(1 + \\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}\\right)\\frac{\delta \\tilde{T}_s}{\\tilde{T}_s} + \\tilde{\mu}\\tilde{\\beta}_{s1} \\frac{\delta \\tilde{r}_s}{\\tilde{r}_s}$
             * `s_ref_change`: `float`</br> Approximation associated with change of $h^{\dagger}$ with warming at surface:
                 $\\tilde{A}_{s\delta}[x] = (1 + \\frac{\delta \\tilde{r}_s[x]}{\\tilde{r}_s})\sum_{n=2}^{\infty}\\frac{1}{n!}\\frac{\partial^n h^{\dagger}}{\partial T_{s}^n}(\delta \\tilde{T}_{s})^n$
-
+            * `ft_anom_no_cape`: `float [n_exp, n_quant]`</br> Same as `ft_anom`, but for anomaly associated with parcel
+                temperature, $T_{FT,\epsilon=0}$, rather than environmental temperature:
+                $A_{FT\Delta, \epsilon=0}[x] = \sum_{n=2}^{\infty}\\frac{1}{n!}\\frac{\partial^n h^{\dagger}}{\partial T_{FT}^n}
+                (T_{FT,\epsilon=0}-\\tilde{T}_{FT})^n$</br>
+                Only included if `cape_form=True`.
+            * `cape_ref`: `float [n_exp]`</br>
+                Error in relating reference $\epsilon$ to reference CAPE. Defined according to:
+                $\\tilde{\epsilon} = \\frac{\\tilde{\\beta}_{FT1}}{R^{\dagger}}\\widetilde{CAPE} +
+                \\tilde{A}_{\epsilon}$</br>
+                Only included if `cape_form=True`.
     """
     n_exp, n_quant = temp_surf_quant.shape
     if z_approx_ref is None:
@@ -535,7 +703,8 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     temp_surf_anom = temp_surf_quant - temp_surf_ref[:, np.newaxis]
     temp_ft_anom = temp_ft_quant - temp_ft_ref[:, np.newaxis]
     r_anom = r_quant - r_ref[:, np.newaxis]
-    epsilon_anom = (epsilon_quant - epsilon_ref[:, np.newaxis]) * 1000
+    epsilon_anom = (epsilon_quant - epsilon_ref[:, np.newaxis]) * 1000      # units of J/kg
+
 
     approx = {}
     # Z error - The starting equation for mse_mod approximates the geopotential height. We quantify that here.
@@ -603,6 +772,11 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
         mse_mod_ref_change0 + var_ref_change)
     approx_terms['nl'] = prefactor_mse_ft * ((approx['ft_beta'] * mse_mod_ref_change0) +
                                               (1+approx['ft_beta']) * var_ref_change) * var_anom0
+
+    if cape_form:   # TO CHANGE approx_terms['anom'] IN CAPE FORM
+        # remove epsilon contribution in approx_terms['anom'] if cape_form as add extra approx_terms['cape']
+        mse_mod_anom0 += epsilon_anom[0]
+
     approx_terms['anom'] = prefactor_mse_ft * mse_mod_ref_change0 * (var_anom0 + approx['ft_beta'] * mse_mod_anom0) \
                            + (prefactor_mse_ft * (1+approx['ft_beta']) * var_ref_change) * mse_mod_anom0
     approx_terms['anom_temp_s_r'] = prefactor_mse_ft * mse_mod_ref_change0 * beta_s1[0] * mu[0] * \
@@ -639,6 +813,39 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     approx_terms['temp_s_anom_r_change'] = -approx['s_anom_change_temp_r_cont'] - (
             mu[0]*beta_s1[0] + np.diff(beta_s1, axis=0).squeeze()
     ) * np.diff(r_anom/r_ref[:, np.newaxis], axis=0).squeeze() * np.diff(temp_surf_anom, axis=0).squeeze()
+
+    if cape_form:
+        # Get cape variables required for approx terms
+        cape_ref = np.zeros(n_exp)
+        cape_quant = np.zeros((n_exp, n_quant))
+        temp_ft_parcel_quant = np.zeros((n_exp, n_quant))
+        for i in range(n_exp):
+            if epsilon_ref[i] != 0: # if epsilon_ref=0, then cape_ref=0 too
+                # For ref, have temp_ft,  z_approx and epsilon so provide all to do a sanity check
+                cape_ref[i] = get_cape_approx(temp_surf_ref[i], r_ref[i], pressure_surf, pressure_ft,
+                                              epsilon=epsilon_ref[i], z_approx=z_approx_ref[i], temp_ft=temp_ft_ref[i])[0]
+            for j in range(n_quant):
+                # For quant, don't have z_approx so compute from temp_ft and epsilon
+                cape_quant[i, j], temp_ft_parcel_quant[i, j] = \
+                    get_cape_approx(temp_surf_quant[i, j], r_quant[i, j], pressure_surf, pressure_ft,
+                                    epsilon=epsilon_quant[i, j], temp_ft=temp_ft_quant[i, j])
+        cape_ref *= 1000       # convert to units of J/kg
+        cape_quant *= 1000     # convert to units of J/kg
+        mse_mod_quant_no_cape = moist_static_energy(temp_surf_quant, sphum_quant, height=0,
+                                                    c_p_const=c_p - R_mod) * 1000       # units of J/kg
+
+        # Add cape specific approx terms, ensure everything in units of J/kg
+        approx['cape_ref'] = (epsilon_ref*1000) - beta_ft1 / R_mod * cape_ref
+        approx['ft_anom_no_cape'] = mse_mod_quant_no_cape - mse_mod_ref[:, np.newaxis] - \
+                                    approx['z_anom'] - beta_ft1[:, np.newaxis] * (
+                                            temp_ft_parcel_quant - temp_ft_ref[:, np.newaxis])
+        approx_terms['cape'] = np.diff(beta_ft1, axis=0).squeeze() / R_mod * (cape_ref[0] +
+                                                                              np.diff(cape_quant, axis=0).squeeze())
+        approx_terms['cape'] += np.diff(approx['ft_anom_no_cape'] - approx['ft_anom'], axis=0).squeeze()
+        approx_terms['cape'] -= (np.diff(beta_ft1, axis=0).squeeze() / beta_ft1[0]) * (
+                approx['ft_anom_no_cape'] - approx['ft_anom'] - approx['cape_ref'][:, np.newaxis])[0]
+
+
     # Convert into scaling factor K/K units
     for key in approx_terms:
         approx_terms[key] = approx_terms[key] / (beta_s1[0] * np.diff(temp_surf_ref, axis=0).squeeze())
