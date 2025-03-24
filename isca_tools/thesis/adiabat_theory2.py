@@ -344,7 +344,7 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
             such that $\partial q^*/\partial T = \\alpha q^*$.
 
     If `cape_form=True`, will replace both $\epsilon$ terms with a single $CAPE$ anomaly change:
-    $\gamma_{\delta T_{FT}}\\frac{\delta \Delta CAPE[x]}{R^{\dagger}\delta \overline{T}_s}$.
+    $\gamma_{\delta T_{FT}}\\frac{\delta CAPE[x]}{R^{\dagger}\delta \overline{T}_s}$.
 
     ??? note "Definition of CAPE"
         $CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$ where $T_{FT,\epsilon=0}$ is the free tropospheric
