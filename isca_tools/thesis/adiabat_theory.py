@@ -1003,7 +1003,7 @@ def get_p_x(temp: Union[float, np.ndarray], temp_ft_p: np.ndarray, quant_p: np.n
         p_x_ind: `int [n_temp]`</br>
             `p_x_ind[i]` is the index of value in `quant_p` closest to `p_x[i]`.
     """
-    interp_func = scipy.interpolate.interp1d(temp_ft_p, quant_p, fill_value='extrapolate')
+    interp_func = scipy.interpolate.interp1d(temp_ft_p, quant_p, bounds_error=True)
     p_x = interp_func(temp)
     if isinstance(temp, float):
         return float(p_x), np.abs(quant_p - p_x).argmin()

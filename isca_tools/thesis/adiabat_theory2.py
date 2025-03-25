@@ -862,7 +862,7 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
 
 
 def decompose_var_x_change(var_x: np.ndarray, var_p: np.ndarray,
-                           quant_p: np.ndarray = np.arange(100, dtype=int), simple: bool = True
+                           quant_p: np.ndarray = np.arange(101, dtype=int), simple: bool = True
                            ) -> Tuple[np.ndarray, np.ndarray, dict]:
     """
     We can decompose the change in variable $\chi$, conditioned on near-surface temperature
@@ -920,11 +920,11 @@ def decompose_var_x_change(var_x: np.ndarray, var_p: np.ndarray,
         p_x[i] = get_p_x(var_x[i], var_p[i], quant_p)[0]
 
     # Interpolation so can use p_x which are not integers
-    var_p_interp_func = [scipy.interpolate.interp1d(quant_p, var_p[i], fill_value='extrapolate') for i in range(n_exp)]
+    var_p_interp_func = [scipy.interpolate.interp1d(quant_p, var_p[i], bounds_error=True) for i in range(n_exp)]
     # Sanity check that interpolation function works
     for i in range(n_exp):
         if not np.allclose(var_p_interp_func[i](p_x[i]), var_x[i]):
-            raise ValueError(f'Error in interpolation for experiment {i}')
+            raise ValueError(f'Error in interpolation for experiment {i}: maybe p_x outside 0-100 range')
 
 
     # Isolate x dependence into different terms
