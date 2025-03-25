@@ -1,4 +1,5 @@
 .DS_Store
 *pyc
+*.npz
 __pycache__/
 /site
