@@ -5,9 +5,12 @@ from ..utils.constants import c_p, L_v, R, g
 from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat, get_p_x
 from typing import Tuple, Union, Optional
 
-def get_cape_approx(temp_surf: float, r_surf: float, pressure_surf: float, pressure_ft: float,
-                    temp_ft: Optional[float] = None, epsilon: Optional[float] = None,
-                    z_approx: Optional[float] = None) -> Tuple[float, float]:
+def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np.ndarray],
+                    pressure_surf: float, pressure_ft: float,
+                    temp_ft: Optional[Union[float, np.ndarray]] = None,
+                    epsilon: Optional[Union[float, np.ndarray]] = None,
+                    z_approx: Optional[Union[float, np.ndarray]] = None
+                    ) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
     """
     Calculates an approximate value of CAPE using a single pressure level in the free troposphere, $p_{FT}$:
 
@@ -46,29 +49,35 @@ def get_cape_approx(temp_surf: float, r_surf: float, pressure_surf: float, press
             approximation of geopotential height, as relating to temperature.
 
     Args:
-        temp_surf: Temperature at `pressure_surf` in Kelvin.
-        r_surf: Relative humidity at `pressure_surf` in Kelvin.
+        temp_surf:
+            Temperature at `pressure_surf` in Kelvin. If array, must be same size as `r_surf`.
+        r_surf:
+            Relative humidity at `pressure_surf` in Kelvin. If array, must be same size as `temp_surf`.
         pressure_surf:
             Pressure at near-surface, $p_s$, in *Pa*.
         pressure_ft:
             Pressure at free troposphere level, $p_{FT}$, in *Pa*.
         temp_ft:
-            Temperature at `pressure_ft` in Kelvin.
+            Temperature at `pressure_ft` in Kelvin. If array, must be same size as `temp_surf`.</br>
             If not provided, will be computed using `epsilon` and `approx_z`
             (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).
         epsilon:
-            $\epsilon = h_s - h^*_{FT}$, if not provided, will be computed using `temp_ft` and `approx_z`
+            $\epsilon = h_s - h^*_{FT}$ If array, must be same size as `temp_surf`.</br>
+            If not provided, will be computed using `temp_ft` and `approx_z`
             (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).</br>
             Units: *kJ/kg*.
         z_approx:
             $A_z$ quantifies the error due to approximation of replacing geopotential height with temperature.
+            If array, must be same size as `temp_surf`.</br>
             If not provided, will be computed using `temp_ft` and `epsilon`
             (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).</br>
             Units: *kJ/kg*.</br>
 
     Returns:
         cape: $CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$ in units of *kJ/kg*
+            If array, will be same size as `temp_surf`.
         temp_ft_parcel: $T_{FT,\epsilon=0}$ in units of Kelvin.
+            If array, will be same size as `temp_surf`.
     """
     R_mod = R * np.log(pressure_surf/pressure_ft)/2
     sphum_surf = r_surf * sphum_sat(temp_surf, pressure_surf)

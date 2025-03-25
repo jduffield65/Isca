@@ -53,8 +53,9 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
     return mse_mod_surf - mse_mod_ft
 
 
-def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, pressure_ft: float,
-                     guess_temp_adiabat: float = 273, epsilon: float = 0) -> float:
+def get_temp_adiabat(temp_surf: Union[float, np.ndarray], sphum_surf: Union[float, np.ndarray],
+                     pressure_surf: float, pressure_ft: float,
+                     guess_temp_adiabat: float = 273, epsilon: Union[float, np.ndarray] = 0) -> Union[float, np.ndarray]:
     """
     This returns the adiabatic temperature at `pressure_ft`, $T_{A, FT}$, such that surface moist static
     energy equals free troposphere saturated moist static energy
@@ -64,9 +65,9 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
 
     Args:
         temp_surf:
-            Temperature at `pressure_surf` in Kelvin.
+            Temperature at `pressure_surf` in Kelvin. If array, must be same size as `sphum_surf`
         sphum_surf:
-            Specific humidity at `pressure_surf` in *kg/kg*.
+            Specific humidity at `pressure_surf` in *kg/kg*. If array, must be same size as `temp_surf`
         pressure_surf:
             Pressure at near-surface in *Pa*.
         pressure_ft:
@@ -74,13 +75,20 @@ def get_temp_adiabat(temp_surf: float, sphum_surf: float, pressure_surf: float, 
         guess_temp_adiabat:
             Initial guess for what adiabatic temperature at `pressure_ft` should be.
         epsilon:
-            Proxy for CAPE in *kJ/kg*. Quantifies how much larger near-surface MSE is than free tropospheric saturated.
+            $h_s-h^*_{FT}$ in *kJ/kg*. Quantifies how much larger near-surface MSE is than free tropospheric saturated.
+            If array, must be same size as `temp_surf` and `sphum_surf`.
 
     Returns:
-        Adiabatic temperature at `pressure_ft` in Kelvin.
+        Adiabatic temperature at `pressure_ft` in Kelvin. If array, will be same size as `temp_surf` and `sphum_surf`.
     """
-    return scipy.optimize.fsolve(temp_adiabat_fit_func, guess_temp_adiabat,
-                                 args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))
+    if isinstance(temp_surf, (int, float)):
+        return scipy.optimize.fsolve(temp_adiabat_fit_func, guess_temp_adiabat,
+                                     args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))
+    elif isinstance(temp_surf, np.ndarray):
+        return scipy.optimize.fsolve(temp_adiabat_fit_func, np.full_like(temp_surf, guess_temp_adiabat),
+                                     args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))
+    else:
+        raise ValueError('Invalid value for `temp_surf`: must be float or np.ndarray')
 
 
 def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf: float, z_ft: Optional[float],
