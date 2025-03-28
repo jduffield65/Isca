@@ -1,0 +1,31 @@
+"FMS Model results"
+0001 1 1 0 0 0
+# = output files =
+# file_name, output_freq, output_units, format (I think this is always 1), time_units, long_name (I think this is always "time")
+
+"atmos_6_hourly", 6, "hours", 1, "hours", "time",
+
+# = diagnostic field entries =
+# module_name, field_name, output_name, file_name, time_sampling, time_avg, other_opts, precision
+# Outputs from "dynamics" module from previous experiments are now output from "column" module name
+# "column" does not have omega, and "ucomp", "vcomp" only defined at surface
+
+# Don't think I need these as can just use daily data
+# "column", "pk", "pk", "atmos_6_hourly", "all", .false., "none", 2,
+# "atmosphere", "cin", "cin", "atmos_6_hourly", "all", .true., "none", 2,
+
+
+"column", "height", "height", "atmos_6_hourly", "all", .true., "none", 2,
+"column", "temp", "temp", "atmos_6_hourly", "all", .true., "none", 2,
+"column", "ps", "ps", "atmos_6_hourly", "all", .true., "none", 2,
+"column", "sphum", "sphum", "atmos_6_hourly", "all", .true., "none", 2,
+"two_stream", "olr", "olr", "atmos_6_hourly", "all", .true., "none", 2,
+"two_stream", "swdn_toa", "swdn_toa", "atmos_6_hourly", "all", .true., "none", 2,
+"two_stream", "swdn_sfc", "swdn_sfc", "atmos_6_hourly", "all", .true., "none", 2,
+"two_stream", "lwdn_sfc", "lwdn_sfc", "atmos_6_hourly", "all", .true., "none", 2,
+"two_stream", "lwup_sfc", "lwup_sfc", "atmos_6_hourly", "all", .true., "none", 2,
+"mixed_layer", "flux_t", "flux_t", "atmos_6_hourly", "all", .true., "none", 2,
+"mixed_layer", "flux_lhe", "flux_lhe", "atmos_6_hourly", "all", .true., "none", 2,
+"mixed_layer", "t_surf", "t_surf", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "precipitation", "precipitation", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "cape", "cape", "atmos_6_hourly", "all", .true., "none", 2,

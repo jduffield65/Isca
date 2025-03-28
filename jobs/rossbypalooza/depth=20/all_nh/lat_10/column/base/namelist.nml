@@ -12,10 +12,10 @@
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 1                  ! Number of cores for each node to run job on (Slurm info) - SINGLE COLUMN ONLY WORKS WITH 1 core
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
-   partition = 'small'          ! Queue to submit job to (Slurm info).
+   partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
-   max_walltime = '48:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
+   max_walltime = '2:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
 /
 
@@ -25,7 +25,7 @@
 
 &main_nml
     calendar = 'thirty_day'
-    current_date = 1, 1, 1, 0, 0, 0
+    current_date = 1, 12, 30, 21, 0, 0    ! set first data is (2, 1, 1, 0, 0,0) meaning 6-hourly times saved as 0, 6, 12, 18, 0, (because 12 is max insolation)
     days = 30
     dt_atmos = 720
     hours = 0
