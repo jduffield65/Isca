@@ -500,7 +500,7 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
     $$
     \\begin{align}
     \\frac{\delta T_s(x)}{\delta \\tilde{T}_s} &= \\frac{\delta \hat{T}_s(x)}{\delta \\tilde{T}_s} + A_{\delta \Delta T_{FT}}
-    + A_{\delta \Delta T_s} + A_{\delta r}[x] + A_{\delta \Delta T_s \delta r}[x] \\\\
+    - A_{\delta \Delta T_s} - A_{\delta r}[x] - A_{\delta \Delta T_s \delta r}[x] \\\\
     &+ A_{\Delta T_s \Delta r}[x] + A_{\Delta}[x] + \\tilde{A}_{\delta} + A_{NL}[x]
     \\end{align}
     $$
@@ -608,16 +608,23 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                 (\delta \\tilde{h}^{\dagger}_0 + 2\Delta \\tilde{h}^{\dagger}_0[x] + \\tilde{\\beta}_{FT1}\delta T_{FT}[x])$</br>
                 Note that $\Delta \\tilde{h}^{\dagger}_0[x]$ can be decomposed to give relative contributions
                 of different anomalies in current climate: $\Delta T_s[x], \Delta r_s[x], \Delta \epsilon[x]$.
-            * `temp_s_anom_change`: $A_{\delta \Delta T_s}$</br>
-                Involves contribution from $\delta \Delta T_s(x)$.
+            * `temp_s_anom_change`: $-A_{\delta \Delta T_s}$</br>
+                Involves contribution from $\delta \Delta T_s(x)$. Returned value is multiplied by the $-1$;
+                negative value is because this approx comes from the surface $\delta \Delta h^{\dagger}$ derivation.
             * `r_change`: $A_{\delta r}[x]$</br>
                 Involves contribution from $\delta r_s[x]$ and $\delta \\tilde{r}_s$.
+                Returned value is multiplied by the $-1$;
+                negative value is because this approx comes from the surface $\delta \Delta h^{\dagger}$ derivation.
                 If `simple=True`, will return approximate form:</br>
-                $A_{\delta r}[x] \\tilde{\\beta}_{s1}\delta \\tilde{T}_s \\approx -
+                $-A_{\delta r}[x] \\tilde{\\beta}_{s1}\delta \\tilde{T}_s \\approx -
                 \\tilde{\mu}\\tilde{\\beta}_{s1}\\left(\delta \\tilde{T}_s + \Delta T_s[x]\\right)
                 \\frac{\delta r_s[x]}{\\tilde{r}_s}$
             * `temp_s_anom_r_change`: $A_{\delta \Delta T_s \delta r}[x]$</br>
                 Involves contribution from $\delta \Delta T_s(x) \delta (r_s[x]/\\tilde{r}_s)$.
+                Returned value is multiplied by the $-1$;
+                negative value is because this approx comes from the surface $\delta \Delta h^{\dagger}$ derivation.
+            * `anom_temp_s_r`: $A_{\Delta T_s \Delta r}[x]$</br>
+                Involves contribution from $\Delta T_s(x) \Delta r_s[x]$ in the current climate.
                 If `simple=True`, will return approximate form:</br>
                 $A_{\Delta T_s \Delta r} \\tilde{\\beta}_{s1}\delta \\tilde{T}_s \\approx
                 \\left[\\frac{\\tilde{\\beta}_{FT2}}{\\tilde{\\beta}_{FT1}}
@@ -625,8 +632,6 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                 \\tilde{\mu} \\tilde{\\beta}_{s1} \\tilde{T}_s -
                 \\tilde{\\beta}_{s2}\delta \\tilde{T}_s\\right]\\frac{\Delta r_s[x]}{\\tilde{r}_s}
                 \\frac{\Delta T_s[x]}{\\tilde{T}_s}$
-            * `anom_temp_s_r`: $A_{\Delta T_s \Delta r}[x]$</br>
-                Involves contribution from $\Delta T_s(x) \Delta r_s[x]$ in the current climate.
             * `anom`: $A_{\Delta}[x]$</br> Groups together errors due to approximation of anomaly in current climate.
                 Excludes those in $A_{\Delta T_s \Delta r}$.
                 If `cape_form=True`, will be modified to exclude any contribution from $\Delta \epsilon$.
@@ -774,11 +779,9 @@ def get_approx_terms(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_r
                 mse_mod_ref_change0 + mse_mod_anom0 + 0.5*beta_ft1[0]*temp_ft_anom_change_mod) * temp_ft_anom_change_mod
     else:
         approx_terms['temp_ft_anom_change'] = np.diff(approx['ft_anom'], axis=0).squeeze() + \
-                                              prefactor_mse_ft * beta_ft1[0] * (1 + approx['ft_beta']) * (
-                                                      mse_mod_ref_change0 + var_ref_change) * temp_ft_anom_change_mod
+                                              np.diff(beta_ft1, axis=0).squeeze() * np.diff(temp_ft_anom, axis=0).squeeze()
     approx_terms['z_anom_change'] = np.diff(approx['z_anom'], axis=0).squeeze()
-    approx_terms['ref_change'] =  -var_ref_change - prefactor_mse_ft * (1+approx['ft_beta']) * var_ref_change * (
-        mse_mod_ref_change0 + var_ref_change)
+    approx_terms['ref_change'] =  -var_ref_change
     approx_terms['nl'] = prefactor_mse_ft * ((approx['ft_beta'] * mse_mod_ref_change0) +
                                               (1+approx['ft_beta']) * var_ref_change) * var_anom0
 
