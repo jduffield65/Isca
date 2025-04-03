@@ -24,7 +24,8 @@ def get_file_suffix(dir: str, suffix: str) -> List[str]:
 
 
 def load_dataset(exp_name: str, run_no: Optional[int] = None,
-                 data_dir: Optional[str] = None) -> xr.Dataset:
+                 data_dir: Optional[str] = None, decode_times: bool = False,
+                 use_cftime: bool = True) -> xr.Dataset:
     """
     This loads a dataset produced by Isca containing all the diagnostics specified.
 
@@ -35,6 +36,10 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
             If `None`, data for all months is loaded and combined into a single Dataset.
         data_dir: Directory which contains the `exp_name` directory. If `None`, will assume this is
             the directory specified through the environmental variable `GFDL_DATA`.
+        decode_times: If `True`, decode times into datetime objects
+        use_cftime: If `True`, will decode times into `cftime.datetime` objects,
+            rather than `np.datetime64` objects. Only relevant if `decode_times` is `True`.
+            Useful if using 360 day calendar.
 
     Returns:
         Dataset containing all diagnostics specified for the experiment.
@@ -56,10 +61,11 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
 
     if run_no is None:
         data_file = os.path.join(exp_dir, 'run*', file_name)
-        d = xr.open_mfdataset(data_file, decode_times=False, concat_dim='time', combine='nested')
+        d = xr.open_mfdataset(data_file, concat_dim='time', combine='nested',
+                              decode_times=decode_times, use_cftime=use_cftime)
     else:
         data_file = os.path.join(exp_dir, 'run%04d' % run_no, file_name)
-        d = xr.open_dataset(data_file, decode_times=False)
+        d = xr.open_dataset(data_file, decode_times=decode_times, use_cftime=use_cftime)
     return d
 
 
