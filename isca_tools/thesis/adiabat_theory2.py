@@ -101,9 +101,18 @@ def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np
         if not np.isclose(temp_ft, temp_ft_calc):
             raise ValueError(f"temp_ft={temp_ft}K provided does not match temp_ft_calc={temp_ft_calc}K "
                              f"computed using epsilon and approx_z.")
-
-    temp_ft_parcel = get_temp_adiabat(temp_surf, sphum_surf, pressure_surf,
-                                      pressure_ft, epsilon=z_approx)
+    if np.isnan(temp_surf).any():
+        if temp_surf.size == 1:
+            temp_ft_parcel = np.nan     # if single number, set to nan
+        else:
+            # If nan values, only compute temp_ft_parcel for non-nan values, otherwise does weird things
+            temp_ft_parcel = np.full_like(temp_surf, np.nan)
+            temp_ft_parcel[~np.isnan(temp_surf)] = get_temp_adiabat(temp_surf[~np.isnan(temp_surf)],
+                                                                    sphum_surf[~np.isnan(temp_surf)], pressure_surf,
+                                                                    pressure_ft, epsilon=z_approx[~np.isnan(temp_surf)])
+    else:
+        temp_ft_parcel = get_temp_adiabat(temp_surf, sphum_surf, pressure_surf,
+                                          pressure_ft, epsilon=z_approx)
     return R_mod*(temp_ft_parcel - temp_ft) / 1000, temp_ft_parcel
 
 
@@ -454,10 +463,9 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
                 # For ref, don't have temp_ft so compute from z_approx and epsilon
                 cape_ref[i] = get_cape_approx(temp_surf_ref[i], r_ref[i], pressure_surf, pressure_ft,
                                               epsilon=epsilon_ref[i], z_approx=z_approx_ref[i])[0]
-            for j in range(n_quant):
-                # For quant, don't have z_approx so compute from temp_ft and epsilon
-                cape_quant[i, j] = get_cape_approx(temp_surf_quant[i, j], r_quant[i, j], pressure_surf, pressure_ft,
-                                                   epsilon=epsilon_quant[i, j], temp_ft=temp_ft_quant[i, j])[0]
+            # For quant, don't have z_approx so compute from temp_ft and epsilon
+            cape_quant[i] = get_cape_approx(temp_surf_quant[i], r_quant[i], pressure_surf, pressure_ft,
+                                               epsilon=epsilon_quant[i], temp_ft=temp_ft_quant[i])[0]
         info_var['cape_change'] = np.diff(cape_quant, axis=0).squeeze()*1000 / R_mod / temp_surf_ref_change
     else:
         info_var['epsilon_change'] = np.diff(epsilon_quant, axis=0).squeeze()*1000/c_p/temp_surf_ref_change
