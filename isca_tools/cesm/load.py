@@ -1,7 +1,7 @@
 import os
 import xarray as xr
 import cftime
-from typing import Optional, List
+from typing import Optional, List, Union, Literal
 import fnmatch
 import numpy as np
 import warnings
@@ -13,6 +13,9 @@ local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
 def load_dataset(exp_name: str, comp: str = 'atm',
                  archive_dir: str = jasmin_archive_dir,
                  hist_file: int = 0,
+                 chunks: Optional[Union[dict, Literal["auto"], int]] = None,
+                 combine: Literal["by_coords", "nested"] = 'nested',
+                 concat_dim: str = 'time',
                  decode_times: bool = True,
                  year_first: int = 1, year_last: int = -1,
                  months_keep: Optional[List] = None,
@@ -29,8 +32,14 @@ def load_dataset(exp_name: str, comp: str = 'atm',
             * `ice`: ice
             * `lnd`: land
             * `rof`: river
-        hist_file: Which history file to load, `0` is the default monthly averaged data set.
         archive_dir: Directory where CESM archive data saved.
+        hist_file: Which history file to load, `0` is the default monthly averaged data set.
+        chunks: Dictionary with keys given by dimension names and values given by chunk sizes
+            e.g. `{"time": 365, "lat": 50, "lon": 100}`.</br>
+            Has big impact on memory usage. If `None`, no chunking is performed.
+        combine: Whether `xarray.combine_by_coords` or `xarray.combine_nested` is used to combine all the data.
+        concat_dim: Dimensions to concatenate files along.
+            You only need to provide this argument if combine='nested'.
         decode_times: If `True`, will convert time to actual date.
         year_first: First year of simulation to load.</br>
             Only used for monthly averaged data i.e. `hist_file=0`.
@@ -113,10 +122,10 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
                            year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]
     if apply_month_shift_fix and hist_file == 0:
-        ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim='time', combine='nested')
+        ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim=concat_dim, combine=combine, chunks=chunks)
         return ds_month_shift(ds, decode_times, months_keep)
     else:
-        return xr.open_mfdataset(data_files_load, decode_times=decode_times, concat_dim='time', combine='nested')
+        return xr.open_mfdataset(data_files_load, decode_times=decode_times, concat_dim=concat_dim, combine=combine, chunks=chunks)
 
 
 def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
