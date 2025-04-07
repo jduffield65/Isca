@@ -1,5 +1,8 @@
 import xarray as xr
-from xarray.core.weighted import DataArrayWeighted
+try:
+    from xarray.core.weighted import DataArrayWeighted
+except ModuleNotFoundError:
+    from xarray.computation.weighted import DataArrayWeighted      # Version issue as to where DataArrayWeighted is
 import numpy as np
 from typing import Optional
 
