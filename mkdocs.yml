@@ -121,6 +121,8 @@ nav:
         - Convection:
             - Base: code/convection/base.md
             - Simple Betts-Miller: code/convection/simple_betts_miller.md
+        - JASMIN:
+            - Run: code/jasmin/run/base.md
         - Land:
             - Base: code/land/base.md
             - Mountains: code/land/mountains.md

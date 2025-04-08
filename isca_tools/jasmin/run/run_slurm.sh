@@ -1,38 +1,33 @@
-#!/bin/bash
 sbatch <<EOT
 #!/bin/bash
-#SBATCH --job-name=$1  # make job name be the same as the python script without prefix and suffix.
-#SBATCH --output=$HOME/Isca/jobs/jasmin/console_output/$1/time.txt  # output to console saved as text file in data directory for this experiment (May need to create directory first)
-#SBATCH --error=$HOME/Isca/jobs/jasmin/console_output/$1/error.txt    # errors to console saved as text file in data directory for this experiment
-#SBATCH --time=$9 # maximum walltime for the job
-#SBATCH --nodes=$5 # specify number of nodes
-#SBATCH --ntasks=$6 # specify number of processors per node
-#SBATCH --cpus-per-task=$7
-#SBATCH --mem=$8G
-#SBATCH --partition=$4 # queue to run on
+#SBATCH --job-name=$1                   # name of job in slurm queue
+#SBATCH --output=$HOME/Isca/jobs/jasmin/console_output/$1/out.txt   # output to console saved as text file in directory for this experiment
+#SBATCH --error=$HOME/Isca/jobs/jasmin/console_output/$1/error.txt   # errors to console saved as text file in directory for this experiment
+#SBATCH --time=$2                       # maximum walltime for the job
+#SBATCH --ntasks=$3                     # specify number of processors per node
+#SBATCH --cpus-per-task=$4
+#SBATCH --mem=$5G
+#SBATCH --partition=$6                  # queue to run on
+#SBATCH --qos=$7                        # quality of service
+#SBATCH --account=$8                    # Username on JASMIN
 
 # Input parameters
 # $1 - Name of job
-# $2 - Starting month index, starting at 1
-# $3 - Number of months to run per job
-# $4 - partition indicating which queue to run experiment on e.g. 'debug' or 'singlenode'
-# $5 - n_nodes indicating number of nodes to run experiment on.
-# $6 - n_cores indicating the number of cores to use per node.
-# $7 - namelist file
-# $8 - diagnostic output file indicating what to save
-# $9 - maximum allowed walltime to run job
-# ${10} - python script path to run i.e. the path of run_job_script.py
-# ${11} - Node to submit to: kennedy20, kennedy21 or kennedy22
+# $2 - Maximum wall time for your job in format hh:mm:ss
+# $3 - Number of tasks to run (usually 1 for a single script).
+# $4 - How many CPUs to allocate per task.
+# $5 - Memory to allocate for the job in GB.
+# $6 - Specifies the partition for the job e.g. test, short-serial-4hr, short-serial, par-single.
+# $7 - Quality of service, examples include debug, short and standard.
+# $8 - Account to use for submitting jobs.
+# $9 - Name of the conda environment on JASMIN to use.
+# ${10} - Path of python script to run.
+# ${11} - Arguments to be passed to python script (if multiple, will also be ${12}, ${13}, ...)
 
 # Run the base.py script for experiment and record how long it takes
 source $HOME/miniforge3/bin/activate    # load miniforge3 module, where conda installed
-conda activate myenv                                # Load conda environment which uses Isca on JASMIN to run script
-python ${10} $7 $8 $2 $3   # run job
-
-# Move txt documents containing errors and printed info to experiment data folder
-#mkdir -p $HOME/jasmin_jobs/$1
-#mv $GFDL_DATA/time$2.txt $GFDL_DATA/$1/console_output/time$2.txt
-#mv $GFDL_DATA/error$2.txt $GFDL_DATA/$1/console_output/error$2.txt
+conda activate $9                       # Load conda environment on JASMIN to run script
+python ${10} ${@:11}                    # run python script with all but first 10 arguments as input to script
 
 exit 0
 EOT
