@@ -41,10 +41,8 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         concat_dim: Dimensions to concatenate files along.
             You only need to provide this argument if combine='nested'.
         decode_times: If `True`, will convert time to actual date.
-        year_first: First year of simulation to load.</br>
-            Only used for monthly averaged data i.e. `hist_file=0`.
-        year_last: Last year of simulation to load.</br>
-            Only used for monthly averaged data i.e. `hist_file=0`.
+        year_first: First year of simulation to load.
+        year_last: Last year of simulation to load.
         months_keep: List of months which you want to load for each year.</br>
             Only used for monthly averaged data i.e. `hist_file=0`.</br>
             `1` refers to January. If `None`, all 12 months will be loaded.</br>

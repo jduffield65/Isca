@@ -1,5 +1,7 @@
-import numpy as np
 import sys
 
+def main(name: str):
+    print(f'Hello {name}')
+
 if __name__ == "__main__":
-    print(f'Hello {sys.argv[1]}')
+    main(sys.argv[1])

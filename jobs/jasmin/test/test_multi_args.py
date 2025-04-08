@@ -1,13 +1,8 @@
 import sys
 import time
+from typing import List
 
-if __name__ == "__main__":
-    print(sys.argv)
-    name = sys.argv[1]
-    age = int(sys.argv[2])
-    height = float(sys.argv[3])
-    sports = sys.argv[4].split(",")     # list
-    wait = sys.argv[5].lower() in ("true", "1", "yes")
+def main(name: str, age: int, height: float, sports: List, wait: bool):
     if wait:
         total_time = 60  # seconds
         interval = 5  # seconds
@@ -18,3 +13,8 @@ if __name__ == "__main__":
 
     print(f'Hello {name}, Age is {age}, Height is {height}. Age+Height is {age+height}\n'
           f'Sports is {sports}')
+
+if __name__ == "__main__":
+    # print(sys.argv)
+    main(sys.argv[1], int(sys.argv[2]), float(sys.argv[3]), sys.argv[4].split(","),
+         sys.argv[5].lower() in ("true", "1", "yes"))
