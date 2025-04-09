@@ -1,10 +1,17 @@
 from isca_tools import cesm
 from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat
+from isca_tools.utils import get_memory_usage
 import sys
 import os
 import numpy as np
 import f90nml
+import logging
+import time
+# Set up logging configuration to output to console and don't output milliseconds, and stdout so saved to out file
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+                    stream=sys.stdout)
+
 
 def get_exp_info_dict(input_file_path: str) -> dict:
     # From input nml file, this returns dict containing info required for getting npz file
@@ -50,7 +57,9 @@ def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, p_ft_appr
     return ds_atm, soil_liq, is_land
 
 
-def main(input_file_path):
+def main(input_file_path: str):
+    logger = logging.getLogger()    # for printing to console time info
+    logger.info("Start")
     exp_info = get_exp_info_dict(input_file_path)
     ds, soil_liq, is_land = get_ds(exp_info['exp_name'], exp_info['archive_dir'],
                                    exp_info['chunks_time'], exp_info['chunks_lat'], exp_info['chunks_lon'],
@@ -88,10 +97,14 @@ def main(input_file_path):
     output_info['n_days_quant'] = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
                                                 quant_range).size / n_lat
 
-
+    logger.info(f"Starting iteration over {n_lat} latitudes, 2 surfaces, and {n_quant} quantiles")
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):
+        time_log = {'load': 0, 'calc': 0, 'start': time.time()}
+        ds_lat = ds.isel(lat=i).load()
+        time_log['load'] += time.time() - time_log['start']
         for k, surf in enumerate(output_info['surface']):
+            time_log['start'] = time.time()
             if surf == 'land':
                 is_surf = is_land.isel(lat=i)
             else:
@@ -101,13 +114,15 @@ def main(input_file_path):
                 # If surface not at this latitude, record no data
                 continue
 
-            ds_use = ds.isel(lat=i).sel(lon=is_surf, drop=True)
-            ds_use = ds_use.stack(lon_time=("lon", "time"), create_index=False).chunk(dict(lon_time=-1)).load()
+            ds_use = ds_lat.sel(lon=is_surf, drop=True)
+            ds_use = ds_use.stack(lon_time=("lon", "time"), create_index=False).chunk(dict(lon_time=-1))
             if surf == 'land':
                 soil_liq_use = soil_liq.isel(lat=i).sel(lon=is_surf, drop=True)
                 soil_liq_use = soil_liq_use.stack(lon_time=("lon", "time"),
                                                   create_index=False).chunk(dict(lon_time=-1)).load()
             output_info['n_grid_points'][k, i] = ds_use.lon.size
+            time_log['load'] += time.time() - time_log['start']
+            time_log['start'] = time.time()
             for j in range(n_quant):
                 # get indices corresponding to given near-surface temp quantile
                 use_ind = get_quant_ind(ds_use.T.isel(lev=ind_surf), quant_use[j], quant_range, quant_range)
@@ -140,7 +155,11 @@ def main(input_file_path):
                 # Record most common specific coordinate within grid to see if most of days are at a given location
                 output_info['lon_most_common'][k, i, j] = lon_use[0][lon_use[1].argmax()]
                 output_info['lon_most_common_freq'][k, i, j] = lon_use[1][lon_use[1].argmax()]
-                print(i, k, j)
+                time_log['calc'] += time.time() - time_log['start']
+        if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
+            # Log info on 1st, last and every 10th latitude
+            logger.info(f"Latitude {i + 1}/{n_lat}: Loading took {time_log['load']:.1f}s | Calculation took {time_log['calc']:.1f}s | "
+                        f"Memory used {get_memory_usage()/1000:.1f}GB")
     # Add basic info of the dataset and averaging details used
     output_info['exp_name'] = exp_info['exp_name']
     output_info['date_start'] = ds.time.to_numpy()[0].strftime()
@@ -155,6 +174,7 @@ def main(input_file_path):
 
     # Save output to npz file
     np.savez_compressed(os.path.join(exp_info['out_dir'], exp_info['out_name']), **output_info)
+    logger.info("End")
 
 if __name__ == "__main__":
     main(sys.argv[1])

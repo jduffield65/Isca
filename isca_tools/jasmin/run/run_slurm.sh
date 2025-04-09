@@ -1,7 +1,7 @@
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=$1                   # name of job in slurm queue
-#SBATCH --output=$HOME/Isca/jobs/jasmin/console_output/$1/out.txt   # output to console saved as text file in directory for this experiment
+#SBATCH --output=$HOME/Isca/jobs/jasmin/console_output/$1/out.txt    # output to console saved as text file in directory for this experiment
 #SBATCH --error=$HOME/Isca/jobs/jasmin/console_output/$1/error.txt   # errors to console saved as text file in directory for this experiment
 #SBATCH --time=$2                       # maximum walltime for the job
 #SBATCH --ntasks=$3                     # specify number of processors per node

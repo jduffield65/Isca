@@ -5,6 +5,8 @@ except ModuleNotFoundError:
     from xarray.computation.weighted import DataArrayWeighted      # Version issue as to where DataArrayWeighted is
 import numpy as np
 from typing import Optional
+import psutil
+import os
 
 
 def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
@@ -55,3 +57,16 @@ def print_ds_var_list(ds: xr.Dataset, phrase: Optional[str] = None) -> None:
             except AttributeError:
                 continue
     return None
+
+
+# Memory usage function
+def get_memory_usage() -> float:
+    """
+    Get current process’s memory  in MB.
+
+    Returns:
+        mem_mb: Memory usage in MB
+    """
+    process = psutil.Process(os.getpid())
+    mem_mb = process.memory_info().rss / (1024 * 1024)
+    return mem_mb
