@@ -97,6 +97,7 @@ def main(input_file_path: str):
     output_info['n_days_quant'] = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
                                                 quant_range).size / n_lat
 
+    logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
     logger.info(f"Starting iteration over {n_lat} latitudes, 2 surfaces, and {n_quant} quantiles")
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):
@@ -156,10 +157,10 @@ def main(input_file_path: str):
                 output_info['lon_most_common'][k, i, j] = lon_use[0][lon_use[1].argmax()]
                 output_info['lon_most_common_freq'][k, i, j] = lon_use[1][lon_use[1].argmax()]
                 time_log['calc'] += time.time() - time_log['start']
-        if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
-            # Log info on 1st, last and every 10th latitude
-            logger.info(f"Latitude {i + 1}/{n_lat}: Loading took {time_log['load']:.1f}s | Calculation took {time_log['calc']:.1f}s | "
-                        f"Memory used {get_memory_usage()/1000:.1f}GB")
+        # if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
+        # # Log info on 1st, last and every 10th latitude
+        logger.info(f"Latitude {i + 1}/{n_lat}: Loading took {time_log['load']:.1f}s | Calculation took {time_log['calc']:.1f}s | "
+                    f"Memory used {get_memory_usage()/1000:.1f}GB")
     # Add basic info of the dataset and averaging details used
     output_info['exp_name'] = exp_info['exp_name']
     output_info['date_start'] = ds.time.to_numpy()[0].strftime()

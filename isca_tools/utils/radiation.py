@@ -1,6 +1,7 @@
 import xarray as xr
 import numpy as np
 from netCDF4 import Dataset
+from typing import Optional, Union
 
 
 def frierson_sw_optical_depth(surface_pressure: xr.DataArray, tau_equator: float = 0, tau_lat_var: float = 0,
@@ -142,3 +143,40 @@ def get_heat_capacity(c_p: float, density: float, layer_depth: float) -> float:
         Heat capacity in units of $JK^{-1}m^{-2}$.
     """
     return c_p * density * layer_depth
+
+def opd_lw_gray(lat: np.ndarray, pressure: Optional[float] = None,
+                kappa: float = 1, tau_eq: float = 6, tau_pole: float = 1.5,
+                pressure_ref: float = 10**5, frac_linear: float=0.1, k_exponent: float=4) -> np.ndarray:
+    """
+    Returns the longwave optical depth used in the
+    [Frierson](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#frierson-byrne-schemes)
+    Isca `rad_scheme`.
+
+    If `pressure` not provided, will return surface value. Otherwise, will return value at give `pressure`.
+
+    Args:
+        lat: `float [n_lat]`</br>
+            Latitude in degrees.
+        pressure: Pressure in Pa.
+        kappa: Frierson optical depth scaling parameter.</br>
+            `opd` in `two_stream_gray_rad_nml` namelist.
+        tau_eq: Surface longwave optical depth at equator.</br>
+            `ir_tau_eq` in `two_stream_gray_rad_nml` namelist.
+        tau_pole: Surface longwave optical depth at pole.</br>
+            `ir_tau_pole` in `two_stream_gray_rad_nml` namelist.
+        pressure_ref: Reference pressure in Pa.
+        frac_linear: Determines partitioning between linear term and $p^k$ term.</br>
+            `linear_tau` in `two_stream_gray_rad_nml` namelist.
+        k_exponent: Pressure exponent.</br>
+            `wv_exponent` in `two_stream_gray_rad_nml` namelist.
+
+    Returns:
+        opd: `float [n_lat]`</br>
+            Longwave optical depth
+    """
+    opd_surf = kappa * (tau_eq + (tau_pole - tau_eq) * np.sin(np.deg2rad(lat)) ** 2)
+    if pressure is None:
+        return opd_surf
+    else:
+        pressure_factor = frac_linear * (pressure/pressure_ref) + (1-frac_linear) * (pressure/pressure_ref)**k_exponent
+        return opd_surf * pressure_factor
