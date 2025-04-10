@@ -207,7 +207,8 @@ def get_px(ds: List[xr.Dataset], mse_quant_x: np.ndarray, quant_use: np.ndarray,
 
 
 def get_quant_ind(var: Union[xr.DataArray, np.ndarray], percentile: int, range_below: float = 0,
-                  range_above: float = np.inf, av_dim: Optional[Union[str, int]]=None) -> np.ndarray:
+                  range_above: float = np.inf, av_dim: Optional[Union[List, str, int]]=None,
+                  return_mask: bool = False) -> np.ndarray:
     """
     This functions returns the indices of all occurrences whereby the value of `var` is between the
     `percentile-range_below` and `percentile+range_above` percentile.
@@ -226,10 +227,13 @@ def get_quant_ind(var: Union[xr.DataArray, np.ndarray], percentile: int, range_b
             `percentile+range_above` will be returned.
         av_dim: Dimension to find quantile over, should be string if `var` is xarray or integer if `var` is numpy
             array. If not given, will find quantile over 'lon_lat_time' or 'lon_time' dimension.
+        return_mask: If `True`, will return boolean mask indicating which coordinates are in the quant range.</br>
+            Otherwise will return the indices
 
     Returns:
         `int [n_ind]`</br>
-            All indices where `var` is in the correct percentile range.
+            All indices where `var` is in the correct percentile range.</br>
+            Or boolean of length `n_lon_lat_time` if `return_mask` is `True`.</br>
     """
     quant_min = np.clip(percentile-range_below, 0, 100)
     quant_max = np.clip(percentile+range_above, 0, 100)
@@ -244,10 +248,13 @@ def get_quant_ind(var: Union[xr.DataArray, np.ndarray], percentile: int, range_b
                 av_dim = 'lon_time'
             else:
                 raise ValueError('No suitable dimension to average over - neither lon_lat_time nor lon_time in var')
-        else:
-            if av_dim not in var.dims:
-                raise ValueError(f'No suitable dimension to average over - {av_dim} is not in var')
+        # else:
+        #     if av_dim not in var.dims:
+        #         raise ValueError(f'No suitable dimension to average over - {av_dim} is not in var')
         quantile_thresh_min = var.quantile(quant_min / 100, dim=av_dim, keep_attrs=True)
         quantile_thresh_max = var.quantile(quant_max / 100, dim=av_dim, keep_attrs=True)
-    quant_ind = np.where(np.logical_and(var > quantile_thresh_min, var <= quantile_thresh_max))[0]
-    return quant_ind
+    mask = np.logical_and(var > quantile_thresh_min, var <= quantile_thresh_max)
+    if return_mask:
+        return mask
+    else:
+        return np.where(mask)[0]

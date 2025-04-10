@@ -18,13 +18,13 @@
 
 &script_info
     out_dir =                   ! Where npz saved. Leave blank to set to directory containing this file
-    out_name =                  ! Name of npz file within dir_out, leave blank to set to `output.npz`
+    out_name =                  ! Name of nd2 file within dir_out, leave blank to set to `output.nd2`
     exist_ok = .false.          ! If out_name already exists, overwrite if .true. otherwise give error
     archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
     exp_name = 'e.e20.E1850TEST.f09_g17.daily_output'        ! Name of experiment within archive_dir
-    chunks_time = 365           ! Chunking info for less memory usage (1 chunk per year)
-    chunks_lat = 10             ! Chunking info for less memory usage
-    chunks_lon = 20             ! Chunking info for less memory usage
+    chunks_time =               ! Chunking info for less memory usage (leave empty to not chunk in given dimension)
+    chunks_lat = 1              ! Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
+    chunks_lon =                ! Chunking info for less memory usage
     p_ft_approx_guess = 500     ! Approx FT pressure level to use in hPa
     p_surf_approx_guess = 1000  ! Approx surface pressure level to use in hPa
     landfrac_thresh = 0.5       ! Consider a grid point land if more than this fraction is land

@@ -18,7 +18,7 @@
 
 &script_info
     out_dir =                   ! Where npz saved. Leave blank to set to directory containing this file
-    out_name =                  ! Name of npz file within dir_out, leave blank to set to `output.npz`
+    out_name =  output_year38   ! Name of nd2 file within dir_out, leave blank to set to `output.nd2`
     exist_ok = .false.          ! If out_name already exists, overwrite if .true. otherwise give error
     archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
     exp_name = 'e.e20.E1850TEST.f09_g17.co2_2x_daily_output'        ! Name of experiment within archive_dir
@@ -28,8 +28,8 @@
     p_ft_approx_guess = 500     ! Approx FT pressure level to use in hPa
     p_surf_approx_guess = 1000  ! Approx surface pressure level to use in hPa
     landfrac_thresh = 0.5       ! Consider a grid point land if more than this fraction is land
-    year_first =                ! First year of data to consider, leave blank for first year of data
-    year_last =                 ! Last year of data to consider, leave blank for last year of data
+    year_first = 38               ! First year of data to consider, leave blank for first year of data
+    year_last =  38               ! Last year of data to consider, leave blank for last year of data
     quant = 90, 95, 99          ! Collect quantile info at these quantiles
     quant_range = 0.5           ! For each quantile in quant, consider days with near-surface temp in quantile range quant-quant_range to quant+quant_range
 /

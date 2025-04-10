@@ -8,6 +8,7 @@ import numpy as np
 import f90nml
 import logging
 import time
+import xarray as xr
 # Set up logging configuration to output to console and don't output milliseconds, and stdout so saved to out file
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
@@ -21,10 +22,10 @@ def get_exp_info_dict(input_file_path: str) -> dict:
         exp_info['out_dir'] = os.path.dirname(input_file_path)
     if exp_info['out_name'] is None:
         # Default name of saved data is output.npz
-        exp_info['out_name'] = 'output.npz'
-    elif exp_info['out_name'][-4:] != '.npz':
+        exp_info['out_name'] = 'output.nd2'
+    elif exp_info['out_name'][-4:] != '.nd2':
         # Ensure output file ends in npz
-        exp_info['out_name'] = exp_info['out_name'] + '.npz'
+        exp_info['out_name'] = exp_info['out_name'] + '.nd2'
     if exp_info['year_first'] is None:
         # Default first year of data is year 1
         exp_info['year_first'] = 1
@@ -51,9 +52,18 @@ def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, p_ft_appr
     ind_surf = int(np.argmin(np.abs(ds.T.lev - p_surf_approx_guess).to_numpy()))
     var_atm = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
     ds_atm = ds.isel(lev=[ind_surf, ind_ft])[var_atm]  # For atm dataset, only need a few variables and 2 pressure levels
+
+    # ds_lnd = ds_lnd.reindex_like(ds['PS'], method="nearest", tolerance=0.01)
+
     soil_liq = ds_lnd.SOILLIQ.sum(dim='levsoi')    # for lnd dataset, only need soil moisture
 
     is_land = ds_lnd.landfrac.isel(time=0, drop=True) > landfrac_thresh     # whether a coordinate is land or not
+
+    # re-index so lat align - otherwise get issues because lat slightly different
+    soil_liq = soil_liq.reindex_like(ds['PS'], method="nearest", tolerance=0.01)
+    is_land = is_land.reindex_like(ds['PS'].isel(time=0), method="nearest", tolerance=0.01)  # re-index so lat align
+
+
     return ds_atm, soil_liq, is_land
 
 
@@ -74,37 +84,82 @@ def main(input_file_path: str):
     hybrid_a_coef_ft = float(ds.hyam.isel(time=0, lev=ind_ft))
     hybrid_b_coef_ft = float(ds.hybm.isel(time=0, lev=ind_ft))
     ds = ds.drop_vars(["P0", "hyam", "hybm"])     # don't need ref pressure or hybrid coordinates anymore
-    p_ft_approx = float(ds.T.lev[ind_ft]) * 100
-    p_surf_approx = float(ds.T.lev[ind_surf]) * 100
+    p_ft_approx = float(ds.lev[ind_ft]) * 100
+    p_surf_approx = float(ds.lev[ind_surf]) * 100
 
 
     # Initialize dict to save output data - n_surf (land or ocean) x n_lat x n_quant
     n_lat = ds.lat.size
-    quant_use = exp_info['quant']
-    quant_range = exp_info['quant_range']   # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
-    n_quant = len(quant_use)
-    output_info = {var: np.zeros((2, n_lat, n_quant)) for var in
-                   ['temp', 'temp_ft', 'sphum', 'z', 'z_ft', 'rh', 'mse', 'mse_sat_ft', 'mse_lapse',
-                    'mse_sat_ft_p_approx', 'mse_lapse_p_approx', 'pressure_ft', 'soil_liq']}
+    n_surf = 2
+    n_lev = 2  # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
+    n_quant = len(exp_info['quant'])
+    output_info = {var: np.zeros((n_surf, n_quant, n_lat)) for var in
+                   ['rh', 'mse', 'mse_sat_ft', 'mse_lapse',
+                    'mse_sat_ft_p_approx', 'mse_lapse_p_approx', 'pressure_ft', 'SOILLIQ']}
+    for var in ['T', 'Q', 'Z3']:
+        output_info[var] = np.zeros((n_surf, n_quant, n_lat, n_lev))         # have pressure dim as well
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
-        output_info[var + '_std'] = np.zeros((2, n_lat, n_quant))
-    output_info['lon_most_common'] = np.zeros((2, n_lat, n_quant))
-    output_info['lon_most_common_freq'] = np.zeros((2, n_lat, n_quant), dtype=int)
-    output_info['n_grid_points'] = np.zeros((2, n_lat), dtype=int)  # number of grid points used at each location
-    output_info['surface'] = ['land', 'ocean']
+        output_info[var + '_std'] = np.zeros_like(output_info[var])
+    output_info['lon_most_common'] = np.zeros((n_surf, n_quant, n_lat))
+    output_info['lon_most_common_freq'] = np.zeros((n_surf, n_quant, n_lat), dtype=int)
+    output_info['n_grid_points'] = np.zeros((n_surf, n_lat), dtype=int)  # number of grid points used at each location
     # Record approx number of days used in quantile calculation. If quant_range=0.5 and 1 year used, this is just 0.01*365=3.65
-    output_info['n_days_quant'] = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
-                                                quant_range).size / n_lat
+    # n_days_quant = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
+    #                                             quant_range).size / n_lat
+
+    coords = {'surface': ['land', 'ocean'], 'quant': exp_info['quant'],
+              'lev': ds.lev, 'lat': ds.lat}
+
+    # Coordinate info to convert to xarray datasets
+    output_dims = {var: ['surface', 'quant', 'lat'] for var in output_info}
+    for var in ['T', 'Q', 'Z3']:
+        output_dims[var] = ['surface', 'quant', 'lat', 'lev']
+        output_dims[var+'_std'] = ['surface', 'quant', 'lat', 'lev']
+    output_dims['n_grid_points'] = ['surface', 'lat']
 
     logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
     logger.info(f"Starting iteration over {n_lat} latitudes, 2 surfaces, and {n_quant} quantiles")
+
+    # # Parallel over latitude method of doing calculation - may be useful later
+    # for i in range(n_surf):
+    #     for j in range(n_quant):
+    #         is_quant = get_quant_ind(ds.T.isel(lev=ind_surf), coords['quant'][j],
+    #                                  exp_info['quant_range'], exp_info['quant_range'], return_mask=True,
+    #                                  av_dim=['lon', 'time'])
+    #         if i == 0:
+    #             mask = np.logical_and(is_land, is_quant)
+    #             var = 'SOILLIQ'
+    #             output_info[var][i, j] = soil_liq.where(mask).mean(dim=['lon', 'time'], skipna=True)
+    #             output_info[var+'_std'][i, j] = soil_liq.where(mask).std(dim=['lon', 'time'], skipna=True)
+    #         else:
+    #             mask = np.logical_and(~is_land, is_quant)
+    #         for var in ['T', 'Z3', 'Q']:
+    #             output_info[var][i, j] = ds[var].where(mask).mean(dim=['lon', 'time'], skipna=True)
+    #             output_info[var+'_std'][i, j] = ds[var].where(mask).std(dim=['lon', 'time'], skipna=True)
+    #
+    #         var_use = {}
+    #         var_use['rh'] = (ds.Q / sphum_sat(ds.T, p_surf_approx)).isel(lev=ind_surf)
+    #         var_use['mse'] = moist_static_energy(ds.T, ds.Q, ds.Z3).isel(lev=ind_surf)
+    #         var_use['mse_sat_ft_p_approx'] = moist_static_energy(ds.T, sphum_sat(ds.T, p_ft_approx),
+    #                                                              ds.Z3).isel(lev=ind_ft)
+    #         var_use['mse_lapse_p_approx'] = var_use['mse'] - var_use['mse_sat_ft_p_approx']
+    #         var_use['pressure_ft'] = cesm.get_pressure(ds.PS, p_ref, hybrid_a_coef_ft, hybrid_b_coef_ft)
+    #         var_use['mse_sat_ft'] = moist_static_energy(ds.T.isel(lev=ind_ft),
+    #                                                     sphum_sat(ds.T.isel(lev=ind_ft), var_use['pressure_ft']),
+    #                                                     ds.Z3.isel(lev=ind_ft))
+    #         var_use['mse_lapse'] = var_use['mse'] - var_use['mse_sat_ft']
+    #         for key in var_use:
+    #             output_info[key][i, j] = var_use[key].where(mask).mean(dim=['lon', 'time'], skipna=True)
+    #             output_info[key + '_std'][i, j] = var_use[key].where(mask).std(dim=['lon', 'time'], skipna=True)
+
+
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):
         time_log = {'load': 0, 'calc': 0, 'start': time.time()}
         ds_lat = ds.isel(lat=i).load()
         time_log['load'] += time.time() - time_log['start']
-        for k, surf in enumerate(output_info['surface']):
+        for k, surf in enumerate(coords['surface']):
             time_log['start'] = time.time()
             if surf == 'land':
                 is_surf = is_land.isel(lat=i)
@@ -126,14 +181,13 @@ def main(input_file_path: str):
             time_log['start'] = time.time()
             for j in range(n_quant):
                 # get indices corresponding to given near-surface temp quantile
-                use_ind = get_quant_ind(ds_use.T.isel(lev=ind_surf), quant_use[j], quant_range, quant_range)
+                use_ind = get_quant_ind(ds_use.T.isel(lev=ind_surf), coords['quant'][j], exp_info['quant_range'],
+                                        exp_info['quant_range'])
                 ds_use_q = ds_use.isel(lon_time=use_ind, drop=True)
                 var_use = {}
-                var_use['temp'] = ds_use_q.T.isel(lev=ind_surf)
-                var_use['temp_ft'] = ds_use_q.T.isel(lev=ind_ft)
-                var_use['sphum'] = ds_use_q.Q.isel(lev=ind_surf)
-                var_use['z'] = ds_use_q.Z3.isel(lev=ind_surf)
-                var_use['z_ft'] = ds_use_q.Z3.isel(lev=ind_ft)
+                var_use['T'] = ds_use_q.T
+                var_use['Q'] = ds_use_q.Q
+                var_use['Z3'] = ds_use_q.Z3
                 var_use['rh'] = ds_use_q.Q.isel(lev=ind_surf) / sphum_sat(ds_use_q.T.isel(lev=ind_surf), p_surf_approx)
                 var_use['mse'] = moist_static_energy(ds_use_q.T.isel(lev=ind_surf), ds_use_q.Q.isel(lev=ind_surf),
                                                      ds_use_q.Z3.isel(lev=ind_surf))
@@ -147,34 +201,43 @@ def main(input_file_path: str):
                                                             ds_use_q.Z3.isel(lev=ind_ft))
                 var_use['mse_lapse'] = var_use['mse'] - var_use['mse_sat_ft']
                 if surf == 'land':
-                    var_use['soil_liq'] = soil_liq_use.isel(lon_time=use_ind)
+                    var_use['SOILLIQ'] = soil_liq_use.isel(lon_time=use_ind)
                 for key in var_use:
-                    output_info[key][k, i, j] = var_use[key].mean()
-                    output_info[key + '_std'][k, i, j] = var_use[key].std()
+                    output_info[key][k, j, i] = var_use[key].mean(dim='lon_time')
+                    output_info[key + '_std'][k, j, i] = var_use[key].std(dim='lon_time')
                 lon_use = np.unique(ds_use.lon[use_ind], return_counts=True)
 
                 # Record most common specific coordinate within grid to see if most of days are at a given location
-                output_info['lon_most_common'][k, i, j] = lon_use[0][lon_use[1].argmax()]
-                output_info['lon_most_common_freq'][k, i, j] = lon_use[1][lon_use[1].argmax()]
+                output_info['lon_most_common'][k, j, i] = lon_use[0][lon_use[1].argmax()]
+                output_info['lon_most_common_freq'][k, j, i] = lon_use[1][lon_use[1].argmax()]
                 time_log['calc'] += time.time() - time_log['start']
         # if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
         # # Log info on 1st, last and every 10th latitude
         logger.info(f"Latitude {i + 1}/{n_lat}: Loading took {time_log['load']:.1f}s | Calculation took {time_log['calc']:.1f}s | "
                     f"Memory used {get_memory_usage()/1000:.1f}GB")
-    # Add basic info of the dataset and averaging details used
-    output_info['exp_name'] = exp_info['exp_name']
-    output_info['date_start'] = ds.time.to_numpy()[0].strftime()
-    output_info['date_end'] = ds.time.to_numpy()[-1].strftime()
-    output_info['lat'] = ds.lat.to_numpy()
-    output_info['lon'] = ds.lon.to_numpy()
-    output_info['pressure_surf_approx'] = p_surf_approx
-    output_info['pressure_ft_approx'] = p_ft_approx
-    output_info['quant'] = quant_use
-    output_info['quant_range'] = quant_range
-    output_info['landfrac_thresh'] = exp_info['landfrac_thresh']
 
-    # Save output to npz file
-    np.savez_compressed(os.path.join(exp_info['out_dir'], exp_info['out_name']), **output_info)
+    # Convert output dict into xarray dataset
+    # Convert individual arrays
+    for var in output_info:
+        output_info[var] = xr.DataArray(output_info[var], dims=output_dims[var],
+                                        coords={key: coords[key] for key in output_dims[var]})
+    # Add pressure level info to variables at single level
+    for var in ['rh', 'mse', 'mse_sat_ft', 'mse_sat_ft_p_approx', 'pressure_ft']:
+        if '_ft' in var:
+            output_info[var].coords['lev'] = coords['lev'][ind_ft]
+            output_info[var+'_std'].coords['lev'] = coords['lev'][ind_ft]
+        else:
+            output_info[var].coords['lev'] = coords['lev'][ind_surf]
+            output_info[var+'_std'].coords['lev'] = coords['lev'][ind_surf]
+    # Convert dict to dataset
+    ds_out = xr.Dataset(output_info)
+    # Add basic info to dataset
+    ds_out['time'] = ds.time
+    ds_out['lon'] = ds.lon
+
+
+    # Save output to nd2 file
+    ds_out.to_netcdf(os.path.join(exp_info['out_dir'], exp_info['out_name']))
     logger.info("End")
 
 if __name__ == "__main__":
