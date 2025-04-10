@@ -84,6 +84,35 @@ If you get this, just delete the name of this file from the `path_names` folder.
 this only occured for the file </br>
 `atmos_param/socrates/src/trunk/src/aux/interpolate_p.f`.
 
+### Single Column
+The `path_names` for the single column version of *SOCRATES* in the file 
+`$GFDL_BASE/src/extra/model/socrates_column/path_names` should also be changed as above, 
+with a few modifications to get the compilation to work:
+
+As well as `atmos_param/socrates/src/trunk/src/aux/interpolate_p.f`, I had to delete 
+`atmos_param/socrates/src/trunk/src/um/out_nml.f90` and 
+`atmos_param/socrates/src/trunk/src/um/def_um_nml.f90`.
+
+I had to add `atmos_param/socrates/src/trunk/src/scatter/polynomialroots.f90`.
+
+I had to edit the `SWAP` interface in this `polynomialroots.f90` file.:
+=== "Original"
+    ```fortran
+      INTERFACE Swap
+        MODULE PROCEDURE SwapDouble, SwapSingle
+      END INTERFACE
+    ```
+=== "Updated"
+    ```fortran
+      INTERFACE Swap
+        MODULE PROCEDURE SwapDouble   !, SwapSingle
+      END INTERFACE
+    ```
+Otherwise I got an error:
+
+`Error: Ambiguous interfaces in generic interface 'swap' for 'swapdouble' at (1) and 
+'swapsingle' at (2)`
+
 ## Running a simple experiment
 The simple *SOCRATES* experiment that I [ran](getting_started.md#running-a-general-experiment), was just taking the 
 [*Frierson*](https://github.com/ExeClim/Isca/blob/master/exp/test_cases/frierson/frierson_test_case.py) test experiment
