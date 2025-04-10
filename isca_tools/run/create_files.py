@@ -3,7 +3,7 @@ import numpy as np
 import xarray as xr
 from netCDF4 import Dataset
 from ..utils.load import load_namelist
-from typing import Optional, Tuple, Callable, Union
+from typing import Optional, Tuple, Callable, Union, Literal
 from .cmip_time import day_number_to_date, FakeDT
 import numpy_indexed
 import warnings
@@ -81,34 +81,45 @@ import warnings
 #     print('Output written to: ' + file_name)
 
 
-def create_grid_file(res: int = 21):
+def create_grid_file(example_exp_file: Optional[str] = None, output_file_path: Optional[str] = None,
+                     res: Optional[Literal[21, 42, 85]] = None):
     """
-    Function to create a grid file e.g. `t21_grid.nc` for a specified resolution.
+    Function to create a grid file e.g. `t21_grid.nc` for a specified resolution,
+    or output data from previous experiment.
     This grid file is required to create timeseries files and includes the variables `lon`, `lonb`, `lat`, `latb`,
     `pfull` and `phalf`.
 
     ??? note "Pressure values"
-        The `'_exp.nc'` files in the `grid_files` folder for each resolution contain only 2 pressure values.
-        To change this, the `'_exp.nc'` files will be need to be created again using different pressure levels
-        as specified in the `gridfile_namelist.nml` file. I.e. a quick experiment needs to be run
-        using a modified version of `gridfile_namelist.nml`.
+        The `'_exp.nc'` files in the `grid_files` folder for each resolution (used when `res` is specified)
+        contain only 2 pressure values.
+        To change this, the `example_exp_file` will need to be specified.
 
     Function is extended from an
     [Isca script](https://github.com/ExeClim/Isca/blob/master/src/extra/python/scripts/gfdl_grid_files/grid_file_generator.py)
     but also includes pressure level info.
 
     Args:
+        example_exp_file: Path to the example experiment file (should end with `.nc`).</br>
+            If `res` is specified, it will be loaded from the grid_dir with name `t{res}_exp.nc`.
+        output_file_path: Where to save the grid file (should end with `.nc`).</br>
+            If `res` is specified, it will be saved to the grid_dir with name `t{res}_grid.nc`.
         res: Experiment resolution. Must be either `21`, `42` or `85`.
 
     """
-    # Read in an example data output file for the specified resolution that has suffix '_exp'
-    # This data was produced using the gridfile_namelist.nml and gridfile_diag_table input files.
-    grid_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'grid_files')
-    input_file_name = os.path.join(grid_dir, f"t{res}_exp.nc")
-    if not os.path.exists(input_file_name):
-        raise ValueError(f"The file {input_file_name} does not exist.\n"
-                         f"res provided was {res} but it must be either 21, 42 or 85.")
-    resolution_file = Dataset(input_file_name, 'r', format='NETCDF3_CLASSIC')
+    if example_exp_file is None and res is not None:
+        # Read in an example data output file for the specified resolution that has suffix '_exp'
+        # This data was produced using the gridfile_namelist.nml and gridfile_diag_table input files.
+        grid_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'grid_files')
+        example_exp_file = os.path.join(grid_dir, f"t{res}_exp.nc")
+        if output_file_path is None:
+            output_file_path = os.path.join(grid_dir, f"t{res}_grid.nc")
+    elif example_exp_file is None:
+        raise ValueError('Neither example_exp_file nor res was specified.')
+    elif output_file_path is None:
+        raise ValueError('output_file_path was not specified.')
+    if not os.path.exists(example_exp_file):
+        raise ValueError(f"The file {example_exp_file} does not exist.")
+    resolution_file = Dataset(example_exp_file, 'r', format='NETCDF3_CLASSIC')
 
     # Load longitude/latitude information from the file
     lons = resolution_file.variables['lon'][:]
@@ -122,12 +133,12 @@ def create_grid_file(res: int = 21):
     phalf = resolution_file.variables['phalf'][:]  # always one more value in phalf than in pfull
 
     # Save grid data for this resolution to the same folder as input
-    output_file_name = os.path.join(grid_dir, f"t{res}_grid.nc")
-    if os.path.exists(output_file_name):
-        raise ValueError(f"The file {output_file_name} already exists.")
+
+    if os.path.exists(output_file_path):
+        raise ValueError(f"The file {output_file_path} already exists.")
     else:
-        print('Grid file written to: ' + output_file_name)
-    output_file = Dataset(output_file_name, 'w', format='NETCDF3_CLASSIC')
+        print('Grid file written to: ' + output_file_path)
+    output_file = Dataset(output_file_path, 'w', format='NETCDF3_CLASSIC')
 
     output_file.createDimension('lat', lats.shape[0])
     output_file.createDimension('lon', lons.shape[0])
@@ -227,7 +238,8 @@ def write_var(file_name: str, exp_dir: str,
               time_var: Optional[np.ndarray] = None, pressure_var: Optional[np.ndarray] = None,
               lat_interpolate: bool = False, lon_interpolate: bool = False,
               time_interpolate: Union[bool, str] = False, pressure_interpolate: bool = False,
-              var_name: Optional[str] = None, namelist_file: str='namelist.nml'):
+              var_name: Optional[str] = None, namelist_file: str='namelist.nml',
+              grid_file: Optional[str] = None):
     """
     Creates a *.nc* file containing the value of `var_name` as a function of time, pressure, latitude and longitude to
     be used during a simulation using pressure, latitude and longitude information from the `t{res}_grid.nc` file.
@@ -241,12 +253,9 @@ def write_var(file_name: str, exp_dir: str,
         the day=0.5 value is an average of all time steps between day 0 and day 1.
 
     ??? note "Pressure values"
-        The `'_exp.nc'` files in the `grid_files` folder for each resolution contain only 2 pressure values.
-        To change this, the `'_exp.nc'` files will be need to be created again using different pressure levels
-        as specified in the `gridfile_namelist.nml` file. I.e. a quick experiment needs to be run
-        using a modified version of `gridfile_namelist.nml`.
-
-        Then `create_grid_file` needs to be run to create the new `'_grid.nc'` file for the given resolution.
+        The default `grid_file` will only have 2 pressure values.
+        To change this, a new `grid_file` should be created using `create_grid_file` with the
+        `example_exp_file` specified to a output `.nc` file with the desired pressure information.
 
     Args:
         file_name: *.nc* file containing the value of `var_name` as a function of time, pressure,
@@ -289,6 +298,9 @@ def write_var(file_name: str, exp_dir: str,
             If not provided, will set to `file_name` (without the `.nc` extension).
         namelist_file: Name of namelist `nml` file for the experiment, within the `exp_dir`.
             This specifies the physical parameters used for the simulation.
+        grid_file: Path to file with desired coordinate information for this experiment.
+            Can be created with `create_grid_file` function.</br>
+            If not provided, will use default grid file corresponding to the resolution specified in `namelist_file`.
 
     """
     if var_name is None:
@@ -297,12 +309,13 @@ def write_var(file_name: str, exp_dir: str,
     res = int(namelist['experiment_details']['resolution'][1:])     # resolution for experiment read in
 
     # Create copy of base file for this resolution and save to file_name
-    grid_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'grid_files')
-    base_file_name = os.path.join(grid_dir, f"t{res}_grid.nc")
-    if not os.path.exists(base_file_name):
-        # Create base nc file with all the dimensions if it does not exist.
-        create_grid_file(res)
-    dataset_base = xr.open_dataset(base_file_name)
+    if grid_file is None:
+        grid_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'grid_files')
+        grid_file = os.path.join(grid_dir, f"t{res}_grid.nc")
+        if not os.path.exists(grid_file):
+            # Create base nc file with all the dimensions if it does not exist.
+            create_grid_file(res=res)
+    dataset_base = xr.open_dataset(grid_file)
 
     var_dims = ('lat','lon',)
 
@@ -347,7 +360,7 @@ def write_var(file_name: str, exp_dir: str,
                                          not in np.round(pressure_var, 0) for i in range(dataset_base.pfull.size)])[0]
         if len(interpolated_pressure_ind)>0:
             if not pressure_interpolate:
-                raise ValueError(f"Using resolution file={base_file_name}\nwhich contains pfull="
+                raise ValueError(f"Using resolution file={grid_file}\nwhich contains pfull="
                                  f"{np.round(dataset_base.pfull.to_numpy()[interpolated_pressure_ind], 0)}hPa."
                                  f"\nThese are not provided in pressure_var. Closest is "
                                  f"{np.round(pressure_var[input_pressure_inds_for_out[interpolated_pressure_ind]], 0)}hPa\n"

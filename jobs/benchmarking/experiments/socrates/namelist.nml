@@ -6,7 +6,7 @@
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
    name = 'benchmarking/socrates/64_t85_second_run'                ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/gpfs1/home/jamd1/Isca/jobs/benchmarking/experiments/socrates/'
+   input_dir = '/home/jamd1/Isca/jobs/benchmarking/experiments/socrates/'
    n_months_total = 1           ! Total duration of simulation in months.
    n_months_job = 1             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -141,8 +141,8 @@
 ! Specify socrates radiation using parameters given in socrates_aquaplanet.py script.
 &socrates_rad_nml
     stellar_constant = 1370
-    lw_spectral_filename = '/gpfs1/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_lw_ga7'
-    sw_spectral_filename = '/gpfs1/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_sw_ga7'
+    lw_spectral_filename = '/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_lw_ga7'
+    sw_spectral_filename = '/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_sw_ga7'
     do_read_ozone = .true.
     ozone_file_name = 'ozone_1990'
     ozone_field_name = 'ozone_1990'

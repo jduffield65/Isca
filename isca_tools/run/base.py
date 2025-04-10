@@ -1,6 +1,6 @@
 import os
 import sys
-from isca import Experiment, IscaCodeBase, GFDL_BASE, SocratesCodeBase, ColumnCodeBase
+from isca import Experiment, IscaCodeBase, GFDL_BASE, SocratesCodeBase, ColumnCodeBase, SocColumnCodeBase
 from isca.diagtable import DiagTable
 import f90nml
 import numpy as np
@@ -140,13 +140,16 @@ def run_job(namelist_file: str, diag_table_file: str, month_start: int, month_du
     if 'column_nml' in namelist:
         # Different code base if using column
         cb = ColumnCodeBase.from_directory(GFDL_BASE)
+        if 'idealized_moist_phys_nml' in namelist and 'do_socrates_radiation' in namelist['idealized_moist_phys_nml']:
+            if namelist['idealized_moist_phys_nml']['do_socrates_radiation']:
+                # Different codebase if using socrates
+                cb = SocColumnCodeBase.from_directory(GFDL_BASE)
     else:
         cb = IscaCodeBase.from_directory(GFDL_BASE)
-
-    if 'idealized_moist_phys_nml' in namelist and 'do_socrates_radiation' in namelist['idealized_moist_phys_nml']:
-        if namelist['idealized_moist_phys_nml']['do_socrates_radiation']:
-            # Different codebase if using socrates
-            cb = SocratesCodeBase.from_directory(GFDL_BASE)
+        if 'idealized_moist_phys_nml' in namelist and 'do_socrates_radiation' in namelist['idealized_moist_phys_nml']:
+            if namelist['idealized_moist_phys_nml']['do_socrates_radiation']:
+                # Different codebase if using socrates
+                cb = SocratesCodeBase.from_directory(GFDL_BASE)
 
     if exp_details['compile']:
         cb.compile()
