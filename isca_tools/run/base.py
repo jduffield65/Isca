@@ -6,6 +6,7 @@ import f90nml
 import numpy as np
 import datetime
 from typing import List
+import subprocess
 
 
 def get_file_suffix(dir: str, suffix: str) -> List[str]:
@@ -76,8 +77,6 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # Specify which node to run
     if 'nodelist' not in exp_details:
         # if not given, allow all available nodes
-        print('nodelist not listed in experiment_details_nml section of namelist. '
-              'Using default node, may submit jobs in wrong order if multiple jobs')
         slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm_no_namelist.sh')
         exp_details['nodelist'] = ''    # just set to empty string
     else:
@@ -86,15 +85,22 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # Run this base.py script aas main if using slurm
     # Because doing this, cannot have any relative imports in this file
     run_job_script = os.path.realpath(__file__)     # run this script as main if using slurm
+
+    prev_job_id = ''     # Empty string so don't provide any argument to first slurm script
     # Iterate over all jobs
     for month_job in month_jobs:
         if slurm:
-            # Note that sys.argv[0] is the path to the run_script.py script that was used to call this function.
-            # We now call it again but with input arguments so that it runs the job on slurm.
-            os.system(f"bash {slurm_script} {exp_details['name']} {month_job[0]} {len(month_job)} "
-                      f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                      f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} "
-                      f"{exp_details['nodelist']}")
+            # Different script for first vs subsequent scripts, as they are dependent on previous job
+            cmd = (
+                f"bash {slurm_script if prev_job_id == '' else slurm_script.replace('.sh','_depend.sh')} "
+                f"{exp_details['name']} {month_job[0]} {len(month_job)} "
+                f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
+                f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} "
+                f"{exp_details['nodelist']} {prev_job_id} "
+            )
+            output = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()   # get job just submitted info
+            print(f"{output}{prev_job_id if prev_job_id=='' else ' (dependency: job '+prev_job_id+')'}")
+            prev_job_id = output.split()[-1]  # Save this job id (last word) for the next submission
         else:
             run_job(namelist_file, diag_table_file, month_job[0], len(month_job))
 

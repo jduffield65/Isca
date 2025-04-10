@@ -38,14 +38,18 @@ def get_exp_info_dict(input_file_path: str) -> dict:
         raise ValueError('Output file already exists at:\n{}'.format(out_file))
     return exp_info
 
-def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, p_ft_approx_guess, p_surf_approx_guess,
-           landfrac_thresh, year_first, year_last):
+
+def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, parallel,
+           p_ft_approx_guess, p_surf_approx_guess,
+           landfrac_thresh, year_first, year_last, logger):
     # Load in datasets - one from atm and lnd components
     chunks={"time": chunks_time, "lat": chunks_lat, "lon": chunks_lon}
-    ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1,
-                           year_first=year_first, year_last=year_last,chunks=chunks)
     ds_lnd = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='lnd',
-                               year_first=year_first, year_last=year_last,chunks=chunks)
+                               year_first=year_first, year_last=year_last,chunks=chunks, parallel=parallel, logger=logger)
+    logger.info('Loaded land data')
+    ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1,
+                           year_first=year_first, year_last=year_last,chunks=chunks, parallel=parallel, logger=logger)
+    logger.info('Loaded atmospheric data')
 
     # Reduce size of datasets
     ind_ft = int(np.argmin(np.abs(ds.T.lev - p_ft_approx_guess).to_numpy()))
@@ -72,9 +76,20 @@ def main(input_file_path: str):
     logger.info("Start")
     exp_info = get_exp_info_dict(input_file_path)
     ds, soil_liq, is_land = get_ds(exp_info['exp_name'], exp_info['archive_dir'],
-                                   exp_info['chunks_time'], exp_info['chunks_lat'], exp_info['chunks_lon'],
-                                   exp_info['p_ft_approx_guess'], exp_info['p_surf_approx_guess'],
-                                   exp_info['landfrac_thresh'], exp_info['year_first'], exp_info['year_last'])
+                                   None, None, None,
+                                   exp_info['load_parallel'], exp_info['p_ft_approx_guess'],
+                                   exp_info['p_surf_approx_guess'], exp_info['landfrac_thresh'],
+                                   exp_info['year_first'], exp_info['year_last'], logger=logger)
+    logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
+
+    # Do chunking after open
+    soil_liq = soil_liq.chunk({"time": exp_info['chunks_time'], "lat": exp_info['chunks_lat'],
+                               "lon": exp_info['chunks_lon']})  # Do chunking after open
+    logger.info(f"Finished chunking land data | Memory used {get_memory_usage() / 1000:.1f}GB")
+    ds = ds.chunk({"time": exp_info['chunks_time'], "lat": exp_info['chunks_lat'],
+                   "lon": exp_info['chunks_lon']})
+    logger.info(f"Finished chunking atmospheric data | Memory used {get_memory_usage()/1000:.1f}GB")
+
     is_land = is_land.load()        # load as small dataset and quickens later steps
 
     # Get pressure info
@@ -118,41 +133,7 @@ def main(input_file_path: str):
         output_dims[var+'_std'] = ['surface', 'quant', 'lat', 'lev']
     output_dims['n_grid_points'] = ['surface', 'lat']
 
-    logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
     logger.info(f"Starting iteration over {n_lat} latitudes, 2 surfaces, and {n_quant} quantiles")
-
-    # # Parallel over latitude method of doing calculation - may be useful later
-    # for i in range(n_surf):
-    #     for j in range(n_quant):
-    #         is_quant = get_quant_ind(ds.T.isel(lev=ind_surf), coords['quant'][j],
-    #                                  exp_info['quant_range'], exp_info['quant_range'], return_mask=True,
-    #                                  av_dim=['lon', 'time'])
-    #         if i == 0:
-    #             mask = np.logical_and(is_land, is_quant)
-    #             var = 'SOILLIQ'
-    #             output_info[var][i, j] = soil_liq.where(mask).mean(dim=['lon', 'time'], skipna=True)
-    #             output_info[var+'_std'][i, j] = soil_liq.where(mask).std(dim=['lon', 'time'], skipna=True)
-    #         else:
-    #             mask = np.logical_and(~is_land, is_quant)
-    #         for var in ['T', 'Z3', 'Q']:
-    #             output_info[var][i, j] = ds[var].where(mask).mean(dim=['lon', 'time'], skipna=True)
-    #             output_info[var+'_std'][i, j] = ds[var].where(mask).std(dim=['lon', 'time'], skipna=True)
-    #
-    #         var_use = {}
-    #         var_use['rh'] = (ds.Q / sphum_sat(ds.T, p_surf_approx)).isel(lev=ind_surf)
-    #         var_use['mse'] = moist_static_energy(ds.T, ds.Q, ds.Z3).isel(lev=ind_surf)
-    #         var_use['mse_sat_ft_p_approx'] = moist_static_energy(ds.T, sphum_sat(ds.T, p_ft_approx),
-    #                                                              ds.Z3).isel(lev=ind_ft)
-    #         var_use['mse_lapse_p_approx'] = var_use['mse'] - var_use['mse_sat_ft_p_approx']
-    #         var_use['pressure_ft'] = cesm.get_pressure(ds.PS, p_ref, hybrid_a_coef_ft, hybrid_b_coef_ft)
-    #         var_use['mse_sat_ft'] = moist_static_energy(ds.T.isel(lev=ind_ft),
-    #                                                     sphum_sat(ds.T.isel(lev=ind_ft), var_use['pressure_ft']),
-    #                                                     ds.Z3.isel(lev=ind_ft))
-    #         var_use['mse_lapse'] = var_use['mse'] - var_use['mse_sat_ft']
-    #         for key in var_use:
-    #             output_info[key][i, j] = var_use[key].where(mask).mean(dim=['lon', 'time'], skipna=True)
-    #             output_info[key + '_std'][i, j] = var_use[key].where(mask).std(dim=['lon', 'time'], skipna=True)
-
 
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):

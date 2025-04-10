@@ -97,7 +97,7 @@ def get_slurm_info_from_file(input_file_path: str) -> dict:
 
 def run_script(script_path: Optional[str] = None, script_args: Optional[Union[List, float, int, str]] = None,
                job_name: Optional[str] = None, time: str = '02:00:00', n_tasks: int = 1,
-               cpus_per_tasks: int = 1, mem: Union[float, int] = 16, partition: str = 'standard',
+               cpus_per_task: int = 1, mem: Union[float, int] = 16, partition: str = 'standard',
                qos: Optional[str] = None, account: str = 'global_ex', conda_env: str = 'myenv',
                exist_output_ok: Optional[bool] = None, input_file_path: Optional[str] = None,
                slurm: bool = False) -> None:
@@ -111,7 +111,7 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
             extension, and without `$HOME/Isca/jobs` at the start.
         time: Maximum wall time for your job in format `hh:mm:ss`
         n_tasks: Number of tasks to run (usually 1 for a single script).
-        cpus_per_tasks: How many CPUs to allocate per task.
+        cpus_per_task: How many CPUs to allocate per task.
         mem: Memory to allocate for the job in GB.
         partition: Specifies the partition for the job.
             [Options](https://help.jasmin.ac.uk/docs/batch-computing/how-to-submit-a-job/#partitions-and-qos)
@@ -136,9 +136,9 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
         if not os.path.exists(input_file_path):
             raise ValueError(f"Input file {input_file_path} does not exist")
         slurm_info = get_slurm_info_from_file(input_file_path)
-        script_args, job_name, time, n_tasks, mem, partition, qos, conda_env, account, exist_output_ok = \
-            itemgetter('script_args', 'job_name', 'time', 'n_tasks', 'mem', 'partition', 'qos',
-                       'conda_env', 'account', 'exist_output_ok')(slurm_info)
+        script_args, job_name, time, n_tasks, cpus_per_task, mem, partition, qos, conda_env, account, exist_output_ok = \
+            itemgetter('script_args', 'job_name', 'time', 'n_tasks', 'cpus_per_task',
+                       'mem', 'partition', 'qos', 'conda_env', 'account', 'exist_output_ok')(slurm_info)
         # make script path the full path - combine jobs_dir and script_path
         script_path = os.path.join(slurm_info['jobs_dir'], slurm_info['script_path'])
     if slurm:
@@ -163,7 +163,7 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
         # Note that sys.argv[0] is the path to the run_script.py script that was used to call this function.
         # We now call it again but with input arguments so that it runs the job on slurm.
         submit_string = f"bash {slurm_script} {job_name} {time} {n_tasks} "\
-                        f"{cpus_per_tasks} {mem} {partition} {qos} {account} {conda_env} {script_path}"
+                        f"{cpus_per_task} {mem} {partition} {qos} {account} {conda_env} {script_path}"
         os.system(add_list_to_str(submit_string, script_args))
     else:
         # Import main function from script - do this rather than submitting to console, as can then use debugging stuff

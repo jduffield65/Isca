@@ -5,6 +5,7 @@ from typing import Optional, List, Union, Literal
 import fnmatch
 import numpy as np
 import warnings
+import logging
 
 jasmin_archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'
 local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
@@ -17,9 +18,11 @@ def load_dataset(exp_name: str, comp: str = 'atm',
                  combine: Literal["by_coords", "nested"] = 'nested',
                  concat_dim: str = 'time',
                  decode_times: bool = True,
+                 parallel: bool = True,
                  year_first: int = 1, year_last: int = -1,
                  months_keep: Optional[List] = None,
-                 apply_month_shift_fix: bool = True) -> xr.Dataset:
+                 apply_month_shift_fix: bool = True,
+                 logger: Optional[logging.Logger] = None) -> xr.Dataset:
     """
     This loads a dataset of a given component produced by CESM.
 
@@ -40,6 +43,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         combine: Whether `xarray.combine_by_coords` or `xarray.combine_nested` is used to combine all the data.
         concat_dim: Dimensions to concatenate files along.
             You only need to provide this argument if combine='nested'.
+        parallel: Whether parallel loading is performed.
         decode_times: If `True`, will convert time to actual date.
         year_first: First year of simulation to load.
         year_last: Last year of simulation to load.
@@ -49,6 +53,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
             If directory only contains specific months, should still specify those months here.
         apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset.</br>
             Only used for monthly averaged data i.e. `hist_file=0`.
+        logger: Optional logger.
 
     Returns:
         Dataset containing all diagnostics specified for the experiment.
@@ -119,11 +124,16 @@ def load_dataset(exp_name: str, comp: str = 'atm',
 
         data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
                            year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]
+    if logger:
+        files_str = "\n".join(data_files_load)
+        logger.info(f'Loading data from {len(data_files_load)} files:\n{files_str}')
     if apply_month_shift_fix and hist_file == 0:
-        ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim=concat_dim, combine=combine, chunks=chunks)
+        ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim=concat_dim,
+                               combine=combine, chunks=chunks, parallel=parallel)
         return ds_month_shift(ds, decode_times, months_keep)
     else:
-        return xr.open_mfdataset(data_files_load, decode_times=decode_times, concat_dim=concat_dim, combine=combine, chunks=chunks)
+        return xr.open_mfdataset(data_files_load, decode_times=decode_times,
+                                 concat_dim=concat_dim, combine=combine, chunks=chunks, parallel=parallel)
 
 
 def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
