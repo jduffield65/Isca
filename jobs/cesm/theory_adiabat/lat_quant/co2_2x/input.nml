@@ -6,9 +6,9 @@
    job_name =                                                 ! Set to name of directory containing this file if blank
    time = '12:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
    n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
-   cpus_per_task = 4            ! How many CPUs to allocate per task.
+   cpus_per_task = 1            ! How many CPUs to allocate per task.
    mem = 16                     ! Memory to allocate for the job in GB.
-   partition = 'highres'       ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   partition = 'standard'       ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
    qos =                        ! Set to same as partition if blank
    conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
    account = 'global_ex'        ! Account to use for submitting jobs.
@@ -26,6 +26,7 @@
     chunks_lat = 1             ! Chunking info for less memory usage
     chunks_lon =               ! Chunking info for less memory usage
     load_parallel = .true.      ! Whether to use parallel processing when loading
+    load_all_at_start = .true.  ! Whether to load entire data set at the start before calculations
     p_ft_approx_guess = 500     ! Approx FT pressure level to use in hPa
     p_surf_approx_guess = 1000  ! Approx surface pressure level to use in hPa
     landfrac_thresh = 0.5       ! Consider a grid point land if more than this fraction is land

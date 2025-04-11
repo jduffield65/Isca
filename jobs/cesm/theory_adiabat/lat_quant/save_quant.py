@@ -44,38 +44,56 @@ def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, parallel,
            landfrac_thresh, year_first, year_last, logger):
     # Load in datasets - one from atm and lnd components
     chunks={"time": chunks_time, "lat": chunks_lat, "lon": chunks_lon}
-    ds_lnd = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='lnd',
-                               year_first=year_first, year_last=year_last,chunks=chunks, parallel=parallel, logger=logger)
+
+    var_land = ['SOILLIQ', 'landfrac']
+    def preprocess_land(ds):
+        # Only 2 variables, and sum over all soil levels, and only keep first time value of landfrac
+        soil_liq_sum = ds['SOILLIQ'].sum(dim='levsoi')  # Sum over 'levsoi'
+        landfrac_first = ds['landfrac'].isel(time=0)
+        return xr.Dataset({'SOILLIQ': soil_liq_sum, 'landfrac': landfrac_first})
+    ds_land = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='lnd',
+                               year_first=year_first, year_last=year_last,chunks=chunks, parallel=parallel,
+                               preprocess=preprocess_land,
+                               logger=logger)
     logger.info('Loaded land data')
-    ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1,
-                           year_first=year_first, year_last=year_last,chunks=chunks, parallel=parallel, logger=logger)
+
+    var_atm = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
+    def preprocess_atm(ds):
+        # Preprocessing so don't load in entire dataset
+        ds = ds[var_atm]
+        ds = ds.sel(lev=xr.DataArray([p_surf_approx_guess, p_ft_approx_guess], dims='lev'), method='nearest')
+        # Only keep first time dimension of hybrid coordinates
+        for var in ['hyam', 'hybm']:
+            ds[var] = ds[var].isel(time=0)
+        return ds
+    ds_atm = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1,
+                               year_first=year_first, year_last=year_last,chunks=chunks, parallel=parallel,
+                               preprocess=preprocess_atm, logger=logger)
     logger.info('Loaded atmospheric data')
 
     # Reduce size of datasets
-    ind_ft = int(np.argmin(np.abs(ds.T.lev - p_ft_approx_guess).to_numpy()))
-    ind_surf = int(np.argmin(np.abs(ds.T.lev - p_surf_approx_guess).to_numpy()))
-    var_atm = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
-    ds_atm = ds.isel(lev=[ind_surf, ind_ft])[var_atm]  # For atm dataset, only need a few variables and 2 pressure levels
+    # ind_ft = int(np.argmin(np.abs(ds.T.lev - p_ft_approx_guess).to_numpy()))
+    # ind_surf = int(np.argmin(np.abs(ds.T.lev - p_surf_approx_guess).to_numpy()))
+    # ds_atm = ds.isel(lev=[ind_surf, ind_ft])[var_atm]  # For atm dataset, only need a few variables and 2 pressure levels
 
     # ds_lnd = ds_lnd.reindex_like(ds['PS'], method="nearest", tolerance=0.01)
 
-    soil_liq = ds_lnd.SOILLIQ.sum(dim='levsoi')    # for lnd dataset, only need soil moisture
-
-    is_land = ds_lnd.landfrac.isel(time=0, drop=True) > landfrac_thresh     # whether a coordinate is land or not
+    # soil_liq = ds_lnd.SOILLIQ.sum(dim='levsoi')    # for lnd dataset, only need soil moisture
+    #
+    # is_land = ds_lnd.landfrac.isel(time=0, drop=True) > landfrac_thresh     # whether a coordinate is land or not
 
     # re-index so lat align - otherwise get issues because lat slightly different
-    soil_liq = soil_liq.reindex_like(ds['PS'], method="nearest", tolerance=0.01)
-    is_land = is_land.reindex_like(ds['PS'].isel(time=0), method="nearest", tolerance=0.01)  # re-index so lat align
+    ds_land = ds_land.reindex_like(ds_atm['PS'], method="nearest", tolerance=0.01)
+    # is_land = is_land.reindex_like(ds['PS'].isel(time=0), method="nearest", tolerance=0.01)  # re-index so lat align
 
-
-    return ds_atm, soil_liq, is_land
+    return ds_atm, ds_land
 
 
 def main(input_file_path: str):
     logger = logging.getLogger()    # for printing to console time info
     logger.info("Start")
     exp_info = get_exp_info_dict(input_file_path)
-    ds, soil_liq, is_land = get_ds(exp_info['exp_name'], exp_info['archive_dir'],
+    ds, ds_land = get_ds(exp_info['exp_name'], exp_info['archive_dir'],
                                    None, None, None,
                                    exp_info['load_parallel'], exp_info['p_ft_approx_guess'],
                                    exp_info['p_surf_approx_guess'], exp_info['landfrac_thresh'],
@@ -83,22 +101,29 @@ def main(input_file_path: str):
     logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
 
     # Do chunking after open
-    soil_liq = soil_liq.chunk({"time": exp_info['chunks_time'], "lat": exp_info['chunks_lat'],
+    ds_land = ds_land.chunk({"time": exp_info['chunks_time'], "lat": exp_info['chunks_lat'],
                                "lon": exp_info['chunks_lon']})  # Do chunking after open
     logger.info(f"Finished chunking land data | Memory used {get_memory_usage() / 1000:.1f}GB")
     ds = ds.chunk({"time": exp_info['chunks_time'], "lat": exp_info['chunks_lat'],
                    "lon": exp_info['chunks_lon']})
     logger.info(f"Finished chunking atmospheric data | Memory used {get_memory_usage()/1000:.1f}GB")
 
-    is_land = is_land.load()        # load as small dataset and quickens later steps
+    # Fully load data if chose to do that
+    if exp_info['load_all_at_start']:
+        ds_land.load()
+        logger.info(f"Fully loaded land data | Memory used {get_memory_usage() / 1000:.1f}GB")
+        ds.load()
+        logger.info(f"Fully loaded atmospheric data | Memory used {get_memory_usage() / 1000:.1f}GB")
+
+    is_land = ds_land['land_frac'] > exp_info['landfrac_thresh']
 
     # Get pressure info
     ind_surf = 0
     ind_ft = 1
     p_ref = float(ds.P0[0])
-    hybrid_a_coef_ft = float(ds.hyam.isel(time=0, lev=ind_ft))
-    hybrid_b_coef_ft = float(ds.hybm.isel(time=0, lev=ind_ft))
-    ds = ds.drop_vars(["P0", "hyam", "hybm"])     # don't need ref pressure or hybrid coordinates anymore
+    hybrid_a_coef_ft = float(ds.hyam.isel(lev=ind_ft))
+    hybrid_b_coef_ft = float(ds.hybm.isel(lev=ind_ft))
+    # ds = ds.drop_vars(["P0", "hyam", "hybm"])     # don't need ref pressure or hybrid coordinates anymore
     p_ft_approx = float(ds.lev[ind_ft]) * 100
     p_surf_approx = float(ds.lev[ind_surf]) * 100
 
@@ -138,7 +163,9 @@ def main(input_file_path: str):
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):
         time_log = {'load': 0, 'calc': 0, 'start': time.time()}
-        ds_lat = ds.isel(lat=i).load()
+        ds_lat = ds.isel(lat=i)
+        if not exp_info['load_all_at_start']:
+            ds_lat.load()
         time_log['load'] += time.time() - time_log['start']
         for k, surf in enumerate(coords['surface']):
             time_log['start'] = time.time()
@@ -154,7 +181,7 @@ def main(input_file_path: str):
             ds_use = ds_lat.sel(lon=is_surf, drop=True)
             ds_use = ds_use.stack(lon_time=("lon", "time"), create_index=False).chunk(dict(lon_time=-1))
             if surf == 'land':
-                soil_liq_use = soil_liq.isel(lat=i).sel(lon=is_surf, drop=True)
+                soil_liq_use = ds_land.SOILLIQ.isel(lat=i).sel(lon=is_surf, drop=True)
                 soil_liq_use = soil_liq_use.stack(lon_time=("lon", "time"),
                                                   create_index=False).chunk(dict(lon_time=-1)).load()
             output_info['n_grid_points'][k, i] = ds_use.lon.size
@@ -215,6 +242,7 @@ def main(input_file_path: str):
     # Add basic info to dataset
     ds_out['time'] = ds.time
     ds_out['lon'] = ds.lon
+    ds_out['landfrac'] = ds_land.landfrac
 
 
     # Save output to nd2 file

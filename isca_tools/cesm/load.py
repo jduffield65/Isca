@@ -1,7 +1,7 @@
 import os
 import xarray as xr
 import cftime
-from typing import Optional, List, Union, Literal
+from typing import Optional, List, Union, Literal, Callable
 import fnmatch
 import numpy as np
 import warnings
@@ -18,7 +18,8 @@ def load_dataset(exp_name: str, comp: str = 'atm',
                  combine: Literal["by_coords", "nested"] = 'nested',
                  concat_dim: str = 'time',
                  decode_times: bool = True,
-                 parallel: bool = True,
+                 parallel: bool = False,
+                 preprocess: Optional[Callable] = None,
                  year_first: int = 1, year_last: int = -1,
                  months_keep: Optional[List] = None,
                  apply_month_shift_fix: bool = True,
@@ -44,6 +45,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         concat_dim: Dimensions to concatenate files along.
             You only need to provide this argument if combine='nested'.
         parallel: Whether parallel loading is performed.
+        preprocess: Function to preprocess the data before loading.
         decode_times: If `True`, will convert time to actual date.
         year_first: First year of simulation to load.
         year_last: Last year of simulation to load.
@@ -125,15 +127,19 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
                            year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]
     if logger:
-        files_str = "\n".join(data_files_load)
-        logger.info(f'Loading data from {len(data_files_load)} files:\n{files_str}')
+        if isinstance(data_files_load, str):
+            logger.info(f'Loading data from all files: {data_files_load}')
+        else:
+            files_str = "\n".join(data_files_load)
+            logger.info(f'Loading data from {len(data_files_load)} files:\n{files_str}')
     if apply_month_shift_fix and hist_file == 0:
         ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim=concat_dim,
-                               combine=combine, chunks=chunks, parallel=parallel)
+                               combine=combine, chunks=chunks, parallel=parallel, preprocess=preprocess)
         return ds_month_shift(ds, decode_times, months_keep)
     else:
         return xr.open_mfdataset(data_files_load, decode_times=decode_times,
-                                 concat_dim=concat_dim, combine=combine, chunks=chunks, parallel=parallel)
+                                 concat_dim=concat_dim, combine=combine, chunks=chunks, parallel=parallel,
+                                 preprocess=preprocess)
 
 
 def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
