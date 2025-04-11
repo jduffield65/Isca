@@ -25,11 +25,10 @@
     chunks_time =               ! Chunking info for less memory usage (leave empty to not chunk in given dimension)
     chunks_lat = 1              ! Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
     chunks_lon =                ! Chunking info for less memory usage
-    load_parallel = .true.      ! Whether to use parallel processing when loading
+    load_parallel = .false.      ! Whether to use parallel processing when loading
     load_all_at_start = .true.  ! Whether to load entire data set at the start before calculations
     p_ft_approx_guess = 500     ! Approx FT pressure level to use in hPa
     p_surf_approx_guess = 1000  ! Approx surface pressure level to use in hPa
-    landfrac_thresh = 0.5       ! Consider a grid point land if more than this fraction is land
     year_first =                ! First year of data to consider, leave blank for first year of data
     year_last =                 ! Last year of data to consider, leave blank for last year of data
     quant = 90, 95, 99          ! Collect quantile info at these quantiles

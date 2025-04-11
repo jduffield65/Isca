@@ -1,6 +1,6 @@
 ! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
 &slurm_info
-   jobs_dir = '/home/users/jamd1/Isca/jobs/'                  ! Directory containing jobs on JASMIN
+   jobs_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/'                  ! Directory containing jobs on my mac
    script_path = 'cesm/theory_adiabat/lat_quant/save_quant.py'  ! Path to python script within jobs_dir
    script_args =                                              ! Will set to the path to this file if blank
    job_name =                                                 ! Set to name of directory containing this file if blank
@@ -20,7 +20,7 @@
     out_dir =                   ! Where npz saved. Leave blank to set to directory containing this file
     out_name =                  ! Name of nd2 file within dir_out, leave blank to set to `output.nd2`
     exist_ok = .false.          ! If out_name already exists, overwrite if .true. otherwise give error
-    archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
+    archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/test/'       ! Directory containing cesm experiments on my mac
     exp_name = 'test'           ! Name of experiment within archive_dir
     chunks_time =               ! Chunking info for less memory usage (leave empty to not chunk in given dimension)
     chunks_lat =                ! Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
