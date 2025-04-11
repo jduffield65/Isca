@@ -56,6 +56,8 @@ Options are `T21`, `T42` or `T85`.</br>
 *bool*</br>
 If this is `True` and data already exists in `$GFDL_DATA/{name}`, then it will be overwritten. </br>
 If it is `False` and the data exists, an error will occur.</br>
+If a previous run failed part way through, running the same experiment again with `overwrite_data=.false.` will
+start using the last restart file created in that previous run.
 Typically set to `False`. </br>
 **Default:** N/A
 

@@ -95,7 +95,7 @@ As well as `atmos_param/socrates/src/trunk/src/aux/interpolate_p.f`, I had to de
 
 I had to add `atmos_param/socrates/src/trunk/src/scatter/polynomialroots.f90`.
 
-I had to edit the `SWAP` interface in this `polynomialroots.f90` file.:
+I had to edit the `SWAP` interface in this `polynomialroots.f90` file:
 === "Original"
     ```fortran
       INTERFACE Swap
