@@ -12,7 +12,7 @@
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 1                  ! Number of cores for each node to run job on (Slurm info) - SINGLE COLUMN ONLY WORKS WITH 1 core
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
-   partition = 'bigmem'          ! Queue to submit job to (Slurm info).
+   partition = 'small-short'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '12:00:00'     ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
@@ -73,7 +73,7 @@
 /
 
 &mixed_layer_nml
-    albedo_value = 0.31
+    albedo_value = 0.61                         ! Twice normal 0.31 as was getting far too hot
     depth = 20.0                                ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
@@ -83,7 +83,7 @@
 /
 
 &qe_moist_convection_nml
-    tmax = 350.0
+    tmax = 400.0           ! Raised from initial 350 value
     tmin = 110.0            ! Had to lower from 160 because got error
     rhbm = 0.7
 /
@@ -119,9 +119,9 @@
     do_read_ozone = .true.
     ozone_file_name = 'ozone'   ! use same ozone pressure profile at each latitude from file
     ozone_field_name = 'ozone'
-    co2_ppmv = 300              ! use default co2 concentration
+    co2_ppmv = 0              ! use default co2 concentration
     inc_h2o = .true.            ! just include the default molecules of water, CO2 and ozone
-    inc_co2 = .true.
+    inc_co2 = .false.
     inc_o3 = .true.
 /
 

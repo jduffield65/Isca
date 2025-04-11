@@ -1,7 +1,7 @@
 ! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
 &slurm_info
    jobs_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/'                  ! Directory containing jobs on my mac
-   script_path = 'cesm/theory_adiabat/lat_quant/save_quant.py'  ! Path to python script within jobs_dir
+   script_path = 'cesm/theory_adiabat/lat_quant/save_quant_vec.py'  ! Path to python script within jobs_dir
    script_args =                                              ! Will set to the path to this file if blank
    job_name =                                                 ! Set to name of directory containing this file if blank
    time = '01:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
@@ -26,7 +26,7 @@
     chunks_lat =                ! Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
     chunks_lon =                ! Chunking info for less memory usage
     load_parallel = .false.     ! Whether to use parallel processing when loading
-    load_all_at_start = .true.  ! Whether to load entire data set at the start before calculations
+    load_all_at_start = .false.  ! Whether to load entire data set at the start before calculations
     p_ft_approx_guess = 500     ! Approx FT pressure level to use in hPa
     p_surf_approx_guess = 1000  ! Approx surface pressure level to use in hPa
     year_first =                ! First year of data to consider, leave blank for first year of data

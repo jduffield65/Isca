@@ -152,7 +152,7 @@ def main(input_file_path: str):
         output_dims[var+'_std'] = ['surface', 'quant', 'lat', 'lev']
     output_dims['use_in_calc'] = ['surface', 'quant', 'lat', 'lon', 'time']
 
-    logger.info(f"Starting iteration over {n_lat} latitudes, 2 surfaces, and {n_quant} quantiles")
+    logger.info(f"Starting iteration over {n_lat} latitudes, {n_surf} surfaces, and {n_quant} quantiles")
 
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):
@@ -244,8 +244,10 @@ def main(input_file_path: str):
     ds_out['landmask'] = ds_land.landmask
 
 
-    # Save output to nd2 file
-    ds_out.to_netcdf(os.path.join(exp_info['out_dir'], exp_info['out_name']))
+    # Save output to nd2 file with compression - reduces size of file by factor of 10
+    # Compression makes saving step slower
+    ds_out.to_netcdf(os.path.join(exp_info['out_dir'], exp_info['out_name']), format="NETCDF4",
+                     encoding={var: {"zlib": True, "complevel": 4} for var in ds_use.data_vars})
     logger.info("End")
 
 if __name__ == "__main__":
