@@ -119,7 +119,7 @@
     do_read_ozone = .true.
     ozone_file_name = 'ozone'   ! use same ozone pressure profile at each latitude from file
     ozone_field_name = 'ozone'
-    co2_ppmv = 0              ! turn off co2 as was getting too hot
+    co2_ppmv = 0                ! turn off co2 as was getting too hot
     inc_h2o = .true.            ! just include the default molecules of water, CO2 and ozone
     inc_co2 = .false.
     inc_o3 = .true.
