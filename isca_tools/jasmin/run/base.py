@@ -4,6 +4,7 @@ from typing import List, Optional, Union, Callable
 from operator import itemgetter
 import importlib.util
 import sys
+from ...run.base import get_unique_dir_name
 
 def add_list_to_str(var_str: str, var_list: Optional[Union[List, float, int, str]]) -> str:
     """
@@ -31,26 +32,26 @@ def add_list_to_str(var_str: str, var_list: Optional[Union[List, float, int, str
     return var_str
 
 
-def get_unique_dir_name(base_dir: str) -> str:
-    """
-    Return a unique directory name by appending a number if needed.
-    E.g., 'results', 'results_1', 'results_2', ...
-
-    Args:
-        base_dir: Path to directory
-
-    Returns:
-        base_dir: Unique directory name
-    """
-    if not os.path.exists(base_dir):
-        return base_dir
-
-    i = 1
-    while True:
-        new_dir = f"{base_dir}_{i}"
-        if not os.path.exists(new_dir):
-            return new_dir
-        i += 1
+# def get_unique_dir_name(base_dir: str) -> str:
+#     """
+#     Return a unique directory name by appending a number if needed.
+#     E.g., 'results', 'results_1', 'results_2', ...
+#
+#     Args:
+#         base_dir: Path to directory
+#
+#     Returns:
+#         base_dir: Unique directory name
+#     """
+#     if not os.path.exists(base_dir):
+#         return base_dir
+#
+#     i = 1
+#     while True:
+#         new_dir = f"{base_dir}_{i}"
+#         if not os.path.exists(new_dir):
+#             return new_dir
+#         i += 1
 
 def import_func_from_path(script_path: str, func_name: str="main",
                           module_name: str="my_dynamic_module") -> Optional[Callable]:

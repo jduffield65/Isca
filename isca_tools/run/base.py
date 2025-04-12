@@ -9,6 +9,28 @@ from typing import List
 import subprocess
 
 
+def get_unique_dir_name(base_dir: str) -> str:
+    """
+    Return a unique directory name by appending a number if needed.
+    E.g., 'results', 'results_1', 'results_2', ...
+
+    Args:
+        base_dir: Path to directory
+
+    Returns:
+        base_dir: Unique directory name
+    """
+    if not os.path.exists(base_dir):
+        return base_dir
+
+    i = 1
+    while True:
+        new_dir = f"{base_dir}_{i}"
+        if not os.path.exists(new_dir):
+            return new_dir
+        i += 1
+
+
 def get_file_suffix(dir: str, suffix: str) -> List[str]:
     """
     Returns a list of all files in `dir` which end in `suffix`.
@@ -86,6 +108,12 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # Because doing this, cannot have any relative imports in this file
     run_job_script = os.path.realpath(__file__)     # run this script as main if using slurm
 
+    # Get directory name to save debugging and timing info
+    # If directory already exists, will add a number e.g. console_output_1 until finds one that exists.
+    dir_output = os.path.join(os.environ['GFDL_DATA'], exp_details['name'], 'console_output')
+    dir_output = get_unique_dir_name(dir_output)
+    os.makedirs(dir_output, exist_ok=False)
+
     prev_job_id = ''     # Empty string so don't provide any argument to first slurm script
     # Iterate over all jobs
     for month_job in month_jobs:
@@ -95,7 +123,7 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
                 f"bash {slurm_script if prev_job_id == '' else slurm_script.replace('.sh','_depend.sh')} "
                 f"{exp_details['name']} {month_job[0]} {len(month_job)} "
                 f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} "
+                f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} {dir_output}"
                 f"{exp_details['nodelist']} {prev_job_id} "
             )
             output = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()   # get job just submitted info

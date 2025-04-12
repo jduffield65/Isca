@@ -163,7 +163,7 @@ def main(input_file_path: str):
     # Save output to nd2 file with compression - reduces size of file by factor of 10
     # Compression makes saving step slower
     ds_out.to_netcdf(os.path.join(exp_info['out_dir'], exp_info['out_name']), format="NETCDF4",
-                     encoding={var: {"zlib": True, "complevel": 4} for var in ds_use.data_vars})
+                     encoding={var: {"zlib": True, "complevel": 4} for var in ds_out.data_vars})
     logger.info("End")
 
 if __name__ == "__main__":
