@@ -29,8 +29,16 @@
     load_all_at_start = .true.  ! Whether to load entire data set at the start before calculations
     p_ft_approx_guess = 500     ! Approx FT pressure level to use in hPa
     p_surf_approx_guess = 1000  ! Approx surface pressure level to use in hPa
+    surface =                   ! Leave blank for saving separate data for ocean and land
     year_first =                ! First year of data to consider, leave blank for first year of data
     year_last =                 ! Last year of data to consider, leave blank for last year of data
+    month_nh =                 ! Months to select for northern hemisphere, leave blank for all months (Jan is 1, Dec is 12)
+    month_sh =                 ! Months to select for souther hemisphere, leave blank for the same as months_nh
+    lat_min =                   ! leave None to consider all latitudes
+    lat_max =
+    lon_min =                   ! leave None to consider all longitudes
+    lon_max =
     quant = 90, 95, 99          ! Collect quantile info at these quantiles
-    quant_range = 0.5           ! For each quantile in quant, consider days with near-surface temp in quantile range quant-quant_range to quant+quant_range
+    quant_range_below = 0.5     ! For each quantile in quant, consider days with near-surface temp in quantile range quant-quant_range_below to quant+quant_range_above
+    quant_range_above =         ! Leave blank to set to same as quant_range_below
 /

@@ -14,6 +14,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
                     stream=sys.stdout)
 
 
+def has_out_of_range(val, min_range, max_range):
+    # If it's a single number, make it a list
+    vals = val if isinstance(val, (list, tuple, np.ndarray)) else [val]
+    return any((x < min_range or x > max_range) for x in vals)
+
+
 def get_exp_info_dict(input_file_path: str) -> dict:
     # From input nml file, this returns dict containing info required for getting npz file
     exp_info = f90nml.read(input_file_path)['script_info']
@@ -26,12 +32,39 @@ def get_exp_info_dict(input_file_path: str) -> dict:
     elif exp_info['out_name'][-4:] != '.nd2':
         # Ensure output file ends in npz
         exp_info['out_name'] = exp_info['out_name'] + '.nd2'
+    if exp_info['surface'] is None:
+        exp_info['surface'] = ['land', 'ocean']
+    elif isinstance(exp_info['surface'], str):
+        exp_info['surface'] = [exp_info['surface'].lower()]
     if exp_info['year_first'] is None:
         # Default first year of data is year 1
         exp_info['year_first'] = 1
     if exp_info['year_last'] is None:
         # Default last year of data is last year in cesm data
         exp_info['year_last'] = -1
+    # Set to entire globe if lat/lon not provided
+    if exp_info['month_nh'] is None:
+        exp_info['month_nh'] = np.arange(1, 13)
+    else:
+        if has_out_of_range(exp_info['month_nh'], 1, 12):
+            raise ValueError('month_nh must be between 1 and 12')
+    if exp_info['month_sh'] is None:
+        exp_info['month_sh'] = exp_info['month_nh']
+    else:
+        if has_out_of_range(exp_info['month_sh'], 1, 12):
+            raise ValueError('month_sh must be between 1 and 12')
+    if exp_info['lat_min'] is None:
+        exp_info['lat_min'] = -90
+    if exp_info['lat_max'] is None:
+        exp_info['lat_max'] = 90
+    if exp_info['lon_min'] is None:
+        exp_info['lon_min'] = 0
+    if exp_info['lon_max'] is None:
+        exp_info['lon_max'] = 360
+    if exp_info['quant'] is None:
+        exp_info['quant'] = np.arange(1, 100)    # consider all quantiles from 1 to 99 inclusive if not specified
+    if exp_info['quant_range_above'] is None:
+        exp_info['quant_range_above'] = exp_info['quant_range_below']
     out_file = os.path.join(exp_info['out_dir'], exp_info['out_name'])
     if not exp_info['exist_ok'] and os.path.exists(out_file):
         # Raise error if output data already exists
@@ -41,12 +74,16 @@ def get_exp_info_dict(input_file_path: str) -> dict:
 
 def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, parallel,
            p_ft_approx_guess, p_surf_approx_guess,
-           year_first, year_last, logger):
+           year_first, year_last, months_nh, months_sh, lat_min, lat_max, lon_min, lon_max, logger):
     # Load in datasets - one from atm and lnd components
     chunks={"time": chunks_time, "lat": chunks_lat, "lon": chunks_lon}
 
     def preprocess_land(ds):
         # Only 2 variables, and sum over all soil levels
+        ds = ds.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+        if not (np.array_equiv(np.asarray(np.arange(1, 13)), months_nh) and np.array_equiv(months_sh, months_nh)):
+            # Select months if not all months requested
+            ds = cesm.select_months(ds, months_nh, months_sh)
         soil_liq_sum = ds['SOILLIQ'].sum(dim='levsoi')  # Sum over 'levsoi'
         return xr.Dataset({'SOILLIQ': soil_liq_sum, 'landmask': ds['landmask']})
     ds_land = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='lnd',
@@ -55,9 +92,13 @@ def get_ds(exp_name, archive_dir, chunks_time, chunks_lat, chunks_lon, parallel,
                                logger=logger)
     logger.info('Loaded land data')
 
-    var_atm = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
+    var_atm = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm', 'gw']
     def preprocess_atm(ds):
         # Preprocessing so don't load in entire dataset
+        ds = ds.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+        if not (np.array_equiv(np.asarray(np.arange(1, 13)), months_nh) and np.array_equiv(months_sh, months_nh)):
+            # Select months if not all months requested
+            ds = cesm.select_months(ds, months_nh, months_sh)
         ds = ds[var_atm]
         return ds.sel(lev=xr.DataArray([p_surf_approx_guess, p_ft_approx_guess], dims='lev'), method='nearest')
     ds_atm = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1,
@@ -88,10 +129,14 @@ def main(input_file_path: str):
     logger.info("Start")
     exp_info = get_exp_info_dict(input_file_path)
     ds, ds_land = get_ds(exp_info['exp_name'], exp_info['archive_dir'],
-                                   exp_info['chunks_time'], exp_info['chunks_lat'], exp_info['chunks_lon'],
-                                   exp_info['load_parallel'], exp_info['p_ft_approx_guess'],
-                                   exp_info['p_surf_approx_guess'],
-                                   exp_info['year_first'], exp_info['year_last'], logger=logger)
+                         exp_info['chunks_time'], exp_info['chunks_lat'], exp_info['chunks_lon'],
+                         exp_info['load_parallel'], exp_info['p_ft_approx_guess'],
+                         exp_info['p_surf_approx_guess'],
+                         exp_info['year_first'], exp_info['year_last'],
+                         exp_info['month_nh'], exp_info['month_sh'],
+                         exp_info['lat_min'], exp_info['lat_max'],
+                         exp_info['lon_min'], exp_info['lon_max'],
+                         logger=logger)
     logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
 
     # Do chunking after open - for checking timings
@@ -109,31 +154,36 @@ def main(input_file_path: str):
         ds.load()
         logger.info(f"Fully loaded atmospheric data | Memory used {get_memory_usage() / 1000:.1f}GB")
 
-    ds_land['landmask'] = ds_land['landmask'].isel(time=0, drop=True) > 0
+    # Deal with variables that are constant in time - weighting and landmask
+    # Use max rather than isel(time=0, drop=True) in case NH and SH have different times
+    ds['gw'] = ds['gw'].max(dim='time')
+    ds_land['landmask'] = ds_land['landmask'].max(dim='time') > 0
 
     # Get pressure info
     ind_surf = 0
     ind_ft = 1
-    p_ref = float(ds.P0.isel(time=0))
-    hybrid_a_coef_ft = float(ds.hyam.isel(time=0, lev=ind_ft))
-    hybrid_b_coef_ft = float(ds.hybm.isel(time=0, lev=ind_ft))
+    # use max not isel(time=0) in case have different months for NH and SH
+    p_ref = float(ds.P0.max())
+    hybrid_a_coef_ft = float(ds.hyam.isel(lev=ind_ft).max())
+    hybrid_b_coef_ft = float(ds.hybm.isel(lev=ind_ft).max())
     p_ft_approx = float(ds.lev[ind_ft]) * 100
     p_surf_approx = float(ds.lev[ind_surf]) * 100
 
 
     # Initialize dict to save output data - n_surf (land or ocean) x n_lat x n_quant
+    # Initialize as nan, so remains as Nan if not enough data to perform calculation
     n_lat = ds.lat.size
-    n_surf = 2
+    n_surf = len(exp_info['surface'])
     n_lev = 2  # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
     n_quant = len(exp_info['quant'])
-    output_info = {var: np.zeros((n_surf, n_quant, n_lat)) for var in
+    output_info = {var: np.full((n_surf, n_quant, n_lat), np.nan, dtype=float) for var in
                    ['rh', 'mse', 'mse_sat_ft', 'mse_lapse',
                     'mse_sat_ft_p_approx', 'mse_lapse_p_approx', 'pressure_ft', 'SOILLIQ']}
     for var in ['T', 'Q', 'Z3']:
-        output_info[var] = np.zeros((n_surf, n_quant, n_lat, n_lev))         # have pressure dim as well
+        output_info[var] = np.full((n_surf, n_quant, n_lat, n_lev), np.nan, dtype=float)         # have pressure dim as well
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
-        output_info[var + '_std'] = np.zeros_like(output_info[var])
+        output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
     output_info['use_in_calc'] = np.zeros((n_surf, n_quant, n_lat, ds.lon.size, ds.time.size), dtype=bool)
     # output_info['lon_most_common'] = np.zeros((n_surf, n_quant, n_lat))
     # output_info['lon_most_common_freq'] = np.zeros((n_surf, n_quant, n_lat), dtype=int)
@@ -142,7 +192,7 @@ def main(input_file_path: str):
     # n_days_quant = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
     #                                             quant_range).size / n_lat
 
-    coords = {'surface': ['land', 'ocean'], 'quant': exp_info['quant'],
+    coords = {'surface': exp_info['surface'], 'quant': exp_info['quant'],
               'lev': ds.lev, 'lat': ds.lat, 'lon': ds.lon, 'time': ds.time}
 
     # Coordinate info to convert to xarray datasets
@@ -184,7 +234,7 @@ def main(input_file_path: str):
             for j in range(n_quant):
                 # get indices corresponding to given near-surface temp quantile
                 quant_mask = get_quant_ind(ds_lat.T.isel(lev=ind_surf).where(is_surf), coords['quant'][j],
-                                           exp_info['quant_range'], exp_info['quant_range'], return_mask=True,
+                                           exp_info['quant_range_below'], exp_info['quant_range_above'], return_mask=True,
                                            av_dim=['lon', 'time'])
                 if quant_mask.sum() == 0:
                     logger.info(f"Latitude {i + 1}/{n_lat}: no data found for {surf} and quant={coords['quant'][j]}")
@@ -217,7 +267,7 @@ def main(input_file_path: str):
                 # # Record most common specific coordinate within grid to see if most of days are at a given location
                 # output_info['lon_most_common'][k, j, i] = lon_use[0][lon_use[1].argmax()]
                 # output_info['lon_most_common_freq'][k, j, i] = lon_use[1][lon_use[1].argmax()]
-                time_log['calc'] += time.time() - time_log['start']
+            time_log['calc'] += time.time() - time_log['start']
         # if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
         # # Log info on 1st, last and every 10th latitude
         logger.info(f"Latitude {i + 1}/{n_lat}: Loading took {time_log['load']:.1f}s | Calculation took {time_log['calc']:.1f}s | "
@@ -242,6 +292,7 @@ def main(input_file_path: str):
     # ds_out['time'] = ds.time
     # ds_out['lon'] = ds.lon
     ds_out['landmask'] = ds_land.landmask
+    ds_out['gw'] = ds.gw    # add weighting to output directory
 
 
     # Save output to nd2 file with compression - reduces size of file by factor of 10

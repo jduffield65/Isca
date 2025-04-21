@@ -20,10 +20,14 @@ def main(input_file_path: str):
     logger.info("Start")
     exp_info = get_exp_info_dict(input_file_path)
     ds, ds_land = get_ds(exp_info['exp_name'], exp_info['archive_dir'],
-                                   None, exp_info['chunks_lat'], exp_info['chunks_lon'],
-                                   exp_info['load_parallel'], exp_info['p_ft_approx_guess'],
-                                   exp_info['p_surf_approx_guess'],
-                                   exp_info['year_first'], exp_info['year_last'], logger=logger)
+                         exp_info['chunks_time'], exp_info['chunks_lat'], exp_info['chunks_lon'],
+                         exp_info['load_parallel'], exp_info['p_ft_approx_guess'],
+                         exp_info['p_surf_approx_guess'],
+                         exp_info['year_first'], exp_info['year_last'],
+                         exp_info['month_nh'], exp_info['month_sh'],
+                         exp_info['lat_min'], exp_info['lat_max'],
+                         exp_info['lon_min'], exp_info['lon_max'],
+                         logger=logger)
     ds = ds.chunk({"time": -1})     # have to have single chunk in time. Doesn't work in get_ds because each file has different times
     ds_land = ds_land.chunk({"time": -1})
     logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage()/1000:.1f}GB")
@@ -43,31 +47,36 @@ def main(input_file_path: str):
         ds.load()
         logger.info(f"Fully loaded atmospheric data | Memory used {get_memory_usage() / 1000:.1f}GB")
 
-    ds_land['landmask'] = ds_land['landmask'].isel(time=0, drop=True) > 0
+    # Deal with variables that are constant in time - weighting and landmask
+    # Use max rather than isel(time=0, drop=True) in case NH and SH have different times
+    ds['gw'] = ds['gw'].max(dim='time')
+    ds_land['landmask'] = ds_land['landmask'].max(dim='time') > 0
 
     # Get pressure info
     ind_surf = 0
     ind_ft = 1
-    p_ref = float(ds.P0.isel(time=0))
-    hybrid_a_coef_ft = float(ds.hyam.isel(time=0, lev=ind_ft))
-    hybrid_b_coef_ft = float(ds.hybm.isel(time=0, lev=ind_ft))
+    # use max not isel(time=0) in case have different months for NH and SH
+    p_ref = float(ds.P0.max())
+    hybrid_a_coef_ft = float(ds.hyam.isel(lev=ind_ft).max())
+    hybrid_b_coef_ft = float(ds.hybm.isel(lev=ind_ft).max())
     p_ft_approx = float(ds.lev[ind_ft]) * 100
     p_surf_approx = float(ds.lev[ind_surf]) * 100
 
 
     # Initialize dict to save output data - n_surf (land or ocean) x n_lat x n_quant
+    # Initialize as nan, so remains as Nan if not enough data to perform calculation
     n_lat = ds.lat.size
-    n_surf = 2
+    n_surf = len(exp_info['surface'])
     n_lev = 2  # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
     n_quant = len(exp_info['quant'])
-    output_info = {var: np.zeros((n_surf, n_quant, n_lat)) for var in
+    output_info = {var: np.full((n_surf, n_quant, n_lat), np.nan, dtype=float) for var in
                    ['rh', 'mse', 'mse_sat_ft', 'mse_lapse',
                     'mse_sat_ft_p_approx', 'mse_lapse_p_approx', 'pressure_ft', 'SOILLIQ']}
     for var in ['T', 'Q', 'Z3']:
-        output_info[var] = np.zeros((n_surf, n_quant, n_lat, n_lev))         # have pressure dim as well
+        output_info[var] = np.full((n_surf, n_quant, n_lat, n_lev), np.nan, dtype=float)         # have pressure dim as well
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
-        output_info[var + '_std'] = np.zeros_like(output_info[var])
+        output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
     output_info['use_in_calc'] = np.zeros((n_surf, n_quant, n_lat, ds.lon.size, ds.time.size), dtype=bool)
     # output_info['lon_most_common'] = np.zeros((n_surf, n_quant, n_lat))
     # output_info['lon_most_common_freq'] = np.zeros((n_surf, n_quant, n_lat), dtype=int)
@@ -76,7 +85,7 @@ def main(input_file_path: str):
     # n_days_quant = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
     #                                             quant_range).size / n_lat
 
-    coords = {'surface': ['land', 'ocean'], 'quant': exp_info['quant'],
+    coords = {'surface': exp_info['surface'], 'quant': exp_info['quant'],
               'lev': ds.lev, 'lat': ds.lat, 'lon': ds.lon, 'time': ds.time}
 
     # Coordinate info to convert to xarray datasets
@@ -158,6 +167,7 @@ def main(input_file_path: str):
     # ds_out['time'] = ds.time
     # ds_out['lon'] = ds.lon
     ds_out['landmask'] = ds_land.landmask
+    ds_out['gw'] = ds.gw    # add weighting to output directory
     logger.info(f"Finished conversion of output to xr.Dataset")
 
     # Save output to nd2 file with compression - reduces size of file by factor of 10

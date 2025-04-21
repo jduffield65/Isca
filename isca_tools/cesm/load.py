@@ -172,3 +172,24 @@ def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
     if decode_times:
         ds_new = xr.decode_cf(ds_new)
     return ds_new
+
+def select_months(ds: xr.Dataset, month_nh: List[int], month_sh: Optional[List[int]] = None) -> xr.Dataset:
+    """
+    In dataset, keep only `month_nh` months in the northern hemisphere, and `month_sh` in the southern hemisphere.
+
+    Args:
+        ds: Dataset to select months from.
+        month_nh: List of months to keep in northern hemisphere.
+        month_sh: List of months to keep in southern hemisphere. If `None`, will be the same as `month_nh`.
+
+    Returns:
+        Dataset with months selected.
+    """
+    # Select months for NH
+    if month_sh is None:
+        mask = ds.time.dt.month.isin(month_nh)
+    else:
+        mask_nh = (ds.lat >= 0) & (ds.time.dt.month.isin(month_nh))
+        mask_sh = (ds.lat < 0) & (ds.time.dt.month.isin(month_sh))
+        mask = mask_nh | mask_sh
+    return ds.where(mask)
