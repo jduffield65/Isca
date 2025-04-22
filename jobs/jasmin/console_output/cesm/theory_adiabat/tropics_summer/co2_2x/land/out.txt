@@ -1,0 +1,52 @@
+2025-04-21 19:20:28 - Start
+2025-04-21 19:20:28 - Loading data from all files: /gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/e.e20.E1850TEST.f09_g17.co2_2x_daily_output/lnd/hist/e.e20.E1850TEST.f09_g17.co2_2x_daily_output.clm2.h1.*.nc
+2025-04-21 19:22:21 - Loaded land data
+2025-04-21 19:22:21 - Loading data from all files: /gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/e.e20.E1850TEST.f09_g17.co2_2x_daily_output/atm/hist/e.e20.E1850TEST.f09_g17.co2_2x_daily_output.cam.h1.*.nc
+2025-04-21 19:25:30 - Loaded atmospheric data
+2025-04-21 19:25:30 - Finished lazy-loading datasets | Memory used 0.2GB
+2025-04-21 19:27:01 - Fully loaded land data | Memory used 1.8GB
+2025-04-21 20:15:01 - Fully loaded atmospheric data | Memory used 5.6GB
+2025-04-21 20:15:01 - Starting iteration over 42 latitudes, 1 surfaces, and 99 quantiles
+2025-04-21 20:16:27 - Latitude 1/42: Loading took 0.0s | Calculation took 85.6s | Memory used 5.5GB
+2025-04-21 20:17:45 - Latitude 2/42: Loading took 0.0s | Calculation took 78.3s | Memory used 5.7GB
+2025-04-21 20:18:48 - Latitude 3/42: Loading took 0.0s | Calculation took 62.8s | Memory used 6.1GB
+2025-04-21 20:19:51 - Latitude 4/42: Loading took 0.0s | Calculation took 62.4s | Memory used 6.3GB
+2025-04-21 20:20:51 - Latitude 5/42: Loading took 0.0s | Calculation took 60.6s | Memory used 6.7GB
+2025-04-21 20:22:15 - Latitude 6/42: Loading took 0.0s | Calculation took 84.1s | Memory used 6.9GB
+2025-04-21 20:23:53 - Latitude 7/42: Loading took 0.0s | Calculation took 98.1s | Memory used 7.3GB
+2025-04-21 20:24:58 - Latitude 8/42: Loading took 0.0s | Calculation took 64.4s | Memory used 7.5GB
+2025-04-21 20:25:56 - Latitude 9/42: Loading took 0.0s | Calculation took 57.7s | Memory used 7.9GB
+2025-04-21 20:26:56 - Latitude 10/42: Loading took 0.0s | Calculation took 60.1s | Memory used 8.1GB
+2025-04-21 20:28:00 - Latitude 11/42: Loading took 0.0s | Calculation took 63.8s | Memory used 8.5GB
+2025-04-21 20:28:59 - Latitude 12/42: Loading took 0.0s | Calculation took 59.9s | Memory used 8.7GB
+2025-04-21 20:29:57 - Latitude 13/42: Loading took 0.0s | Calculation took 57.7s | Memory used 9.1GB
+2025-04-21 20:30:52 - Latitude 14/42: Loading took 0.0s | Calculation took 55.3s | Memory used 9.3GB
+2025-04-21 20:31:49 - Latitude 15/42: Loading took 0.0s | Calculation took 56.6s | Memory used 9.7GB
+2025-04-21 20:32:44 - Latitude 16/42: Loading took 0.0s | Calculation took 54.7s | Memory used 9.9GB
+2025-04-21 20:33:38 - Latitude 17/42: Loading took 0.0s | Calculation took 54.7s | Memory used 10.3GB
+2025-04-21 20:34:31 - Latitude 18/42: Loading took 0.0s | Calculation took 52.3s | Memory used 10.5GB
+2025-04-21 20:35:15 - Latitude 19/42: Loading took 0.0s | Calculation took 44.4s | Memory used 10.9GB
+2025-04-21 20:36:04 - Latitude 20/42: Loading took 0.0s | Calculation took 48.4s | Memory used 11.1GB
+2025-04-21 20:36:52 - Latitude 21/42: Loading took 0.0s | Calculation took 48.0s | Memory used 11.5GB
+2025-04-21 20:37:38 - Latitude 22/42: Loading took 0.0s | Calculation took 46.7s | Memory used 11.7GB
+2025-04-21 20:38:26 - Latitude 23/42: Loading took 0.0s | Calculation took 47.4s | Memory used 12.1GB
+2025-04-21 20:39:11 - Latitude 24/42: Loading took 0.0s | Calculation took 45.5s | Memory used 12.3GB
+2025-04-21 20:39:56 - Latitude 25/42: Loading took 0.0s | Calculation took 44.5s | Memory used 12.7GB
+2025-04-21 20:40:42 - Latitude 26/42: Loading took 0.0s | Calculation took 46.5s | Memory used 12.9GB
+2025-04-21 20:41:32 - Latitude 27/42: Loading took 0.0s | Calculation took 49.5s | Memory used 13.3GB
+2025-04-21 20:42:33 - Latitude 28/42: Loading took 0.0s | Calculation took 61.2s | Memory used 13.5GB
+2025-04-21 20:43:30 - Latitude 29/42: Loading took 0.0s | Calculation took 57.2s | Memory used 13.9GB
+2025-04-21 20:44:14 - Latitude 30/42: Loading took 0.0s | Calculation took 43.4s | Memory used 14.1GB
+2025-04-21 20:45:06 - Latitude 31/42: Loading took 0.0s | Calculation took 52.6s | Memory used 14.5GB
+2025-04-21 20:46:04 - Latitude 32/42: Loading took 0.0s | Calculation took 57.5s | Memory used 14.7GB
+2025-04-21 20:46:47 - Latitude 33/42: Loading took 0.0s | Calculation took 43.4s | Memory used 15.1GB
+2025-04-21 20:47:32 - Latitude 34/42: Loading took 0.0s | Calculation took 44.5s | Memory used 15.3GB
+2025-04-21 20:48:15 - Latitude 35/42: Loading took 0.0s | Calculation took 43.4s | Memory used 15.7GB
+2025-04-21 20:48:58 - Latitude 36/42: Loading took 0.0s | Calculation took 43.4s | Memory used 15.9GB
+2025-04-21 20:49:57 - Latitude 37/42: Loading took 0.0s | Calculation took 58.4s | Memory used 16.3GB
+2025-04-21 20:50:40 - Latitude 38/42: Loading took 0.0s | Calculation took 43.2s | Memory used 16.5GB
+2025-04-21 20:51:23 - Latitude 39/42: Loading took 0.0s | Calculation took 43.3s | Memory used 16.8GB
+2025-04-21 20:52:08 - Latitude 40/42: Loading took 0.0s | Calculation took 44.4s | Memory used 17.1GB
+2025-04-21 20:52:51 - Latitude 41/42: Loading took 0.0s | Calculation took 43.6s | Memory used 17.4GB
+2025-04-21 20:53:34 - Latitude 42/42: Loading took 0.0s | Calculation took 43.1s | Memory used 17.5GB
+2025-04-21 20:54:21 - End
