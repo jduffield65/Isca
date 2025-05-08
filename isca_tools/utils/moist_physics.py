@@ -62,6 +62,48 @@ def mixing_ratio_from_sphum(sphum: Union[float, np.ndarray]) -> Union[float, np.
     return sphum / (1 - sphum)
 
 
+def sphum_from_partial_pressure(partial_pressure: Union[float, np.ndarray],
+                                       total_pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Computes the specific humidity, $q$, from partial pressure, $e$, and total atmospheric pressure, $p$, according to:
+
+    $q = w / (1+w)$
+
+    where $w$ is the mixing ratio, calculated using `mixing_ratio_from_partial_pressure`.
+
+    Args:
+        partial_pressure: `float [n_levels]`. Partial pressure at each level, $e$, in *Pa*.
+        total_pressure: `float [n_levels]`. Atmospheric pressure at each level, $p$, in *Pa*.
+
+    Returns:
+        Specific humidity, $q$, in units of $kg/kg$.
+    """
+    w = mixing_ratio_from_partial_pressure(partial_pressure, total_pressure)
+    return w / (1+w)
+
+
+def partial_pressure_from_sphum(sphum: Union[float, np.ndarray],
+                                total_pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Computes the partial pressure, $e$, from specific humidity, $q$, and total atmospheric pressure, $p$, according to:
+
+    $e = wp / (\epsilon+w)$
+
+    where $w$ is the mixing ratio, calculated using `mixing_ratio_from_sphum`, and
+    $\epsilon = R_d/R_v = 0.622$ is the ratio of molecular weight of water to that of dry air.
+
+    Args:
+        sphum: Specific humidity, $q$, in units of $kg/kg$.
+        total_pressure: `float [n_levels]`. Atmospheric pressure at each level, $p$, in *Pa*.
+
+    Returns:
+        partial_pressure: `float [n_levels]`.
+            Partial pressure at each level, $e$, in *Pa*.
+    """
+    w = mixing_ratio_from_sphum(sphum)
+    return w * total_pressure / (epsilon + w)
+
+
 def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray],
                   total_pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """
