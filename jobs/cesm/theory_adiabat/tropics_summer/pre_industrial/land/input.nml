@@ -33,7 +33,7 @@
     year_first =                ! First year of data to consider, leave blank for first year of data
     year_last =                 ! Last year of data to consider, leave blank for last year of data
     month_nh = 4,5,6,7,8,9      ! 6 Month Summer - should probably check these are the hottest 6
-    month_sh = 9,10,11,12,1,2    ! 6 Month Summer
+    month_sh = 9,10,11,12,1,2   ! 6 Month Summer
     lat_min = -20               ! Tropics
     lat_max = 20
     lon_min =                   ! leave None to consider all longitudes

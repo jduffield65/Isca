@@ -7,6 +7,7 @@ import numpy as np
 from typing import Optional
 import psutil
 import os
+import numbers
 
 
 def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
@@ -70,3 +71,20 @@ def get_memory_usage() -> float:
     process = psutil.Process(os.getpid())
     mem_mb = process.memory_info().rss / (1024 * 1024)
     return mem_mb
+
+def len_safe(x) -> int:
+    """
+    Return length of `x` which can have multiple values, or just be a number.
+
+    Args:
+        x: Variable to return length of.
+
+    Returns:
+        Number of elements in `x`.
+    """
+    if isinstance(x, numbers.Number):
+        return 1
+    try:
+        return len(x)
+    except TypeError:
+        raise TypeError(f"Unsupported type with no length: {type(x)}")
