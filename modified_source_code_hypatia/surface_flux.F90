@@ -261,6 +261,10 @@ logical :: ncar_ocean_flux_orig  = .false. ! for backwards compatibility
 logical :: raoult_sat_vap        = .false.
 logical :: do_simple             = .false.
 
+real    :: w_atm_const           = 0.0    ! JD 11/05/2025 - Add option for no-WISHE (approx value should be 10)
+real    :: drag_const            = 0.0    ! JD 11/05/2025 - Add option for no-WISHE (approx value should be 0.0009)
+logical :: mo_drag_use_w_atm_const = .false.   ! JD 11/05/2025 - option to use constant wind to compute drag coeffs if no-WISHE
+
 real    :: land_humidity_prefactor  =  1.0    ! Default is that land makes no difference to evaporative fluxes
 real    :: land_evap_prefactor  =  1.0    ! Default is that land makes no difference to evaporative fluxes
 
@@ -279,6 +283,9 @@ namelist /surface_flux_nml/ no_neg_q,             &
                             ncar_ocean_flux_orig, &
                             raoult_sat_vap,       &
                             do_simple,            &
+                            w_atm_const,          &     ! JD 11/05/2025 noWISHE
+                            drag_const,           &     ! JD 11/05/2025 noWISHE
+                            mo_drag_use_w_atm_const, &  ! JD 11/05/2025 noWISHE
                             land_humidity_prefactor, & ! Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
                             land_evap_prefactor, & ! Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
                             flux_heat_gp,         &    ! prescribed lower boundary heat flux on a giant planet
@@ -343,7 +350,7 @@ subroutine surface_flux_1d (                                           &
      u_surf,    v_surf,                                                &
      rough_mom, rough_heat, rough_moist, rough_scale, gust,            &
      flux_t, flux_q, flux_r, flux_u, flux_v,                           &
-     cd_m,      cd_t,       cd_q,                                      &
+     cd_m,      cd_t,       cd_q,       rho,                           &  ! JD 11/05/2025 - output density
      w_atm,     u_star,     b_star,     q_star,                        &
      dhdt_surf, dedt_surf,  dedq_surf,  drdt_surf,                     &
      dhdt_atm,  dedq_atm,   dtaudu_atm, dtaudv_atm,                    &
@@ -367,7 +374,7 @@ subroutine surface_flux_1d (                                           &
        dhdt_surf, dedt_surf,  dedq_surf, drdt_surf,          &
        dhdt_atm,  dedq_atm,   dtaudu_atm,dtaudv_atm,         &
        w_atm,     u_star,     b_star,    q_star,             &
-       cd_m,      cd_t,       cd_q,                          & 
+       cd_m,      cd_t,       cd_q,      rho,                &  ! JD 11/05/2025 - output density
        ex_del_m, ex_del_h, ex_del_q,                         &
        temp_2m, u_10m, v_10m,                                &
        q_2m, rh_2m
@@ -391,9 +398,10 @@ subroutine surface_flux_1d (                                           &
        thv_atm,  th_atm,   tv_atm,    thv_surf,            &
        e_sat,    e_sat1,   q_sat,     q_sat1,    p_ratio,  &
        t_surf0,  t_surf1,  u_dif,     v_dif,               &
-       rho_drag, drag_t,    drag_m,   drag_q,    rho,      &
+       rho_drag, drag_t,    drag_m,   drag_q,              &
        q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
-       e_sat_2m, q_sat_2m
+       e_sat_2m, q_sat_2m, cd_t_ignored, cd_q_ignored,     &      ! JD 11/05/2025 - drag calc
+       cd_m_ignored, u_star_ignored, b_star_ignored               ! JD 11/05/2025 - drag calc
 
   integer :: i, nbad
 
@@ -500,10 +508,34 @@ subroutine surface_flux_1d (                                           &
      endwhere
   endif
 
-  !  monin-obukhov similarity theory
-  call mo_drag (thv_atm, thv_surf, z_atm,                  &
-       rough_mom, rough_heat, rough_moist, w_atm,          &
-       cd_m, cd_t, cd_q, u_star, b_star, avail             )
+ ! JD 11/05/2025 Add option to fix w_atm in the evaporation and sensible heat equations.
+  ! drag coefficients cd_t and cd_q depend on wind so need to compute differently
+  ! if using w_atm_const.
+  if (w_atm_const > 0.0 .and. mo_drag_use_w_atm_const) then
+  ! Start by calling with constant wind speed
+  ! variables with ignored suffix are not used after this if statement
+      ! Initiaze ignore variables to be same as actual variables
+      cd_q_ignored = cd_q
+      cd_t_ignored = cd_t
+      cd_m_ignored = cd_m
+      u_star_ignored = u_star
+      b_star_ignored = b_star
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm * 0 + w_atm_const,    &
+           cd_m_ignored, cd_t, cd_q, u_star_ignored, b_star_ignored, avail             )
+  ! JD Call again using actual wind speed to set cd_m, u_star and b_star to correct values
+  ! cd_t and cd_q will remain at values computed using constant wind speed.
+  ! Do this because worried it may muck up the momentum transfer stuff if use constant
+  ! rather than actual wind
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm,    &
+           cd_m, cd_t_ignored, cd_q_ignored, u_star, b_star, avail             )
+  else
+   !  monin-obukhov similarity theory
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm,          &
+           cd_m, cd_t, cd_q, u_star, b_star, avail             )
+  end if
 
 ! added for 10m winds and 2m temperature add mo_profile()
 
@@ -561,26 +593,58 @@ subroutine surface_flux_1d (                                           &
                              seawater, cd_m, cd_t, cd_q, u_star, b_star     )
   end if
 
-  where (avail)
-     ! scale momentum drag coefficient on orographic roughness
-     cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
-     ! surface layer drag coefficients
-     drag_t = cd_t * w_atm
-     drag_q = cd_q * w_atm
-     drag_m = cd_m * w_atm
+  if (drag_const > 0.0) then
+      ! JD 11/05/2025 Add option to fix drag in surface flux equations
+      where (avail)
+         cd_t = cd_t * 0 + drag_const      ! set drag coefficient to a constant
+         cd_q = cd_q * 0 + drag_const
+      end where
+  end if
 
-     ! density
-     rho = p_atm / (rdgas * tv_atm)
+  if (w_atm_const > 0.0) then
+      where (avail)
+         ! JD 11/05/2025 Add option for no-WISHE, using constant wind
+         ! scale momentum drag coefficient on orographic roughness
+         cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
+         ! surface layer drag coefficients
+         drag_t = cd_t * w_atm_const
+         drag_q = cd_q * w_atm_const
+         drag_m = cd_m * w_atm_const
 
-     ! sensible heat flux
-     rho_drag = cp_air * drag_t * rho
-     flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
-     dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
-     dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+         ! density
+         rho = p_atm / (rdgas * tv_atm)
 
-     ! evaporation
-     rho_drag  =  drag_q * rho
-  end where
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho
+      end where
+  else
+      where (avail)
+         ! scale momentum drag coefficient on orographic roughness
+         cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
+         ! surface layer drag coefficients
+         drag_t = cd_t * w_atm
+         drag_q = cd_q * w_atm
+         drag_m = cd_m * w_atm
+
+         ! density
+         rho = p_atm / (rdgas * tv_atm)
+
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho
+      end where
+  end if
 
 ! Add bucket - if bucket is on evaluate fluxes based on moisture availability.
 ! Note changes to avail statements to allow bucket to be switched on or off
@@ -645,11 +709,23 @@ subroutine surface_flux_1d (                                           &
 
 ! end of Add bucket changes
 
+  ! JD 11/05/2025 - noWISHE, use constant wind to compute surface specific humidity
+  if (w_atm_const > 0.0) then
+      ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
+      where (avail)
+          q_surf = q_atm + flux_q / (rho*cd_q*w_atm_const)   ! surface specific humidity
+      end where
+  else
+      where (avail)
+          q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
+      end where
+  end if
+
   where (avail)
 
      q_star = flux_q / (u_star * rho)             ! moisture scale
      ! ask Chris and Steve K if we still want to keep this for diagnostics
-     q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
+     ! q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! JD 11/05/2025 - done in previous if statement now
 
      ! upward long wave radiation
      flux_r    =   stefan*t_surf**4               ! (W/m**2)
@@ -747,7 +823,7 @@ subroutine surface_flux_0d (                                                 &
        dhdt_surf, dedt_surf,  dedq_surf, drdt_surf,          &
        dhdt_atm,  dedq_atm,   dtaudu_atm,dtaudv_atm,         &
        w_atm,     u_star,     b_star,    q_star,             &
-       cd_m,      cd_t,       cd_q,                          &
+       cd_m,      cd_t,       cd_q,      rho,                &   ! JD 11/05/2025 - output density
        ex_del_m, ex_del_h, ex_del_q,                         &
        temp_2m, u_10m, v_10m,                                &
        q_2m, rh_2m
@@ -789,7 +865,7 @@ subroutine surface_flux_0d (                                                 &
        u_surf,    v_surf,                                                &
        rough_mom, rough_heat, rough_moist, rough_scale, gust,            &
        flux_t, flux_q, flux_r, flux_u, flux_v,                           &
-       cd_m,      cd_t,       cd_q,                                      &
+       cd_m,      cd_t,       cd_q,       rho,                           &   ! JD 11/05/2025 - output density
        w_atm,     u_star,     b_star,     q_star,                        &
        dhdt_surf, dedt_surf,  dedq_surf,  drdt_surf,                     &
        dhdt_atm,  dedq_atm,   dtaudu_atm, dtaudv_atm,                    &
@@ -838,7 +914,7 @@ subroutine surface_flux_2d (                                           &
      u_surf,    v_surf,                                                &
      rough_mom, rough_heat, rough_moist, rough_scale, gust,            &
      flux_t,    flux_q,     flux_r,    flux_u,    flux_v,              &
-     cd_m,      cd_t,       cd_q,                                      &
+     cd_m,      cd_t,       cd_q,       rho,                           &  ! JD 11/05/2025 - output density
      w_atm,     u_star,     b_star,     q_star,                        &
      dhdt_surf, dedt_surf,  dedq_surf,  drdt_surf,                     &
      dhdt_atm,  dedq_atm,   dtaudu_atm, dtaudv_atm,                    &
@@ -858,8 +934,8 @@ subroutine surface_flux_2d (                                           &
        flux_t,    flux_q,     flux_r,    flux_u,  flux_v,    &
        dhdt_surf, dedt_surf,  dedq_surf, drdt_surf,          &
        dhdt_atm,  dedq_atm,   dtaudu_atm,dtaudv_atm,         &
-       w_atm,     u_star,     b_star,    q_star,             &
-       cd_m,      cd_t,       cd_q,                          &
+       w_atm,     u_star,     b_star,    q_star,             &  ! JD 11/05/2025 - output density
+       cd_m,      cd_t,       cd_q,      rho,                &
        ex_del_m, ex_del_h, ex_del_q,                         &
        temp_2m, u_10m, v_10m,                                &
        q_2m, rh_2m
@@ -884,7 +960,7 @@ subroutine surface_flux_2d (                                           &
           u_surf(:,j),    v_surf(:,j),                                                                    &
           rough_mom(:,j), rough_heat(:,j), rough_moist(:,j), rough_scale(:,j), gust(:,j),                 &
           flux_t(:,j),    flux_q(:,j),     flux_r(:,j),    flux_u(:,j),    flux_v(:,j),                   &
-          cd_m(:,j),      cd_t(:,j),       cd_q(:,j),                                                     &
+          cd_m(:,j),      cd_t(:,j),       cd_q(:,j),       rho(:,j),                                     &  ! JD 11/05/2025 - output density
           w_atm(:,j),     u_star(:,j),     b_star(:,j),     q_star(:,j),                                  &
           dhdt_surf(:,j), dedt_surf(:,j),  dedq_surf(:,j),  drdt_surf(:,j),                               &
           dhdt_atm(:,j),  dedq_atm(:,j),   dtaudu_atm(:,j), dtaudv_atm(:,j),                              &

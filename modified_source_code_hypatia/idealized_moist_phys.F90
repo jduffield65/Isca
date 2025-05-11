@@ -198,6 +198,7 @@ real, allocatable, dimension(:,:)   ::                                        &
      drag_m,               &   ! momentum drag coefficient
      drag_t,               &   ! heat drag coefficient
      drag_q,               &   ! moisture drag coefficient
+     rho,                  &   ! JD 11/05/2025 - air density at surface
      w_atm,                &   ! wind speed
      ustar,                &   ! friction velocity
      bstar,                &   ! buoyancy scale
@@ -292,6 +293,12 @@ integer ::           &
      id_bucket_depth_lh,   &   ! bucket depth variation induced by LH
      id_rh,           & ! Relative humidity
      id_diss_heat_ray,&  ! Heat dissipated by rayleigh bottom drag if gp_surface=.True.
+     id_w_atm,             &   ! JD 11/05/2025 - wind used in LH and SH computation
+     id_drag_q,            &   ! JD 11/05/2025 - moisture drag coefficient
+     id_drag_t,            &   ! JD 11/05/2025 - heat drag coefficient
+     id_rho,               &   ! JD 11/05/2025 - air density at surface
+     id_q_atm,             &   ! JD 11/05/2025 - lowest level specific humidity
+     id_q_surf,            &   ! JD 11/05/2025 - surface humidity
      id_z_tg,        &   ! Relative humidity
      id_cape,        &
      id_cin,         &      
@@ -497,6 +504,7 @@ allocate(drag_m      (is:ie, js:je))
 allocate(drag_t      (is:ie, js:je))
 allocate(drag_q      (is:ie, js:je))
 allocate(w_atm       (is:ie, js:je))
+allocate(rho         (is:ie, js:je))    ! JD 11/05/2025 - air density at surface
 allocate(ustar       (is:ie, js:je))
 allocate(bstar       (is:ie, js:je))
 allocate(qstar       (is:ie, js:je))
@@ -686,6 +694,22 @@ id_flux_u = register_diag_field(mod_name, 'flux_u', &
      axes(1:2), Time, 'Zonal momentum flux', 'Pa')
 id_flux_v = register_diag_field(mod_name, 'flux_v', &
      axes(1:2), Time, 'Meridional momentum flux', 'Pa')
+
+! JD 11/05/2025 - Output for latent and sensible heat breakdown
+if(.not.gp_surface) then
+    id_w_atm = register_diag_field(mod_name, 'w_atm',          &
+    	axes(1:2), Time, 'Lowest level wind speed','m/s')
+    id_drag_q = register_diag_field(mod_name, 'drag_q',          &
+ 	    axes(1:2), Time, 'Moisture drag coefficient','none')
+    id_drag_t = register_diag_field(mod_name, 'drag_t',          &
+ 	    axes(1:2), Time, 'Heat drag coefficient','none')
+    id_rho = register_diag_field(mod_name, 'rho',          &
+ 	    axes(1:2), Time, 'Air density at lowest level','kg/m/m/m')
+    id_q_atm = register_diag_field(mod_name, 'q_atm',          &
+  	    axes(1:2), Time, 'Lowest level specific humidity','kg/kg')
+    id_q_surf = register_diag_field(mod_name, 'q_surf',          &
+ 	    axes(1:2), Time, 'Surface specific humidity','kg/kg')
+endif
 
 if(bucket) then
   id_bucket_depth = register_diag_field(mod_name, 'bucket_depth',            &
@@ -1113,6 +1137,7 @@ if(.not.gp_surface) then
                                   drag_m(:,:),                              &
                                   drag_t(:,:),                              &
                                   drag_q(:,:),                              &
+                                    rho(:, :),                              & ! JD 11/05/2025 - intent(out) so can save density
                                    w_atm(:,:),                              &
                                    ustar(:,:),                              &
                                    bstar(:,:),                              &
@@ -1145,6 +1170,12 @@ if(.not.gp_surface) then
   if(id_v_10m > 0) used = send_data(id_v_10m, v_10m, Time)
   if(id_q_2m > 0) used = send_data(id_q_2m, q_2m, Time)
   if(id_rh_2m > 0) used = send_data(id_rh_2m, rh_2m*1e2, Time)
+  if(id_w_atm > 0) used = send_data(id_w_atm, w_atm, Time)    ! JD 11/05/2025 - LH and SH breakdown
+  if(id_drag_q > 0) used = send_data(id_drag_q, drag_q, Time)
+  if(id_drag_t > 0) used = send_data(id_drag_t, drag_t, Time)
+  if(id_rho > 0) used = send_data(id_rho, rho, Time)
+  if(id_q_atm > 0) used = send_data(id_q_atm, grid_tracers(:,:,num_levels,previous,nsphum), Time)
+  if(id_q_surf > 0) used = send_data(id_q_surf, q_surf, Time)
 
 endif
 
