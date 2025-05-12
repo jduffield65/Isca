@@ -25,6 +25,7 @@
 "socrates", "soc_surf_flux_lw_down", "soc_surf_flux_lw_down", "atmos_daily", "all", .true., "none", 2,
 "socrates", "soc_flux_lw", "soc_flux_lw", "atmos_daily", "all", .true., "none", 2,
 "socrates", "soc_coszen", "soc_coszen", "atmos_daily", "all", .true., "none", 2,
+"socrates", "soc_ozone", "soc_ozone", "atmos_daily", "all", .true., "none", 2,
 "mixed_layer", "flux_t", "flux_t", "atmos_daily", "all", .true., "none", 2,
 "mixed_layer", "flux_lhe", "flux_lhe", "atmos_daily", "all", .true., "none", 2,
 "mixed_layer", "t_surf", "t_surf", "atmos_daily", "all", .true., "none", 2,

@@ -9,7 +9,7 @@
    n_months_total = 240         ! Total duration of simulation in months.
    n_months_job = 240           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
-   n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
+   n_nodes = 2                  ! Number of nodes to run job on (Slurm info).
    n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'large-short'          ! Queue to submit job to (Slurm info).
@@ -123,6 +123,10 @@
     inc_h2o = .true.            ! just include the default molecules of water, CO2 and ozone
     inc_co2 = .true.
     stellar_constant = 1360     ! same as grey gas case
+    do_read_ozone = .true.
+    ozone_file_name = 'ozone'   ! use same ozone pressure profile at each latitude from file
+    ozone_field_name = 'ozone'
+    inc_o3 = .true.
 /
 
 &diag_manager_nml

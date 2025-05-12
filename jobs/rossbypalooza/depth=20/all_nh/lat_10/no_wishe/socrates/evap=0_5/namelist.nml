@@ -123,6 +123,10 @@
     inc_h2o = .true.            ! just include the default molecules of water, CO2 and ozone
     inc_co2 = .true.
     stellar_constant = 1360     ! same as grey gas case
+    do_read_ozone = .true.
+    ozone_file_name = 'ozone'   ! use same ozone pressure profile at each latitude from file
+    ozone_field_name = 'ozone'
+    inc_o3 = .true.
 /
 
 &diag_manager_nml
