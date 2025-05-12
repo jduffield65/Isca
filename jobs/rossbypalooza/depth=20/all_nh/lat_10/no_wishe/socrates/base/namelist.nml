@@ -4,15 +4,15 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/no_wishe/base'
-   n_months_total = 2         ! Total duration of simulation in months.
-   n_months_job = 2           ! Approximate duration of each job of the simulation in months.
+   name = 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates/base'
+   n_months_total = 240         ! Total duration of simulation in months.
+   n_months_job = 240           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info).
+   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
-   partition = 'small'          ! Queue to submit job to (Slurm info).
+   partition = 'large-short'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '48:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
@@ -42,7 +42,8 @@
     roughness_heat = 3.21e-05
     roughness_moist = 3.21e-05
     roughness_mom = 3.21e-05
-    two_stream_gray = .true.
+    two_stream_gray = .false.
+    do_socrates_radiation = .true.
     convection_scheme = 'SIMPLE_BETTS_MILLER'
     land_option = 'input'                           ! LAND OPTION
     land_file_name = 'INPUT/land.nc'                ! LAND OPTION
@@ -112,12 +113,19 @@
     trayfric = -0.25
 /
 
-&two_stream_gray_rad_nml
-    rad_scheme = 'frierson'
-    do_seasonal = .true.            ! SEASONS
-    equinox_day =  0.75             ! SEASONS
-    atm_abs = 0.2                   ! default is 0.0
-    odp = 1                         ! FRIERSON kappa optical depth parameter
+! Specify socrates radiation using parameters given in socrates_aquaplanet.py script.
+&socrates_rad_nml
+    chunk_size = 16
+    lw_spectral_filename = '/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_lw_ga7'
+    sw_spectral_filename = '/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_sw_ga7'
+    co2_ppmv = 300
+    inc_h2o = .true.            ! just include the default molecules of water, CO2 and ozone
+    inc_co2 = .true.
+    stellar_constant = 1360     ! same as grey gas case
+    do_read_ozone = .true.
+    ozone_file_name = 'ozone'   ! use same ozone pressure profile at each latitude from file
+    ozone_field_name = 'ozone'
+    inc_o3 = .true.
 /
 
 &diag_manager_nml
