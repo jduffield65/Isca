@@ -5,6 +5,7 @@ import logging
 import f90nml
 import numpy as np
 import concurrent.futures
+import copy
 from typing import Optional, Callable, Union, List
 
 # Get daily average variable at given pressure level for a given year (one file created per year)
@@ -126,8 +127,9 @@ def main(input_file_path: str) -> None:
     else:
         # Get data for each year in turn
         years_all = request_dict['year']
-        del request_dict['year']
-        def download_one_year(year, request_dict_use=request_dict):
+        def download_one_year(year):
+            # ensure a separate dictionary for each year, with year set to that particular year
+            request_dict_use = copy.deepcopy(request_dict)
             request_dict_use['year'] = year
             try:
                 download_data(os.path.join(script_info['out_dir'], f'{year}.nc'), script_info['dataset'],
