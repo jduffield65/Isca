@@ -1,0 +1,145 @@
+import cdsapi
+import sys
+import os
+import logging
+import f90nml
+import numpy as np
+import concurrent.futures
+from typing import Optional, Callable, Union, List
+
+# Get daily average variable at given pressure level for a given year (one file created per year)
+# Use freq=1 hour, which is the frequency to sample the source data
+# Variable examples: temperature, geopotential
+# Dataset url: https://cds.climate.copernicus.eu/datasets/derived-era5-pressure-levels-daily-statistics
+
+# Set up logging configuration to output to console, and stdout so saved to out file
+logging.basicConfig(level=logging.INFO, format='%(asctime)s,%(msecs)03d - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+                    stream=sys.stdout)
+
+def parse_int_list(value: Optional[Union[str, int, List]], format_func: Callable = lambda x: str(x)) -> List:
+    """
+    Takes in a value or list of values e.g. `[1, 2, 3]` and converts it into a list of strings where
+    each string has the format given by `format_func` e.g. `['1', '2', '3']` for the default case.
+
+    If `value='x:y'`, will return all integers between `x` and `y` inclusive.
+
+    Args:
+        value: Variable to convert into list of strings
+        format_func: How to format each integer within the string.
+
+    Returns:
+        List, where each integer in `value` is converted using `format_func`.
+    """
+    if isinstance(value, list):
+        pass
+    elif isinstance(value, int):
+        value = [value]
+    elif isinstance(value, str):
+        value = value.strip()       # remove blank space
+        if ':' in value:
+            # If '1979:2023' returns all integers from 1979 to 2023
+            start, end = map(int, value.split(':'))
+            value = list(range(start, end + 1))
+        else:
+            value = [int(value)]
+    else:
+        raise ValueError(f"Unsupported format: {value}")
+    return [format_func(i) for i in value]
+
+
+def initialize_request_dict(request_dict: dict) -> dict:
+    """
+    Takes request_dict as it is in nml file, and converts each key into expected format for cdsapi client.
+
+    Args:
+        request_dict: Request dictionary from nml file, required to get chosen data.
+
+    Returns:
+        request_dict with numbers set to strings, and time info changed to correct format.
+    """
+    # If months, days or time left blank then set to include all values
+    if request_dict['month'] is None:
+        request_dict['month'] = np.arange(1, 13).tolist()
+    if request_dict['day'] is None:
+        request_dict['day'] = np.arange(1, 32).tolist()
+    if 'time' in request_dict:
+        if request_dict['time'] is None:
+            request_dict['time'] = np.arange(24).tolist()
+
+    # Re-reformat time lists so correct format
+    format_time = {'month': lambda x: f"{x:02d}", 'day': lambda x: f"{x:02d}", 'year': lambda x: str(x),
+                   'time': lambda x: f"{x:02d}:00"}
+    for key in format_time:
+        if key not in request_dict:
+            continue
+        request_dict[key] = parse_int_list(request_dict[key], format_time[key])
+
+    # Convert any numbers into strings
+    for key in request_dict:
+        if isinstance(request_dict[key], (int, float)):
+            request_dict[key] = str(request_dict[key])
+    return request_dict
+
+
+def download_data(out_path: str, dataset: str, request_dict: dict, exist_ok: bool,
+                  logger: Optional[logging.Logger] = None) -> None:
+    """
+    Function to run climate data store application programming interface (cdsapi) to download the ERA5 data
+    requested in the `request_dict` dictionary.
+
+    Args:
+        out_path: Where to save the downloaded data.
+        dataset: ERA5 dataset name e.g. `'derived-era5-pressure-levels-daily-statistics'`
+        request_dict: Dictionary containing request information e.g. `year`, `month`, `day`, `pressure_level`.
+        exist_ok: If output already exists, overwrite if `True` otherwise give error.
+        logger: If provide logger, will log the time when download starts
+
+    Returns:
+
+    """
+    if not exist_ok:
+        if os.path.exists(out_path):
+            raise ValueError(f"File '{out_path}' already exists. Run with exist_ok=True to overwrite.")
+    if logger is not None:
+        logger.info(f"Start year: {request_dict['year']}")
+    c = cdsapi.Client()
+    c.retrieve(dataset, request_dict, out_path)
+
+def main(input_file_path: str) -> None:
+    input_info = f90nml.read(input_file_path)
+    script_info = input_info['script_info']
+    request_dict = initialize_request_dict(input_info['request'])
+    logger = logging.getLogger()  # for printing to console time info
+    if not os.path.exists(script_info['out_dir']):
+        os.makedirs(script_info['out_dir'])
+        logger.info(f"Directory '{script_info['out_dir']}' created.")
+    if not script_info['one_year_per_file']:
+        # Combine all years in a single file
+        logger.info(f"Downloading all {len(request_dict['year'])} years in single file")
+        out_file_name = 'all_years.nc'
+        try:
+            download_data(os.path.join(script_info['out_dir'], out_file_name), script_info['dataset'], request_dict,
+                          script_info['exist_ok'])
+        except Exception as e:
+            logger.info(f"Error: {e}")
+        logger.info("End")
+    else:
+        # Get data for each year in turn
+        years_all = request_dict['year']
+        del request_dict['year']
+        def download_one_year(year, request_dict_use=request_dict):
+            request_dict_use['year'] = year
+            try:
+                download_data(os.path.join(script_info['out_dir'], f'{year}.nc'), script_info['dataset'],
+                              request_dict_use, script_info['exist_ok'], logger)
+            except Exception as e:
+                logger.info(f"Error for year {year}: {e}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=script_info['max_workers']) as executor:
+            futures = {executor.submit(download_one_year, year): year for year in years_all}
+            for future in concurrent.futures.as_completed(futures):
+                year = futures[future]
+                logger.info(f"End year: {year}")
+
+
+if __name__ == '__main__':
+    main(sys.argv[1])

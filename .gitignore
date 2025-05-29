@@ -2,5 +2,6 @@
 *pyc
 *.npz
 *.nd2
+*.nc
 __pycache__/
 /site
