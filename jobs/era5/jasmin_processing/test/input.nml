@@ -25,11 +25,13 @@
     months = 1,2                    ! Months to consider for each year. Leave blank to consider all
     months_at_a_time = 1            ! Number of months of hourly data to load in at any one time
     level =                         ! Model level to consider variable at. -1 or 137 for model closest to surface, and 1 for closest to space. Not required if single level variable
-    lon_min = 0                      ! Will consider longitudes between lon_min and lon_max. Leave blank for whole globe.
+    lon_min = 0                     ! Will consider longitudes between lon_min and lon_max. Leave blank for whole globe.
     lon_max = 1
-    lat_min = 30                     ! Will consider latitudes between lat_min and lat_max. Leave blank for whole globe.
+    lat_min = 30                    ! Will consider latitudes between lat_min and lat_max. Leave blank for whole globe.
     lat_max = 31
     model = 'oper'                  ! Either `oper` for operational reanalysis (default era5 output) or `enda` for ensemble dataset
-    load_all_at_start = .false.      ! Whether to load data for given chunk of months before doing processing
-    exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
+    load_all_at_start = .false.     ! Whether to load data for given chunk of months before doing processing
+    exist_ok =                      ! If output already exists, overwrite if .true., skip if blank, give error if .false.
+    max_wait_time = 3600            ! Wait upto a maximum of 1 hour to save file if get permission errors
+    wait_interval = 20              ! If get permission error, try every 30s to save file again
 /

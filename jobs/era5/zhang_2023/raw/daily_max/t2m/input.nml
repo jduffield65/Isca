@@ -17,10 +17,10 @@
 /
 
 &script_info
-    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/zhang2023_data/raw/daily_mean/t2m'          ! Where nd2 file saved
+    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/zhang2023_data/raw/daily_max/t2m'          ! Where nd2 file saved
     var = '2t'                      ! '2t' for 2m temperature
     years = '1979:2021'             ! All years to run, will make 1 file per year
-    stat = 'mean'                   ! Whether to compute mean, min or max over the stat_freq time period
+    stat = 'max'                   ! Whether to compute mean, min or max over the stat_freq time period
     stat_freq = '1D'                ! Integer followed by 'H' for hour, ''D' for day, 'W' for week, 'M' for month, 'Y' for year
     months =                        ! Months to consider for each year. Leave blank to consider all (1 is Jan)
     months_at_a_time = 1            ! Number of months of hourly data to load in at any one time

@@ -1,4 +1,6 @@
 # Script to process a single variable, and save the processed variable as one file for each year
+import time
+
 import f90nml
 from get_jasmin_era5 import Find_era5
 from isca_tools.utils.base import split_list_max_n
@@ -55,9 +57,15 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
                  months: Optional[Union[str,List]] = None, months_at_a_time: int = 1, level: Optional[int] = None,
                  lon_min: Optional[float] = None, lon_max: Optional[float] = None, lat_min: Optional[float] = None,
                  lat_max: Optional[float] = None, model: Literal["oper", "enda"] = "oper",
-                 load_all_at_start: bool = False, exist_ok: bool = False, logger: Optional[logging.Logger] = None):
+                 load_all_at_start: bool = False, exist_ok: Optional[bool] = None, wait_interval: int = 20,
+                 max_wait_time: int = 3600, logger: Optional[logging.Logger] = None) -> None:
     if os.path.exists(out_file):
-        if exist_ok:
+        if exist_ok is None:
+            if logger is not None:
+                logger.info(f'Year {year} - Output file already exists, skipping to next year.')
+            # If None, and file exist skip
+            return None
+        elif exist_ok:
             if logger is not None:
                 logger.info(f'Year {year} - Output file already exists, will be overwritten')
         else:
@@ -117,10 +125,38 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
 
     # Concatenate all days for the year and save
     full_year = xr.concat(out_chunks, dim='time')
-    full_year.to_netcdf(out_file)
+
+    # Do while loop because can get in a situation where multiple scripts trying to write to same folder
+    success = False
+    start_time = time.time()
+    i = 0
+    while not success and (time.time() - start_time) < max_wait_time:
+        try:
+            if os.path.exists(out_file):
+                if logger is not None:
+                    logger.info(f"Year {year} - {out_file} already exists, must have been created by another script, "
+                                f"as did not exist at start of this script")
+                success = True
+                break
+            full_year.to_netcdf(out_file)
+            success = True
+        except PermissionError as e:
+            if (logger is not None) and (i==0):
+                logger.info(f'Year {year} | Permission Error | {e}')
+            time.sleep(wait_interval)
+            i += 1
+        except Exception as e:
+            if (logger is not None) and (i==0):
+                logger.info(f'Year {year} | Unexpected Error | {e}')
+            time.sleep(wait_interval)
+            i += 1
 
     if logger is not None:
+        if not success:
+            logger.info(f'Year {year} - Failed to write {out_file} after {max_wait_time} seconds.')
         logger.info(f'Year {year} - End')
+    return None
+
 
 def main(input_file_path: str):
     # Run processing for all required years
