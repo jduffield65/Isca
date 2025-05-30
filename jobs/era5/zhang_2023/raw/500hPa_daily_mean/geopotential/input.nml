@@ -21,7 +21,7 @@
     dataset = 'derived-era5-pressure-levels-daily-statistics'                                    ! Copernicus dataset to use
     exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
     one_year_per_file = .true.      ! If true, will run different job for each year. Otherwise will run one job for all years.
-    max_workers = 5                 ! Number of jobs to run simultaneously. Only relavent if one_year_per_file = .true.
+    max_workers = 1                 ! Number of jobs to run simultaneously. Only relavent if one_year_per_file = .true.
 /
 
 ! Give all info required for the request dictionary for the cds api client

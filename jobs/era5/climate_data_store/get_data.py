@@ -17,6 +17,43 @@ from typing import Optional, Callable, Union, List
 logging.basicConfig(level=logging.INFO, format='%(asctime)s,%(msecs)03d - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
 
+def create_years_per_job_nml(input_file_path: str, exist_ok: Optional[bool] = None) -> List:
+    """
+    Splits up list of all years into separate lists of no more than `max_workers` in each.
+    A `nml` file is then created for each of these with name same as `input_file_path` but with first year
+    in job as a suffix e.g. `input_nml` becomes `input1985.nml` with `input_info['request']['year']` set to
+    years to run for that job.
+
+    Args:
+        input_file_path: Path to `nml` file for experiment.
+        exist_ok: If `True`, do not raise exception if any file to be created already exists.
+            If `False`, will overwrite it. If `None` leaves the existing file unchanged.
+
+    Returns:
+        List of paths to nml files created e.g. `['/Users/.../input1985.nml', '/Users/.../input1985.nml']`
+    """
+    input_info = f90nml.read(input_file_path)
+    script_info = copy.deepcopy(input_info['script_info'])
+    request_dict = initialize_request_dict(copy.deepcopy(input_info['request']))
+    if not script_info['one_year_per_file']:
+        out_file_names = [input_file_path]      # if more than one year per file, run job just once
+    else:
+        years_all = [int(year) for year in request_dict['year']]
+        n = script_info['max_workers']
+        years_jobs = [years_all[i:i + n] for i in range(0, len(years_all), n)]
+        out_file_names = []
+        for years in years_jobs:
+            input_info['request']['year'] = years
+            out_file_names.append(input_file_path.replace('.nml', f'{years[0]}.nml'))
+            if os.path.exists(out_file_names[-1]):
+                if exist_ok is None:
+                    print(f'{years}: Output nml file already exists. Leaving unchanged')
+                    continue
+            input_info.write(out_file_names[-1], force=exist_ok)
+            print(f'{years}: Output nml file created')
+    return out_file_names
+
+
 def parse_int_list(value: Optional[Union[str, int, List]], format_func: Callable = lambda x: str(x)) -> List:
     """
     Takes in a value or list of values e.g. `[1, 2, 3]` and converts it into a list of strings where

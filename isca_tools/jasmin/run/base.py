@@ -4,7 +4,8 @@ from typing import List, Optional, Union, Callable
 from operator import itemgetter
 import importlib.util
 import sys
-from ...run.base import get_unique_dir_name
+import subprocess
+# from ...run.base import get_unique_dir_name
 
 def add_list_to_str(var_str: str, var_list: Optional[Union[List, float, int, str]]) -> str:
     """
@@ -32,26 +33,26 @@ def add_list_to_str(var_str: str, var_list: Optional[Union[List, float, int, str
     return var_str
 
 
-# def get_unique_dir_name(base_dir: str) -> str:
-#     """
-#     Return a unique directory name by appending a number if needed.
-#     E.g., 'results', 'results_1', 'results_2', ...
-#
-#     Args:
-#         base_dir: Path to directory
-#
-#     Returns:
-#         base_dir: Unique directory name
-#     """
-#     if not os.path.exists(base_dir):
-#         return base_dir
-#
-#     i = 1
-#     while True:
-#         new_dir = f"{base_dir}_{i}"
-#         if not os.path.exists(new_dir):
-#             return new_dir
-#         i += 1
+def get_unique_dir_name(base_dir: str) -> str:
+    """
+    Return a unique directory name by appending a number if needed.
+    E.g., 'results', 'results_1', 'results_2', ...
+
+    Args:
+        base_dir: Path to directory
+
+    Returns:
+        base_dir: Unique directory name
+    """
+    if not os.path.exists(base_dir):
+        return base_dir
+
+    i = 1
+    while True:
+        new_dir = f"{base_dir}_{i}"
+        if not os.path.exists(new_dir):
+            return new_dir
+        i += 1
 
 def import_func_from_path(script_path: str, func_name: str="main",
                           module_name: str="my_dynamic_module") -> Optional[Callable]:
@@ -101,7 +102,7 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
                cpus_per_task: int = 1, mem: Union[float, int] = 16, partition: str = 'standard',
                qos: Optional[str] = None, account: str = 'global_ex', conda_env: str = 'myenv',
                exist_output_ok: Optional[bool] = None, input_file_path: Optional[str] = None,
-               slurm: bool = False) -> None:
+               slurm: bool = False, dependent_job_id: Optional[str] = None) -> Optional[str]:
     """
     Function to submit a python script located at `script_path` to JASMIN using *Slurm*.
 
@@ -130,6 +131,8 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
         input_file_path: Give option to provide nml file containing all *Slurm* info within `slurm_info` section.
         slurm: If `True`, will submit job to LOTUS cluster using *Slurm* queue.
             Otherwise, it will just run the script interactively, with no submission to *Slurm*.
+        dependent_job_id: Job should only run after job with this dependency has finished. Only makes a difference
+            if `slurm=True`.
 
     """
     if input_file_path is not None:
@@ -161,11 +164,18 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
         if qos is None:
             qos = partition
 
+        if dependent_job_id is None:
+            dependent_job_id = ''
+
         # Note that sys.argv[0] is the path to the run_script.py script that was used to call this function.
         # We now call it again but with input arguments so that it runs the job on slurm.
-        submit_string = f"bash {slurm_script} {job_name} {time} {n_tasks} "\
-                        f"{cpus_per_task} {mem} {partition} {qos} {account} {conda_env} {script_path}"
-        os.system(add_list_to_str(submit_string, script_args))
+        submit_string = f"bash {slurm_script if dependent_job_id == '' else slurm_script.replace('.sh','_depend.sh')} "\
+                        f"{job_name} {time} {n_tasks} {cpus_per_task} {mem} {partition} {qos} {account} "\
+                        f"{conda_env} {script_path} {dependent_job_id}"
+        submit_string = add_list_to_str(submit_string.strip(), script_args)   # use strip to get rid of any empty spaces at start or end
+        output = subprocess.check_output(submit_string, shell=True).decode("utf-8").strip()  # get job just submitted info
+        print(f"{output}{dependent_job_id if dependent_job_id == '' else ' (dependency: job ' + dependent_job_id + ')'}")
+        return output.split()[-1]  # Save this job id (last word) for the next submission
     else:
         # Import main function from script - do this rather than submitting to console, as can then use debugging stuff
         main_func = import_func_from_path(script_path)
@@ -175,3 +185,4 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
             main_func()                     # if no arguments, call function without providing any arguments
         else:
             main_func(script_args)          # if single argument, call with just that argument
+        return None

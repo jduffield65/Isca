@@ -21,7 +21,7 @@
     dataset = 'derived-era5-pressure-levels-daily-statistics'                                    ! Copernicus dataset to use
     exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
     one_year_per_file = .true.      ! If true, will run different job for each year. Otherwise will run one job for all years.
-    max_workers = 5                 ! Number of jobs to run simultaneously. Only relavent if one_year_per_file = .true.
+    max_workers = 1                 ! Number of years to run simultaneously and in a single job. Only relavent if one_year_per_file = .true.
 /
 
 ! Give all info required for the request dictionary for the cds api client
@@ -31,7 +31,7 @@
     daily_statistic = 'daily_mean'
     frequency = '1_hourly'
     time_zone = 'utc+00:00'
-    year = '1979:2021'
+    year = '1984:2021'
     month =                           ! Months to select, leave blank for all months (Jan is 1, Dec is 12)
     day =                             ! Days to select for each month and year, leave bank for all days (1st is 1)
     pressure_level = 500              ! Pressure level to get data on
