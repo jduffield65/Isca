@@ -32,6 +32,7 @@
     model = 'oper'                  ! Either `oper` for operational reanalysis (default era5 output) or `enda` for ensemble dataset
     load_all_at_start = .false.     ! Whether to load data for given chunk of months before doing processing
     exist_ok =                      ! If output already exists, overwrite if .true., skip if blank, give error if .false.
-    max_wait_time = 3600            ! Wait upto a maximum of 1 hour to save file if get permission errors
+    max_wait_time = 360            ! Wait upto a maximum of 5 minutes to save file if get permission errors
     wait_interval = 30              ! If get permission error, try every 30s to save file again
+    complevel = 4                   ! Level of compression, higher means more compression. Max is 9
 /

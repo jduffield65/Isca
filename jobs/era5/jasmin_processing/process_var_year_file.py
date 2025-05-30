@@ -58,7 +58,7 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
                  lon_min: Optional[float] = None, lon_max: Optional[float] = None, lat_min: Optional[float] = None,
                  lat_max: Optional[float] = None, model: Literal["oper", "enda"] = "oper",
                  load_all_at_start: bool = False, exist_ok: Optional[bool] = None, wait_interval: int = 20,
-                 max_wait_time: int = 3600, logger: Optional[logging.Logger] = None) -> None:
+                 max_wait_time: int = 360, complevel: int = 4, logger: Optional[logging.Logger] = None) -> None:
     if os.path.exists(out_file):
         if exist_ok is None:
             if logger is not None:
@@ -126,19 +126,16 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
     # Concatenate all days for the year and save
     full_year = xr.concat(out_chunks, dim='time')
 
+    encoding = {var: {'zlib': True, 'complevel': complevel} for var in full_year.data_vars}
+    full_year = full_year.astype('float32')     # save as float32 to reduce memory
+
     # Do while loop because can get in a situation where multiple scripts trying to write to same folder
     success = False
     start_time = time.time()
     i = 0
     while not success and (time.time() - start_time) < max_wait_time:
         try:
-            if os.path.exists(out_file):
-                if logger is not None:
-                    logger.info(f"Year {year} - {out_file} already exists, must have been created by another script, "
-                                f"as did not exist at start of this script")
-                success = True
-                break
-            full_year.to_netcdf(out_file)
+            full_year.to_netcdf(out_file, encoding=encoding)
             success = True
         except PermissionError as e:
             if (logger is not None) and (i==0):
