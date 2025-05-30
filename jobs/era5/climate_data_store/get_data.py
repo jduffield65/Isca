@@ -6,7 +6,8 @@ import f90nml
 import numpy as np
 import concurrent.futures
 import copy
-from typing import Optional, Callable, Union, List
+from typing import Optional, List
+from isca_tools.utils.base import parse_int_list
 
 # Get daily average variable at given pressure level for a given year (one file created per year)
 # Use freq=1 hour, which is the frequency to sample the source data
@@ -52,37 +53,6 @@ def create_years_per_job_nml(input_file_path: str, exist_ok: Optional[bool] = No
             input_info.write(out_file_names[-1], force=exist_ok)
             print(f'{years}: Output nml file created')
     return out_file_names
-
-
-def parse_int_list(value: Optional[Union[str, int, List]], format_func: Callable = lambda x: str(x)) -> List:
-    """
-    Takes in a value or list of values e.g. `[1, 2, 3]` and converts it into a list of strings where
-    each string has the format given by `format_func` e.g. `['1', '2', '3']` for the default case.
-
-    If `value='x:y'`, will return all integers between `x` and `y` inclusive.
-
-    Args:
-        value: Variable to convert into list of strings
-        format_func: How to format each integer within the string.
-
-    Returns:
-        List, where each integer in `value` is converted using `format_func`.
-    """
-    if isinstance(value, list):
-        pass
-    elif isinstance(value, int):
-        value = [value]
-    elif isinstance(value, str):
-        value = value.strip()       # remove blank space
-        if ':' in value:
-            # If '1979:2023' returns all integers from 1979 to 2023
-            start, end = map(int, value.split(':'))
-            value = list(range(start, end + 1))
-        else:
-            value = [int(value)]
-    else:
-        raise ValueError(f"Unsupported format: {value}")
-    return [format_func(i) for i in value]
 
 
 def initialize_request_dict(request_dict: dict) -> dict:

@@ -1,0 +1,35 @@
+! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
+&slurm_info
+   jobs_dir = '/home/users/jamd1/Isca/jobs/'                  ! Directory containing jobs on JASMIN
+   script_path = 'era5/jasmin_processing/process_var_year_file.py'  ! Path to python script within jobs_dir
+   script_args =                                              ! Will set to the path to this file if blank
+   job_name =                                                 ! Set to name of directory containing this file if blank
+   time = '1:00:00'             ! Maximum wall time for your job in format `hh:mm:ss`
+   n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
+   cpus_per_task = 1            ! How many CPUs to allocate per task.
+   mem = 50                      ! Memory to allocate for the job in GB.
+   partition = 'debug'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   qos =                        ! Set to same as partition if blank
+   conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
+   account = 'global_ex'        ! Account to use for submitting jobs.
+   exist_output_ok =            ! Whether to run script if console_output for `job_name` already exists
+                                ! blank will just append number if output already exists.
+/
+
+&script_info
+    out_dir = '/home/users/jamd1/Isca/jobs/era5/jasmin_processing/test/output/'          ! Where nd2 file saved
+    var = '2t'                      ! '2t' for 2m temperature
+    years = '1979:1980'             ! All years to run, will make 1 file per year
+    stat = 'mean'                   ! Whether to compute mean, min or max over the stat_freq time period
+    stat_freq = '1D'                ! Integer followed by 'H' for hour, ''D' for day, 'W' for week, 'M' for month, 'Y' for year
+    months = 1,2                    ! Months to consider for each year. Leave blank to consider all
+    months_at_a_time = 1            ! Number of months of hourly data to load in at any one time
+    level =                         ! Model level to consider variable at. -1 or 137 for model closest to surface, and 1 for closest to space. Not required if single level variable
+    lon_min = 0                      ! Will consider longitudes between lon_min and lon_max. Leave blank for whole globe.
+    lon_max = 1
+    lat_min = 30                     ! Will consider latitudes between lat_min and lat_max. Leave blank for whole globe.
+    lat_max = 31
+    model = 'oper'                  ! Either `oper` for operational reanalysis (default era5 output) or `enda` for ensemble dataset
+    load_all_at_start = .false.      ! Whether to load data for given chunk of months before doing processing
+    exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
+/
