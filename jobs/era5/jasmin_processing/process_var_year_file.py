@@ -53,6 +53,35 @@ def create_years_per_job_nml(input_file_path: str, years_per_job: int, exist_ok:
     return out_file_names
 
 
+def convert_lnsp_to_sp(ds: xr.Dataset) -> xr.Dataset:
+    """
+    Function to convert logarithm of surface pressure, into surface pressure with units of Pa
+
+    Args:
+        ds: Dataset containing variable called `lnsp` to be converted.
+
+    Returns:
+        Dataset containing variable called `sp`, and without the variable `lnsp`.
+    """
+    if 'lnsp' not in ds:
+        print("Dataset does not contain variable called 'lnsp', returning original dataset.")
+        return ds
+
+    # Compute surface pressure
+    sp = np.exp(ds['lnsp'])
+
+    # Rename and set attributes
+    sp.name = 'sp'
+    sp.attrs['long_name'] = 'surface pressure'
+    sp.attrs['units'] = 'Pa'
+
+    # Drop lnsp and add sp
+    ds = ds.drop_vars('lnsp')
+    ds['sp'] = sp
+
+    return ds
+
+
 def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min', 'max'], stat_freq: str = '1D',
                  months: Optional[Union[str,List]] = None, months_at_a_time: int = 1, level: Optional[int] = None,
                  lon_min: Optional[float] = None, lon_max: Optional[float] = None, lat_min: Optional[float] = None,
@@ -108,7 +137,15 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
     out_chunks = []
     for i in range(n_chunks):
         # era5 object takes the following arguments: era5[var, time_range, level, lon_range, lat_range, model]
-        var_in = era5[var, time_start_chunk[i]:time_end_chunk[i], level, lon_range, lat_range, model]
+        if var == 'sp':
+            # To get surface pressure, must get log of surface pressure and then take exponential
+            if (logger is not None) and (i==0):
+                logger.info(f'Year {year} | Variable is surface pressure, but only lnsp available. | '
+                            f'Taking exponential of this to get surface pressure.')
+            var_in = era5['lnsp', time_start_chunk[i]:time_end_chunk[i], level, lon_range, lat_range, model]
+            var_in = convert_lnsp_to_sp(var_in)
+        else:
+            var_in = era5[var, time_start_chunk[i]:time_end_chunk[i], level, lon_range, lat_range, model]
         if logger is not None:
             logger.info(f'Year {year} - Chunk {i + 1}/{n_chunks} lazy loaded | '
                         f'Memory used {get_memory_usage() / 1000:.1f}GB')
@@ -163,12 +200,40 @@ def main(input_file_path: str):
     func_arg_names = inspect.signature(process_year).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
     logger = logging.getLogger()  # for printing to console time info
+    # While loop to stop mutliple processes making directory at same time
     if not os.path.exists(script_info['out_dir']):
-        os.makedirs(script_info['out_dir'])
-        logger.info(f"Directory '{script_info['out_dir']}' created.")
+        i = 0
+        success = False
+        start_time = time.time()
+        while not success and (time.time() - start_time) < script_info['max_wait_time']:
+            if os.path.exists(script_info['out_dir']):
+                logger.info(f'Output directory now exists, must have been created by another script.')
+                success = True
+            try:
+                os.makedirs(script_info['out_dir'])
+                success = True
+                logger.info(f"Directory '{script_info['out_dir']}' created.")
+            except PermissionError as e:
+                if i == 0:
+                    logger.info(f'Making output directory | Permission Error | {e}')
+                time.sleep(script_info['wait_interval'])
+                i += 1
+            except Exception as e:
+                if i == 0:
+                    logger.info(f'Making output directory  | Unexpected Error | {e}')
+                time.sleep(script_info['wait_interval'])
+                i += 1
+        if not success:
+            raise ValueError(f"Making output directory - Failed to create {script_info['out_dir']} "
+                             f"after {script_info['max_wait_time']} seconds.")
     for year in years_all:
-        process_year(**func_args, out_file=os.path.join(script_info['out_dir'], f"{year}.nc"),
-                     year=year, logger=logger)
+        try:
+            process_year(**func_args, out_file=os.path.join(script_info['out_dir'], f"{year}.nc"),
+                         year=year, logger=logger)
+        except Exception as e:
+            # If error just go to next year
+            logger.info(f'Year {year} | FAILED | {e} ')
+            continue
 
 if __name__ == '__main__':
     main(sys.argv[1])

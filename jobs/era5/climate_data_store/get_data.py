@@ -7,7 +7,7 @@ import numpy as np
 import concurrent.futures
 import copy
 from typing import Optional, List
-from isca_tools.utils.base import parse_int_list
+from isca_tools.utils.base import parse_int_list, split_list_max_n
 
 # Get daily average variable at given pressure level for a given year (one file created per year)
 # Use freq=1 hour, which is the frequency to sample the source data
@@ -40,8 +40,7 @@ def create_years_per_job_nml(input_file_path: str, exist_ok: Optional[bool] = No
         out_file_names = [input_file_path]      # if more than one year per file, run job just once
     else:
         years_all = [int(year) for year in request_dict['year']]
-        n = script_info['max_workers']
-        years_jobs = [years_all[i:i + n] for i in range(0, len(years_all), n)]
+        years_jobs = split_list_max_n(years_all, script_info['max_workers'])
         out_file_names = []
         for years in years_jobs:
             input_info['request']['year'] = years

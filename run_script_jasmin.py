@@ -34,7 +34,7 @@ else:
 
 # Process era5 data on Jasmin
 # exp_input_file = os.path.join(jobs_dir, f'era5/jasmin_processing/test/input.nml')
-exp_input_file = os.path.join(jobs_dir, f'era5/zhang_2023/raw/daily_max/t2m/input.nml')
+exp_input_file = os.path.join(jobs_dir, f'era5/zhang_2023/raw/daily_mean/sp/input.nml')
 years_per_job = 5
 from jobs.era5.jasmin_processing.process_var_year_file import create_years_per_job_nml
 exp_input_file_job_list = create_years_per_job_nml(exp_input_file, years_per_job, exist_ok=True) # exist_ok=True to re-create individual nml for each year

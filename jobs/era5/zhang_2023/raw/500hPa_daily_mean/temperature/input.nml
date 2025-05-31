@@ -31,7 +31,7 @@
     daily_statistic = 'daily_mean'
     frequency = '1_hourly'
     time_zone = 'utc+00:00'
-    year = '1996:2021'
+    year = '1999:2016'
     month =                           ! Months to select, leave blank for all months (Jan is 1, Dec is 12)
     day =                             ! Days to select for each month and year, leave bank for all days (1st is 1)
     pressure_level = 500              ! Pressure level to get data on
