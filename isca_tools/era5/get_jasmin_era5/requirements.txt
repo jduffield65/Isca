@@ -1,0 +1,4 @@
+# Python dependencies
+numpy
+pandas
+xarray
