@@ -1,4 +1,36 @@
 import numpy as np
+import xarray as xr
+
+def convert_lnsp_to_sp(ds: xr.Dataset, delete_lnsp: bool = True) -> xr.Dataset:
+    """
+    Function to convert logarithm of surface pressure, into surface pressure with units of Pa
+
+    Args:
+        ds: Dataset containing variable called `lnsp` to be converted.
+        delete_lnsp: If True, delete the original `lnsp` variable.
+
+    Returns:
+        Dataset containing variable called `sp`
+    """
+    if 'lnsp' not in ds:
+        print("Dataset does not contain variable called 'lnsp', returning original dataset.")
+        return ds
+
+    # Compute surface pressure
+    sp = np.exp(ds['lnsp'])
+
+    # Rename and set attributes
+    sp.name = 'sp'
+    sp.attrs['long_name'] = 'surface pressure'
+    sp.attrs['units'] = 'Pa'
+
+    # Drop lnsp and add sp
+    if delete_lnsp:
+        ds = ds.drop_vars('lnsp')
+    ds['sp'] = sp
+
+    return ds
+
 
 
 def get_ab(n_levels):
