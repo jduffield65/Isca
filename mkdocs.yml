@@ -122,7 +122,9 @@ nav:
             - Base: code/convection/base.md
             - Simple Betts-Miller: code/convection/simple_betts_miller.md
         - ERA5:
-            - Get Jasmin ERA5: code/era5/get_jasmin_era5.md
+            - Get Jasmin ERA5:
+                - Core: code/era5/get_jasmin_era5/core.md
+                - Utils: code/era5/get_jasmin_era5/utils.md
         - JASMIN:
             - Run: code/jasmin/run/base.md
         - Land:
