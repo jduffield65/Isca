@@ -10,6 +10,9 @@ from .utils import get_pl, get_gz, sel_era5, convert_lnsp_to_sp
 
 
 class Find_era5:
+    """
+
+    """
     def __init__(self, archive: Literal[None, 1, 't'] = None):
         """
         Initialise object to load ERA5 data from JASMIN
@@ -17,8 +20,10 @@ class Find_era5:
             archive: There are three types of ERA5 archives:
 
                 * `None` to use default ERA5 archive at `/badc/ecmwf-era5`
+
                 * `1` to use ERA5.1 at `/badc/ecmwf-era51`,
                     which is suggested for model level data in years 2000-2006 inclusive.
+
                 * `t` to use Preliminary at `/badc/ecmwf-era5t`, near real-time data
         """
         self._init_vars(archive)

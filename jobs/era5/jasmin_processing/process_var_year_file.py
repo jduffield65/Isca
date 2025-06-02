@@ -2,7 +2,7 @@
 import time
 
 import f90nml
-from get_jasmin_era5 import Find_era5
+from isca_tools.era5.get_jasmin_era5 import Find_era5
 from isca_tools.utils.base import split_list_max_n
 from typing import Literal, List, Optional, Union
 import xarray as xr
@@ -53,35 +53,6 @@ def create_years_per_job_nml(input_file_path: str, years_per_job: int, exist_ok:
     return out_file_names
 
 
-def convert_lnsp_to_sp(ds: xr.Dataset) -> xr.Dataset:
-    """
-    Function to convert logarithm of surface pressure, into surface pressure with units of Pa
-
-    Args:
-        ds: Dataset containing variable called `lnsp` to be converted.
-
-    Returns:
-        Dataset containing variable called `sp`, and without the variable `lnsp`.
-    """
-    if 'lnsp' not in ds:
-        print("Dataset does not contain variable called 'lnsp', returning original dataset.")
-        return ds
-
-    # Compute surface pressure
-    sp = np.exp(ds['lnsp'])
-
-    # Rename and set attributes
-    sp.name = 'sp'
-    sp.attrs['long_name'] = 'surface pressure'
-    sp.attrs['units'] = 'Pa'
-
-    # Drop lnsp and add sp
-    ds = ds.drop_vars('lnsp')
-    ds['sp'] = sp
-
-    return ds
-
-
 def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min', 'max'], stat_freq: str = '1D',
                  months: Optional[Union[str,List]] = None, months_at_a_time: int = 1, level: Optional[int] = None,
                  lon_min: Optional[float] = None, lon_max: Optional[float] = None, lat_min: Optional[float] = None,
@@ -101,8 +72,14 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
             raise ValueError(f'Output file {out_file} already exists')
     if logger is not None:
         logger.info(f'Year {year} - Start')
+
+    # Use default archive, except for model level data in the years where README warns to use ERA5.1
     era5 = Find_era5()
-    # era5.enda to use ensemble version
+    if (var in era5._ML_VARS) and (year in era5._ML_WARNING_YEARS):
+        era5 = Find_era5(archive=1)
+        logger.info(f'Year {year} | ERA5.1 rather than ERA5 used | '
+                    f'Because {var} is model level variable and README says ERA5.1 more reliable for this year')
+
     if months is None:
         months = np.arange(1, 13)
     else:
@@ -137,15 +114,11 @@ def process_year(out_file: str, var: str, year: int, stat: Literal['mean', 'min'
     out_chunks = []
     for i in range(n_chunks):
         # era5 object takes the following arguments: era5[var, time_range, level, lon_range, lat_range, model]
-        if var == 'sp':
+        if (var == 'sp') and (logger is not None) and (i==0):
             # To get surface pressure, must get log of surface pressure and then take exponential
-            if (logger is not None) and (i==0):
-                logger.info(f'Year {year} | Variable is surface pressure, but only lnsp available. | '
-                            f'Taking exponential of this to get surface pressure.')
-            var_in = era5['lnsp', time_start_chunk[i]:time_end_chunk[i], level, lon_range, lat_range, model]
-            var_in = convert_lnsp_to_sp(var_in)
-        else:
-            var_in = era5[var, time_start_chunk[i]:time_end_chunk[i], level, lon_range, lat_range, model]
+            logger.info(f'Year {year} | Variable is surface pressure, but only lnsp available. | '
+                        f'Taking exponential of this to get surface pressure.')
+        var_in = era5[var, time_start_chunk[i]:time_end_chunk[i], level, lon_range, lat_range, model]
         if logger is not None:
             logger.info(f'Year {year} - Chunk {i + 1}/{n_chunks} lazy loaded | '
                         f'Memory used {get_memory_usage() / 1000:.1f}GB')

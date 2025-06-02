@@ -17,11 +17,11 @@
 /
 
 &script_info
-    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/zhang2023_data/raw/500hPa_daily_mean/geopotential'          ! Where nd2 file saved
+    out_dir = '/home/users/jamd1/Isca/jobs/era5/zhang_2023/raw/daily_mean/z500'          ! Where nd2 file saved - home directory as group workspace full
     dataset = 'derived-era5-pressure-levels-daily-statistics'                                    ! Copernicus dataset to use
     exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
     one_year_per_file = .true.      ! If true, will run different job for each year. Otherwise will run one job for all years.
-    max_workers = 1                 ! Number of jobs to run simultaneously. Only relavent if one_year_per_file = .true.
+    max_workers = 3                 ! Number of jobs to run simultaneously. Only relavent if one_year_per_file = .true.
 /
 
 ! Give all info required for the request dictionary for the cds api client
