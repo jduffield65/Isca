@@ -17,7 +17,7 @@
 /
 
 &script_info
-    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/zhang2023_data/raw/500hPa_daily_mean/temperature'          ! Where nd2 file saved
+    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/daily_mean/t500'          ! Where nd2 file saved
     dataset = 'derived-era5-pressure-levels-daily-statistics'                                    ! Copernicus dataset to use
     exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
     one_year_per_file = .true.      ! If true, will run different job for each year. Otherwise will run one job for all years.

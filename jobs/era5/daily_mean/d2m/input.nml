@@ -7,7 +7,7 @@
    time = '24:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
    n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
    cpus_per_task = 1            ! How many CPUs to allocate per task.
-   mem = 80                     ! Memory to allocate for the job in GB.
+   mem = 20                     ! Memory to allocate for the job in GB.
    partition = 'standard'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
    qos =                        ! Set to same as partition if blank
    conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
@@ -17,13 +17,13 @@
 /
 
 &script_info
-    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/zhang2023_data/raw/daily_mean/t2m'          ! Where nd2 file saved
-    var = '2t'                      ! '2t' for 2m temperature
+    out_dir = '/gws/nopw/j04/global_ex/jamd1/era5/daily_mean/d2m'          ! Where nd2 file saved
+    var = '2d'                      ! '2t' for 2m temperature
     years = '1979:2021'             ! All years to run, will make 1 file per year
     stat = 'mean'                   ! Whether to compute mean, min or max over the stat_freq time period
     stat_freq = '1D'                ! Integer followed by 'H' for hour, ''D' for day, 'W' for week, 'M' for month, 'Y' for year
     months =                        ! Months to consider for each year. Leave blank to consider all (1 is Jan)
-    months_at_a_time = 1            ! Number of months of hourly data to load in at any one time
+    months_at_a_time = 3            ! Number of months of hourly data to load in at any one time
     level =                         ! Model level to consider variable at. -1 or 137 for model closest to surface, and 1 for closest to space. Not required if single level variable
     lon_min =                       ! Will consider longitudes between lon_min and lon_max. Leave blank for whole globe.
     lon_max =
