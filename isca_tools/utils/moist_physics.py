@@ -82,6 +82,26 @@ def sphum_from_partial_pressure(partial_pressure: Union[float, np.ndarray],
     return w / (1+w)
 
 
+def sphum_from_dew(temp_dew: Union[float, np.ndarray], pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Calculates specific humidity from dew temperature at a given `pressure`.
+    The dew temperature is defined such as the temperature at which the saturation vapour pressure
+    is equal to the partial pressure i.e. $e_s(T_d) = e(T)$ where $T_d$ is the dew temperature, and
+    $T$ is the actual temperature.
+
+    Args:
+        temp_dew: `float [n_lat, n_levels]`. Dew temperature at each coordinate considered. Units: *Kelvin*.
+        pressure: `float [n_levels]`. Atmospheric pressure, $p$, at each level considered in *Pa*.
+
+    Returns:
+        specific_humidity: `float [n_lat, n_levels]`.
+            Specific humidity, $q$, in units of $kg/kg$.
+    """
+    # dew temperature is defined as temp such that saturation vapour pressure equals partial pressure
+    e = saturation_vapor_pressure(temp_dew)
+    return sphum_from_partial_pressure(e, pressure)
+
+
 def partial_pressure_from_sphum(sphum: Union[float, np.ndarray],
                                 total_pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """
