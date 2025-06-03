@@ -23,7 +23,7 @@
     stat = 'mean'                   ! Whether to compute mean, min or max over the stat_freq time period
     stat_freq = '1D'                ! Integer followed by 'H' for hour, ''D' for day, 'W' for week, 'M' for month, 'Y' for year
     months =                        ! Months to consider for each year. Leave blank to consider all (1 is Jan)
-    months_at_a_time = 3            ! Number of months of hourly data to load in at any one time
+    months_at_a_time = 1            ! Number of months of hourly data to load in at any one time
     level =                         ! Model level to consider variable at. -1 or 137 for model closest to surface, and 1 for closest to space. Not required if single level variable
     lon_min =                       ! Will consider longitudes between lon_min and lon_max. Leave blank for whole globe.
     lon_max =
