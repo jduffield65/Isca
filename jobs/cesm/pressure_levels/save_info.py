@@ -46,15 +46,15 @@ def process_year(exp_name, archive_dir, out_dir: str, var: Union[str, List],
                  p0: float, hist_file: int = 0, lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                  lat_min: Optional[float] = None,
                  lat_max: Optional[float] = None,
-                 load_all_at_start: bool = False, exist_ok: Optional[bool] = None, wait_interval: int = 20,
+                 load_all_at_start: bool = True, overwrite: Optional[bool] = None, wait_interval: int = 20,
                  max_wait_time: int = 360, complevel: int = 4, logger: Optional[logging.Logger] = None) -> None:
     out_file = os.path.join(out_dir, f"{year}.nc")
     if os.path.exists(out_file):
-        if exist_ok is None:
+        if overwrite is None:
             print_log(f'Year {year} - Output file already exists, skipping to next year.', logger)
             # If None, and file exist skip
             return None
-        elif exist_ok:
+        elif overwrite:
             print_log(f'Year {year} - Output file already exists, will be overwritten', logger)
         else:
             raise ValueError(f'Output file {out_file} already exists')
@@ -65,11 +65,11 @@ def process_year(exp_name, archive_dir, out_dir: str, var: Union[str, List],
         var = [var]
     if 'PS' not in var:
         var.append('PS')        # need surface pressure as well
-    pressure_levels = np.array(pressure_levels, ndmin=1)
+    pressure_levels = np.array(pressure_levels, ndmin=1) * 100  # convert to Pa from hPa
 
     # Load dataset for given year
     ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=hist_file, comp='atm',
-                           year_first=year, year_last=year, logger=logger)[var]
+                           year_files=year, logger=logger)[var]
     ds = ds_lat_lon_slice(ds, lat_min, lat_max, lon_min, lon_max)
 
     print_log(f'Year {year} - lazy loaded | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
@@ -100,22 +100,44 @@ def main(input_file_path: str):
     # Run processing for all required years
     input_info = f90nml.read(input_file_path)
     script_info = input_info['script_info']
-    years_all = parse_int_list(script_info['years'], lambda x: int(x))
+
+    # Determine which years to get data for
+    file_dates = cesm.get_exp_file_dates(script_info['exp_name'], 'atm', script_info['archive_dir'],
+                                         script_info['hist_file'])
+    year_files_all = np.unique(file_dates.dt.year).tolist()
+    if script_info['year_files'] is None:
+        years_consider = year_files_all
+    else:
+        years_consider = parse_int_list(script_info['year_files'], lambda x: int(x), all_values=year_files_all)
+
+    if script_info['out_dir'] is None:
+        # Set out directory to experiment folder with directory name `out_name` if don't provide full path
+        script_info['out_dir'] = os.path.join(script_info['archive_dir'], script_info['exp_name'], script_info['out_name'])
+
     func_arg_names = inspect.signature(process_year).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
+
     logger = logging.getLogger()  # for printing to console time info
-    # While loop to stop mutliple processes making directory at same time
+    logger.info(f'Years {years_consider} | Start')
+    logger.info(f'Loading reference P0, hyam and hybm from Year {years_consider[0]} | Start')
+    ds_ref = cesm.load_dataset(script_info['exp_name'], 'atm', script_info['archive_dir'],
+                               script_info['hist_file'], year_files=years_consider[0])[['P0', 'hyam', 'hybm']]
+    ds_ref = ds_ref.isel(time=0).load()
+    logger.info(f'Loading reference P0, hyam and hybm from Year {years_consider[0]} | End')
+
     if not os.path.exists(script_info['out_dir']):
-        run_func_loop(func = lambda: os.makedirs(script_info['out_dir']),
-                      func_check = lambda: os.path.exists(script_info['out_dir']),
+        # While loop to stop mutliple processes making directory at same time
+        run_func_loop(func=lambda: os.makedirs(script_info['out_dir']),
+                      func_check=lambda: os.path.exists(script_info['out_dir']),
                       max_wait_time=script_info['max_wait_time'], wait_interval=script_info['wait_interval'])
-    for year in years_all:
+    for year in years_consider:
         try:
-            process_year(**func_args, year=year, logger=logger)
+            process_year(**func_args, year=year, logger=logger, hyam=ds_ref.hyam, hybm=ds_ref.hybm,
+                         p0=float(ds_ref['P0']))
         except Exception as e:
             # If error just go to next year
             logger.info(f'Year {year} | FAILED | {e} ')
             continue
-
+    logger.info(f'Years {years_consider} | End')
 if __name__ == '__main__':
     main(sys.argv[1])
