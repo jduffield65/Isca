@@ -48,7 +48,7 @@ def process_year(exp_name, archive_dir, out_dir: str, var: Union[str, List],
                  lat_max: Optional[float] = None,
                  load_all_at_start: bool = True, overwrite: Optional[bool] = None, wait_interval: int = 20,
                  max_wait_time: int = 360, complevel: int = 4, logger: Optional[logging.Logger] = None) -> None:
-    out_file = os.path.join(out_dir, f"{year}.nc")
+    out_file = os.path.join(out_dir, f"{year:04d}.nc")
     if os.path.exists(out_file):
         if overwrite is None:
             print_log(f'Year {year} - Output file already exists, skipping to next year.', logger)
