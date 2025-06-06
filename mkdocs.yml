@@ -159,3 +159,4 @@ nav:
             - Numerical: code/utils/numerical.md
             - Radiation: code/utils/radiation.md
             - Statistics: code/utils/stats.md
+            - Xarray: code/utils/xarray.md

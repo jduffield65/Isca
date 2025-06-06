@@ -8,6 +8,8 @@ from typing import Optional, Union, List, Callable
 import psutil
 import os
 import numbers
+import time
+import logging
 
 
 def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
@@ -26,44 +28,77 @@ def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
     return var.weighted(weights)
 
 
-def print_ds_var_list(ds: xr.Dataset, phrase: Optional[str] = None) -> None:
+def print_log(text: str, logger:Optional[logging.Logger] = None) -> None:
     """
-    Prints all variables in `ds` which contain `phrase` in the variable name or variable `long_name`.
+    Quick function to add to log if log exists, otherwise print it.
 
     Args:
-        ds: Dataset to investigate variables of.
-        phrase: Key phrase to search for in variable info.
+        text: Text to be printed.
+        logger:
+
+    Returns:
 
     """
-    # All the exceptions to deal with case when var does not have a long_name
-    var_list = list(ds.keys())
-    if phrase is None:
-        for var in var_list:
-            try:
-                print(f'{var}: {ds[var].long_name}')
-            except AttributeError:
-                print(f'{var}')
-    else:
-        for var in var_list:
-            if phrase.lower() in var.lower():
-                try:
-                    print(f'{var}: {ds[var].long_name}')
-                except AttributeError:
-                    print(f'{var}')
-                continue
-            try:
-                if phrase.lower() in ds[var].long_name.lower():
-                    print(f'{var}: {ds[var].long_name}')
-                    continue
-            except AttributeError:
-                continue
-    return None
+    logger.info(text) if logger else print(text)
+
+
+def run_func_loop(func: Callable, max_wait_time: int = 300, wait_interval: int = 20,
+                  func_check: Optional[Callable] = None, logger: Optional[logging.Logger] = None):
+    """
+    Safe way to run a function, such that if hit error, will try again every `wait_interval` seconds up to a
+    maximum of `max_wait_time` seconds.
+
+    If `func_check` is given and returns `True` at any point, it will exit the loop without executing `func`.
+
+    Most obvious usage is for creating a directory e.g. `os.makedirs`, especially to a server where connection
+    cuts in and out.
+
+    Args:
+        func: Function to run. Must have no arguments.
+        max_wait_time: Maximum number of seconds to try and run `func`.
+        wait_interval: Interval in seconds to wait between running `func`.
+        func_check: Function that returns a boolean. If it returns `True` at any point, the loop
+            will exit the loop without executing `func`.
+        logger: Logger to record information
+
+    Returns:
+        Whatever `func` returns.
+    """
+    i = 0
+    j = 0
+    success = False
+    start_time = time.time()
+    output = None
+    while not success and (time.time() - start_time) < max_wait_time:
+        if func_check is not None:
+            if func_check():
+                print_log("func_check passed so did not exectute func", logger)
+                success = True
+                break
+        try:
+            output = func()
+            success = True
+        except PermissionError as e:
+            i += 1
+            if i == 1:
+                # Only print on first instance of error
+                print_log(f'Permission Error: {e}', logger)
+            time.sleep(wait_interval)
+        except Exception as e:
+            j += 1
+            if j == 1:
+                # Only print on first instance of error
+                print_log(f'Unexpected Error: {e}', logger)
+            time.sleep(wait_interval)
+    if not success:
+        raise ValueError(f"Making output directory - Failed to run function after {max_wait_time} seconds.")
+    return output
 
 
 # Memory usage function
 def get_memory_usage() -> float:
     """
-    Get current process’s memory  in MB.
+    Get current process’s memory in MB.
 
     Returns:
         mem_mb: Memory usage in MB
@@ -106,7 +141,7 @@ def split_list_max_n(lst: Union[List, np.ndarray], n: int) -> List:
     return [lst[i * avg : (i + 1) * avg] for i in range(k)]
 
 
-def parse_int_list(value: Optional[Union[str, int, List]], format_func: Callable = lambda x: str(x)) -> List:
+def parse_int_list(value: Union[str, int, List], format_func: Callable = lambda x: str(x)) -> List:
     """
     Takes in a value or list of values e.g. `[1, 2, 3]` and converts it into a list of strings where
     each string has the format given by `format_func` e.g. `['1', '2', '3']` for the default case.

@@ -6,6 +6,9 @@ import fnmatch
 import numpy as np
 import warnings
 import logging
+import re
+from datetime import datetime, timedelta
+from ..utils.base import parse_int_list
 
 jasmin_archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'
 local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
@@ -20,8 +23,8 @@ def load_dataset(exp_name: str, comp: str = 'atm',
                  decode_times: bool = True,
                  parallel: bool = False,
                  preprocess: Optional[Callable] = None,
-                 year_first: int = 1, year_last: int = -1,
-                 months_keep: Optional[List] = None,
+                 year_files: Optional[Union[int, List]] = None,
+                 month_files: Optional[List] = None,
                  apply_month_shift_fix: bool = True,
                  logger: Optional[logging.Logger] = None) -> xr.Dataset:
     """
@@ -47,12 +50,8 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         parallel: Whether parallel loading is performed.
         preprocess: Function to preprocess the data before loading.
         decode_times: If `True`, will convert time to actual date.
-        year_first: First year of simulation to load.
-        year_last: Last year of simulation to load.
-        months_keep: List of months which you want to load for each year.</br>
-            Only used for monthly averaged data i.e. `hist_file=0`.</br>
-            `1` refers to January. If `None`, all 12 months will be loaded.</br>
-            If directory only contains specific months, should still specify those months here.
+        year_files: Only files with these years in their name will be loaded. Leave as `None` to load all years.
+        month_files: Only months with these months in their names will be loaded. Leave as `None` to load all months.
         apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset.</br>
             Only used for monthly averaged data i.e. `hist_file=0`.
         logger: Optional logger.
@@ -60,72 +59,52 @@ def load_dataset(exp_name: str, comp: str = 'atm',
     Returns:
         Dataset containing all diagnostics specified for the experiment.
     """
-    # LHS of comp_dir_file is name of directory containing hist files for the component
-    # RHS of comp_dir_file is the string indicating the component in the individual .nc files within this directory
-    comp_dir_file = {'atm': 'cam',  # atmosphere
-                     'ice': 'cice',  # ice
-                     'lnd': 'clm2',  # land
-                     'rof': 'mosart'}  # river
-
-    if comp not in comp_dir_file:
-        # Generate inverse dict to comp_dir_file
-        comp_file_dir = {key: list(comp_dir_file.keys())[i] for i, key in enumerate(comp_dir_file.values())}
-        if comp in comp_file_dir:
-            # Deal with case where give comp_file not comp_dir i.e. 'cam' rather than 'atm'
-            comp_dir = os.path.join(archive_dir, exp_name, comp_file_dir[comp])
-            comp_file = comp
-        else:
-            raise ValueError(f'comp must be one of {list(comp_dir_file.keys())} but got {comp}')
-    else:
-        comp_dir = os.path.join(archive_dir, exp_name, comp)
-        comp_file = comp_dir_file[comp]
-    if year_first == 1 and year_last == -1 and months_keep is None:
+    exp_dir, comp_id = get_exp_dir(exp_name, comp, archive_dir)
+    if year_files is None and month_files is None:
         # Load all data in folder
         # * indicates where date index info is, so we combine all datasets
-        data_files_load = os.path.join(comp_dir, 'hist', f'{exp_name}.{comp_file}.h{hist_file}.*.nc')
+        data_files_load = os.path.join(exp_dir, f'{exp_name}.{comp_id}.h{hist_file}.*.nc')
     else:
-        if hist_file != 0 and months_keep is not None:
+        if hist_file != 0 and month_files is not None:
             warnings.warn(f'If h{hist_file} files not saved monthly then will not have a file for each month so '
-                          f'using months_keep={months_keep} will miss out different days in different years.')
+                          f'using months_keep={month_files} will miss out different days in different years.')
+        file_dates = get_exp_file_dates(exp_name, comp, archive_dir, hist_file)
+        year_files_all = np.unique(file_dates.dt.year).tolist()
+        if year_files is None:
+            year_files = year_files_all         # all possible years
+        else:
+            year_files = parse_int_list(year_files, format_func= lambda x: int(x))
+            years_request_missing = [x for x in year_files if x not in year_files_all]
+            if len(years_request_missing) > 0:
+                warnings.warn(f'The requested years = {years_request_missing}\n'
+                              f'are missing from the available years = {year_files_all}')
+        month_files_all = np.unique(file_dates.dt.month).tolist()
+        if month_files is None:
+            month_files = month_files_all       # all possible months
+        else:
+            month_files = parse_int_list(month_files, format_func= lambda x: int(x))
+            month_request_missing = [x for x in month_files if x not in month_files_all]
+            if len(month_request_missing) > 0:
+                warnings.warn(f'The requested months = {month_request_missing}\n'
+                              f'are missing from the available months = {month_files_all}')
+
+        file_ind_keep = [i for i in range(file_dates.size) if (file_dates.dt.year[i] in year_files)
+                         and (file_dates.dt.month[i] in month_files)]
+        if len(file_ind_keep) == 0:
+            raise ValueError(f'No files with requested years and months in file name\n'
+                             f'Available years: {np.unique(file_dates.dt.year).tolist()}\n'
+                             f'Available months: {np.unique(file_dates.dt.month).tolist()}\n'
+                             f'Requested years: {year_files}\n'
+                             f'Requested months: {month_files}\n')
+
         # Only load in specific years and/or months
-        data_files_all = os.listdir(os.path.join(comp_dir, 'hist'))
+        data_files_all = os.listdir(exp_dir)
         # only keep files of correct format
         data_files_all = [file for file in data_files_all if
-                          fnmatch.fnmatch(file, f'{exp_name}.{comp_file}.h{hist_file}.*.nc')]
-
-        # Extract the year and month that each file points to
-        # If not h0 files, then files have time indicated in the name, hence the different indices used for non h0 files
-        file_year = np.asarray([int(file[-10-9*int(hist_file != 0):-6-9*int(hist_file != 0)])
-                                for file in data_files_all])
-        file_month = np.asarray([int(file[-5-9*int(hist_file != 0):-3-9*int(hist_file != 0)])
-                                 for file in data_files_all])
-
-        if year_last < 0:
-            year_last_use = year_last + np.max(file_year) + 1  # i.e. -1 changes to max(file_year)
-        else:
-            year_last_use = year_last
-        if year_first < 0:
-            year_first_use = year_first + np.max(file_year) + 1  # i.e. -1 changes to max(file_year)
-        else:
-            year_first_use = year_first
-
-        if year_first_use not in file_year:
-            raise ValueError(f'year_first={year_first_use} is not in available years: {file_year}')
-        if year_last_use not in file_year:
-            raise ValueError(f'year_last={year_last_use} is not in available years: {file_year}')
-
-        if months_keep is None:
-            months_keep = np.arange(1, 13)  # keep all months
-        else:
-            months_error = []
-            for month in months_keep:
-                if month not in months_keep:
-                    months_error.append(month)
-            if len(months_error) > 0:
-                raise ValueError(f'months={months_error} are not in available months: {file_month}')
-
-        data_files_load = [os.path.join(comp_dir, 'hist', file) for i, file in enumerate(data_files_all) if
-                           year_last_use >= file_year[i] >= year_first_use and file_month[i] in months_keep]
+                          fnmatch.fnmatch(file, f'{exp_name}.{comp_id}.h{hist_file}.*.nc')]
+        # only keep files with requested years and months in file name
+        data_files_load = [os.path.join(exp_dir, file) for i, file in enumerate(data_files_all) if
+                           i in file_ind_keep]
     if logger:
         if isinstance(data_files_load, str):
             logger.info(f'Loading data from all files: {data_files_load}')
@@ -135,15 +114,106 @@ def load_dataset(exp_name: str, comp: str = 'atm',
     if apply_month_shift_fix and hist_file == 0:
         ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim=concat_dim,
                                combine=combine, chunks=chunks, parallel=parallel, preprocess=preprocess)
-        return ds_month_shift(ds, decode_times, months_keep)
+        return ds_month_shift(ds, decode_times)
     else:
         return xr.open_mfdataset(data_files_load, decode_times=decode_times,
                                  concat_dim=concat_dim, combine=combine, chunks=chunks, parallel=parallel,
                                  preprocess=preprocess)
 
 
-def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
-                   months_in_ds: Optional[List] = None) -> xr.Dataset:
+def get_exp_dir(exp_name: str, comp: str = 'atm', archive_dir: str = jasmin_archive_dir):
+    """
+
+    Args:
+        exp_name: Name of folder in `archive_dir` where data for this experiment was saved.
+        comp: Component of CESM to load data from.</br>
+            Options are:
+
+            * `atm`: atmosphere
+            * `ice`: ice
+            * `lnd`: land
+            * `rof`: river
+        archive_dir: Directory where CESM archive data saved.
+
+    Returns:
+
+    """
+    # LHS of comp_id_dict is name of directory containing hist files for the component
+    # RHS of comp_id_dict is the string indicating the component in the individual .nc files within this directory
+    comp_id_dict = {'atm': 'cam',  # atmosphere
+                    'ice': 'cice',  # ice
+                    'lnd': 'clm2',  # land
+                    'rof': 'mosart'}  # river
+    if comp not in comp_id_dict:
+        # Generate inverse dict to comp_id_dict
+        comp_id_dict_reverse = {key: list(comp_id_dict.keys())[i] for i, key in enumerate(comp_id_dict.values())}
+        if comp in comp_id_dict_reverse:
+            # Deal with case where give comp_file not comp_dir i.e. 'cam' rather than 'atm'
+            comp_dir = os.path.join(archive_dir, exp_name, comp_id_dict_reverse[comp])
+            comp_id = comp
+        else:
+            raise ValueError(f'comp must be one of {list(comp_id_dict.keys())} but got {comp}')
+    else:
+        comp_dir = os.path.join(archive_dir, exp_name, comp)
+        comp_id = comp_id_dict[comp]
+    return os.path.join(comp_dir, 'hist'), comp_id
+
+def parse_cesm_datetime(time_str) -> datetime:
+    """
+    Given a time string in the form either 'YYYY-MM' or 'YYYY-MM-DD-sssss' where `sssss` are the seconds since midnight,
+    this will return the datetime object corresponding to that time.
+
+    Args:
+        time_str: String to convert to datetime object.
+
+    Returns:
+        Datetime object corresponding to `time_str`.
+    """
+    date_part = time_str[:10]               # 'YYYY-MM-DD'
+    if len(date_part) == 7:
+        return datetime.strptime(date_part, '%Y-%m')
+    else:
+        seconds_since_midnight = int(time_str[11:])  # e.g., 00000 → 0 seconds, 04320 → 01:12:00 (1 hour, 12 minutes)
+        base_date = datetime.strptime(date_part, '%Y-%m-%d')
+        return base_date + timedelta(seconds=seconds_since_midnight)
+
+
+def get_exp_file_dates(exp_name: str, comp: str = 'atm', archive_dir: str = jasmin_archive_dir,
+                       hist_file: int = 0) -> xr.DataArray:
+    """
+    Get dates indicated in file names of a particular experiment.
+
+    Args:
+        exp_name: Name of folder in `archive_dir` where data for this experiment was saved.
+        comp: Component of CESM to load data from.</br>
+            Options are:
+
+            * `atm`: atmosphere
+            * `ice`: ice
+            * `lnd`: land
+            * `rof`: river
+        archive_dir: Directory where CESM archive data saved.
+        hist_file: Which history file to load, `0` is the default monthly averaged data set.
+
+    Returns:
+        DataArray of dates indicated in file names of `exp_name`.
+    """
+    exp_dir, comp_id = get_exp_dir(exp_name, comp, archive_dir)
+    # Only load in specific years and/or months
+    data_files_all = os.listdir(exp_dir)
+    # only keep files of correct format
+    file_dates = []
+    for file in data_files_all:
+        date = re.search(rf'h{hist_file}\.(.*?)\.nc', file)
+        if not date:
+            continue
+        file_dates.append(parse_cesm_datetime(date.group(1)))
+
+    return xr.DataArray(np.array(file_dates, dtype='datetime64[D]'), dims="time", name="time")
+
+
+
+def ds_month_shift(ds: xr.Dataset, decode_times: bool = True) -> xr.Dataset:
     """
     When loading CESM data, for some reason the first month is marked as February, so this function
     shifts the time variable to correct it to January.
@@ -152,17 +222,13 @@ def ds_month_shift(ds: xr.Dataset, decode_times: bool = True,
         ds: Dataset to apply the shift to.
             It should have been loaded with `decode_times=False`.
         decode_times: If `True`, will convert time to actual date.
-        months_in_ds: List of months which are in `ds` for each year.
-            `1` refers to January.
-            If `None`, will assume there are all 12 months.
 
     Returns:
         Dataset with first months shifted by -1 so now first month is January.
     """
     n_day_month = np.asarray(
         [cftime.DatetimeNoLeap(1, i + 1, 1).daysinmonth for i in range(12)])  # number of days in each month
-    if months_in_ds is None:
-        months_in_ds = np.arange(1, 13)
+    months_in_ds = np.arange(1, 13)                             # TODO may have to get months from ds e.g. ds.time.dt.month
     n_day_month = n_day_month[np.asarray(months_in_ds) - 1]
     n_months_in_ds = ds.time.size
     n_years_in_ds = int(np.floor(n_months_in_ds / 12))
