@@ -23,8 +23,8 @@ def load_dataset(exp_name: str, comp: str = 'atm',
                  decode_times: bool = True,
                  parallel: bool = False,
                  preprocess: Optional[Callable] = None,
-                 year_files: Optional[Union[int, List]] = None,
-                 month_files: Optional[List] = None,
+                 year_files: Optional[Union[int, List, str]] = None,
+                 month_files: Optional[Union[int, List, str]] = None,
                  apply_month_shift_fix: bool = True,
                  logger: Optional[logging.Logger] = None) -> xr.Dataset:
     """
@@ -50,8 +50,15 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         parallel: Whether parallel loading is performed.
         preprocess: Function to preprocess the data before loading.
         decode_times: If `True`, will convert time to actual date.
-        year_files: Only files with these years in their name will be loaded. Leave as `None` to load all years.
-        month_files: Only months with these months in their names will be loaded. Leave as `None` to load all months.
+        year_files: Only files with these years in their name will be loaded. Leave as `None` to load all years.</br>
+            As well as integer or list of integers, there are three string options:
+            * `'1975:1979'` will load in all years between 1975 and 1979 inclusive.
+            * `first5` will load in the first 5 years.
+            * `last5` will load in the last 5 years.
+        month_files: Only files with these months (1 is Jan) in their names will be loaded.
+            Leave as `None` to load all months.</br>
+            As well as integer or list of integers, there are three is a single string option:
+            `'2:5'` will load in all months between 2 and 5 inclusive.
         apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset.</br>
             Only used for monthly averaged data i.e. `hist_file=0`.
         logger: Optional logger.
@@ -73,6 +80,20 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         if year_files is None:
             year_files = year_files_all         # all possible years
         else:
+            if isinstance(year_files, str):
+                # Can specify just first or last n years
+                if re.search(r'^first(\d+)', year_files):
+                    n_years_req = int( re.search(r'^first(\d+)', year_files).group(1))
+                    if n_years_req > len(year_files_all):
+                        warnings.warn(f"year_files={year_files} but there are only "
+                                      f"{len(year_files_all)} years available:\n{year_files_all}")
+                    year_files = year_files_all[:n_years_req]
+                elif re.search(r'^last(\d+)', year_files):
+                    n_years_req = int( re.search(r'^last(\d+)', year_files).group(1))
+                    if n_years_req > len(year_files_all):
+                        warnings.warn(f"year_files={year_files} but there are only "
+                                      f"{len(year_files_all)} years available:\n{year_files_all}")
+                    year_files = year_files_all[-n_years_req:]
             year_files = parse_int_list(year_files, format_func= lambda x: int(x))
             years_request_missing = [x for x in year_files if x not in year_files_all]
             if len(years_request_missing) > 0:
