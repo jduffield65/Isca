@@ -149,15 +149,13 @@ def main(input_file_path: str):
 
     # Loop through and get quantile info at each latitude and surface
     for i in range(n_lat):
+        time_log = {'load': 0, 'calc': 0, 'start': time.time()}
         for k in range(n_lon):
-            time_log = {'load': 0, 'calc': 0, 'start': time.time()}
+            time_log['start'] = time.time()
             ds_latlon = ds.isel(lat=i, lon=k, drop=True)
             if not script_info['load_all_at_start']:
                 ds_latlon.load()
             time_log['load'] += time.time() - time_log['start']
-
-            time_log['start'] = time.time()
-
             time_log['start'] = time.time()
             for j in range(n_quant):
                 # get indices corresponding to given near-surface temp quantile
@@ -183,9 +181,9 @@ def main(input_file_path: str):
             time_log['calc'] += time.time() - time_log['start']
             # if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
             # # Log info on 1st, last and every 10th latitude
-            logger.info(f"Latitude {i + 1}/{n_lat} | Longitude {k + 1}/{n_lon}: Loading took {time_log['load']:.1f}s |"
-                        f" Calculation took {time_log['calc']:.1f}s | "
-                        f"Memory used {get_memory_usage() / 1000:.1f}GB")
+        logger.info(f"Latitude {i + 1}/{n_lat} | Loading took {time_log['load']:.1f}s |"
+                    f" Calculation took {time_log['calc']:.1f}s | "
+                    f"Memory used {get_memory_usage() / 1000:.1f}GB")
 
     # Convert output dict into xarray dataset
     # Convert individual arrays
