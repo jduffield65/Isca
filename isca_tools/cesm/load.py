@@ -80,21 +80,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         if year_files is None:
             year_files = year_files_all         # all possible years
         else:
-            if isinstance(year_files, str):
-                # Can specify just first or last n years
-                if re.search(r'^first(\d+)', year_files):
-                    n_years_req = int( re.search(r'^first(\d+)', year_files).group(1))
-                    if n_years_req > len(year_files_all):
-                        warnings.warn(f"year_files={year_files} but there are only "
-                                      f"{len(year_files_all)} years available:\n{year_files_all}")
-                    year_files = year_files_all[:n_years_req]
-                elif re.search(r'^last(\d+)', year_files):
-                    n_years_req = int( re.search(r'^last(\d+)', year_files).group(1))
-                    if n_years_req > len(year_files_all):
-                        warnings.warn(f"year_files={year_files} but there are only "
-                                      f"{len(year_files_all)} years available:\n{year_files_all}")
-                    year_files = year_files_all[-n_years_req:]
-            year_files = parse_int_list(year_files, format_func= lambda x: int(x))
+            year_files = parse_int_list(year_files, format_func=lambda x: int(x), all_values=year_files_all)
             years_request_missing = [x for x in year_files if x not in year_files_all]
             if len(years_request_missing) > 0:
                 warnings.warn(f'The requested years = {years_request_missing}\n'

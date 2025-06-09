@@ -109,7 +109,7 @@ def anom_from_annual_mean(ds: Dataset, combine_lon: bool = False, n_year_days: i
     return ds.groupby('day_of_year') - ds_annual_mean
 
 
-def lat_lon_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Dataset:
+def lat_lon_coord_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Dataset:
     """
     Returns dataset, `ds`, keeping only data at the coordinate indicated by `(lat[i], lon[i])` for all `i`.
 
@@ -195,3 +195,43 @@ def time_rolling(ds: Union[Dataset, DataArray], window_time: int, wrap: bool = T
         return ds_roll.isel(time=slice(window_time, -window_time))  # remove the padded time values
     else:
         return ds.rolling(time=window_time, center=True).mean()
+
+
+def lat_lon_range_slice(ds: Union[Dataset, DataArray], lat_min: Optional[float] = None,
+                        lat_max: Optional[float] = None, lon_min: Optional[float] = None,
+                        lon_max: Optional[float] = None):
+    """
+
+    Args:
+        ds:
+        lat_min:
+        lat_max:
+        lon_min:
+        lon_max:
+
+    Returns:
+
+    """
+    if (lon_min is None) and lon_max is None:
+        lon_range = None
+    else:
+        if lon_max is None:
+            raise ValueError('lon_max is required')
+        if lon_min is None:
+            raise ValueError('lon_min is required')
+        lon_range = slice(lon_min, lon_max)
+
+    if (lat_min is None) and (lat_max is None):
+        lat_range = None
+    else:
+        if lat_max is None:
+            raise ValueError('lat_max is required')
+        if lat_min is None:
+            raise ValueError('lat_min is required')
+        lat_range = slice(lat_min, lat_max)
+
+    if lat_range is not None:
+        ds = ds.sel(lat=lat_range)
+    if lon_range is not None:
+        ds = ds.sel(lon=lon_range)
+    return ds

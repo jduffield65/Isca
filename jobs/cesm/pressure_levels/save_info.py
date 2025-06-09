@@ -4,41 +4,17 @@ import logging
 import os
 import xarray as xr
 from isca_tools import cesm
-from isca_tools.utils.base import parse_int_list, get_memory_usage, split_list_max_n, print_log, run_func_loop
+from isca_tools.utils.base import parse_int_list, get_memory_usage, print_log, run_func_loop
 from isca_tools.utils import set_attrs
 from geocat.comp.interpolation import interp_hybrid_to_pressure
 import sys
 import f90nml
 import inspect
+from isca_tools.utils.ds_slicing import lat_lon_range_slice
+
 # Set up logging configuration to output to console and don't output milliseconds, and stdout so saved to out file
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
-
-
-def ds_lat_lon_slice(ds, lat_min, lat_max, lon_min, lon_max):
-    if (lon_min is None) and lon_max is None:
-        lon_range = None
-    else:
-        if lon_max is None:
-            raise ValueError('lon_max is required')
-        if lon_min is None:
-            raise ValueError('lon_min is required')
-        lon_range = slice(lon_min, lon_max)
-
-    if (lat_min is None) and (lat_max is None):
-        lat_range = None
-    else:
-        if lat_max is None:
-            raise ValueError('lat_max is required')
-        if lat_min is None:
-            raise ValueError('lat_min is required')
-        lat_range = slice(lat_min, lat_max)
-
-    if lat_range is not None:
-        ds = ds.sel(lat=lat_range)
-    if lon_range is not None:
-        ds = ds.sel(lon=lon_range)
-    return ds
 
 
 def process_year(exp_name, archive_dir, out_dir: str, var: Union[str, List],
@@ -70,7 +46,7 @@ def process_year(exp_name, archive_dir, out_dir: str, var: Union[str, List],
     # Load dataset for given year
     ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=hist_file, comp='atm',
                            year_files=year, logger=logger)[var]
-    ds = ds_lat_lon_slice(ds, lat_min, lat_max, lon_min, lon_max)
+    ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
 
     print_log(f'Year {year} - lazy loaded | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
     if load_all_at_start:
