@@ -75,18 +75,17 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: str, surf_geopotent
     ds_plev = ds_plev.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
     logger.info('Loaded pressure-level data')
 
-    # Get surface geopotential height
+    # PHIS is the geopotential at the surface, so to get Z at reference height, divide by g and add 2
     ds_z2m = xr.open_dataset(surf_geopotential_file)[['PHIS']]
-    ds_z2m['ZREFHT'] = ds_z2m['PHIS'] / g + 2               # PHIS is geopotential in m2/s2 so need to convert
+    z_refht = 2   # reference height is at 2m
+    ds_z2m['ZREFHT'] = ds_z2m['PHIS'] / g + z_refht               # PHIS is geopotential in m2/s2 so need to convert
     del ds_z2m['PHIS']
 
     ds_z2m = ds_z2m.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
     set_attrs(ds_z2m.ZREFHT, long_name=ds_plev.Z3.long_name, units=ds_plev.Z3.units)
     logger.info('Loaded surface geopotential')
 
-    # PHIS is the geopotential at the surface, so to get Z at reference height, divide by g and add 2
-    z_refht = 2   # reference height is at 2m
-    return xr.merge([ds_surf, ds_land, ds_plev, ds_z2m / g + z_refht])
+    return xr.merge([ds_surf, ds_land, ds_plev, ds_z2m])
 
 
 def main(input_file_path: str):
@@ -123,7 +122,8 @@ def main(input_file_path: str):
     # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
     n_quant = len_safe(script_info['quant'])
     output_info = {var: np.full((n_quant, n_lat, n_lon), np.nan, dtype=float) for var in
-                   ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse', 'SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3']}
+                   ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse', 'SOILLIQ', 'PS', 'TREFHT', 'QREFHT',
+                    'T', 'Z3', 'Q']}
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
         output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
@@ -169,7 +169,7 @@ def main(input_file_path: str):
                 ds_use = ds_latlon.where(quant_mask)
                 output_info['use_in_calc'][j, i, k] = quant_mask
                 var_use = {}
-                for var in ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3']:
+                for var in ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3', 'Q']:
                     var_use[var] = ds_use[var]
                 var_use['rh_refht'] = ds_use.QREFHT / sphum_sat(ds_use.TREFHT, ds_use.PS)
                 var_use['mse_refht'] = moist_static_energy(ds_use.TREFHT, ds_use.QREFHT, ds_use.ZREFHT)
