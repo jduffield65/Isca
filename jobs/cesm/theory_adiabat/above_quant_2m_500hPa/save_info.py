@@ -123,26 +123,17 @@ def main(input_file_path: str):
     n_quant = len_safe(script_info['quant'])
     output_info = {var: np.full((n_quant, n_lat, n_lon), np.nan, dtype=float) for var in
                    ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse', 'SOILLIQ', 'PS', 'TREFHT', 'QREFHT',
-                    'T', 'Z3', 'Q']}
+                    'T', 'Z3']}
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
         output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
     output_info['use_in_calc'] = np.zeros((n_quant, n_lat, ds.lon.size, ds.time.size), dtype=bool)
-    # output_info['lon_most_common'] = np.zeros((n_surf, n_quant, n_lat))
-    # output_info['lon_most_common_freq'] = np.zeros((n_surf, n_quant, n_lat), dtype=int)
-    # output_info['n_grid_points'] = np.zeros((n_surf, n_lat), dtype=int)  # number of grid points used at each location
-    # Record approx number of days used in quantile calculation. If quant_range=0.5 and 1 year used, this is just 0.01*365=3.65
-    # n_days_quant = get_quant_ind(np.arange(ds.time.size * n_lat), quant_use[0], quant_range,
-    #                                             quant_range).size / n_lat
 
     coords = {'quant': np.array(script_info['quant'], ndmin=1),
               'lat': ds.lat, 'lon': ds.lon, 'time': ds.time}
 
     # Coordinate info to convert to xarray datasets
     output_dims = {var: ['quant', 'lat', 'lon'] for var in output_info}
-    # for var in ['T', 'Q', 'Z3']:
-    #     output_dims[var] = ['quant', 'lat', 'lon', 'lev']
-    #     output_dims[var + '_std'] = ['quant', 'lat', 'lon', 'lev']
     output_dims['use_in_calc'] = ['quant', 'lat', 'lon', 'time']
 
     logger.info(f"Starting iteration over {n_lat} latitudes, {n_lon} longitudes, and {n_quant} quantiles")
@@ -169,7 +160,7 @@ def main(input_file_path: str):
                 ds_use = ds_latlon.where(quant_mask)
                 output_info['use_in_calc'][j, i, k] = quant_mask
                 var_use = {}
-                for var in ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3', 'Q']:
+                for var in ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3']:
                     var_use[var] = ds_use[var]
                 var_use['rh_refht'] = ds_use.QREFHT / sphum_sat(ds_use.TREFHT, ds_use.PS)
                 var_use['mse_refht'] = moist_static_energy(ds_use.TREFHT, ds_use.QREFHT, ds_use.ZREFHT)

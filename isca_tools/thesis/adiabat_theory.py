@@ -54,7 +54,7 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
 
 
 def get_temp_adiabat(temp_surf: Union[float, np.ndarray], sphum_surf: Union[float, np.ndarray],
-                     pressure_surf: float, pressure_ft: float,
+                     pressure_surf: Union[float, np.ndarray], pressure_ft: Union[float, np.ndarray],
                      guess_temp_adiabat: float = 273, epsilon: Union[float, np.ndarray] = 0) -> Union[float, np.ndarray]:
     """
     This returns the adiabatic temperature at `pressure_ft`, $T_{A, FT}$, such that surface moist static
@@ -69,9 +69,9 @@ def get_temp_adiabat(temp_surf: Union[float, np.ndarray], sphum_surf: Union[floa
         sphum_surf:
             Specific humidity at `pressure_surf` in *kg/kg*. If array, must be same size as `temp_surf`
         pressure_surf:
-            Pressure at near-surface in *Pa*.
+            Pressure at near-surface in *Pa*. Either single value or one for each `temp_surf`.
         pressure_ft:
-            Pressure at free troposphere level in *Pa*.
+            Pressure at free troposphere level in *Pa*. Either single value or one for each `temp_surf`.
         guess_temp_adiabat:
             Initial guess for what adiabatic temperature at `pressure_ft` should be.
         epsilon:

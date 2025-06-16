@@ -290,11 +290,13 @@ def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Unio
 def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_ref: np.ndarray,
                             r_quant: np.ndarray, temp_ft_quant: np.ndarray,
                             epsilon_quant: np.ndarray,
-                            pressure_surf: float, pressure_ft: float,
+                            pressure_surf_ref: float, pressure_ft_ref: float,
                             epsilon_ref: Optional[np.ndarray] = None,
                             z_approx_ref: Optional[np.ndarray] = None,
                             include_non_linear: bool = False,
-                            cape_form: bool = False) -> Tuple[np.ndarray, dict, dict, dict]:
+                            cape_form: bool = False,
+                            pressure_surf_quant: Optional[np.ndarray] = None,
+                            pressure_ft_quant: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict, dict, dict]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
     to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by:
@@ -390,10 +392,10 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         epsilon_quant: `float [n_exp, n_quant]` $\epsilon[x]$</br>
             `epsilon_quant[i, j]` is $\epsilon = h_s - h^*_{FT}$, averaged over all days with near-surface temperature
              corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kJ/kg*.
-        pressure_surf:
-            Pressure at near-surface, $p_s$, in *Pa*.
-        pressure_ft:
-            Pressure at free troposphere level, $p_{FT}$, in *Pa*.
+        pressure_surf_ref:
+            Pressure at near-surface for reference day, $p_s$, in *Pa*.
+        pressure_ft_ref:
+            Pressure at free troposphere level for reference day, $p_{FT}$, in *Pa*.
         epsilon_ref: `float [n_exp]` $\\tilde{\epsilon}_s$</br>
             Reference value of $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE and
             $h^*_{FT}$ is saturated MSE at `pressure_ft`. If not given, weill set to 0. Units: *kJ/kg*.
@@ -412,6 +414,12 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         cape_form: If `True`, scaling factor is in $CAPE$ rather than $\epsilon$ form, so a single `cape_anom_change`
             value returned in all dictionaries, instead of the `epsilon_change` and `epsilon_anom` values.
             `scale_factor` will also be adjusted to reflect this form.
+        pressure_surf_quant: `float [n_exp, n_quant]` $p_s[x]$</br>
+            To compute $CAPE$, require surface pressure conditioned on $x$ days. If not given, will assume same
+            as `pressure_surf_ref`. Only required if `cape_form=True`.
+        pressure_ft_quant: `float [n_exp, n_quant]` $p_s[x]$</br>
+            To compute $CAPE$, require FT pressure conditioned on $x$ days. If not given, will assume same
+            as `pressure_ft_ref`. Only required if `cape_form=True`.
 
     Returns:
         scale_factor: `float [n_quant]`</br>
@@ -442,10 +450,10 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     n_exp, n_quant = temp_surf_quant.shape
     if epsilon_ref is None:
         epsilon_ref = np.zeros(n_exp)
-    gamma = get_sensitivity_factors(temp_surf_ref, r_ref, pressure_surf, pressure_ft, epsilon_ref, z_approx_ref,
+    gamma = get_sensitivity_factors(temp_surf_ref, r_ref, pressure_surf_ref, pressure_ft_ref, epsilon_ref, z_approx_ref,
                                     cape_form)
-    sphum_ref = r_ref * sphum_sat(temp_surf_ref, pressure_surf)
-    R_mod, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf_ref, pressure_surf, pressure_ft,
+    sphum_ref = r_ref * sphum_sat(temp_surf_ref, pressure_surf_ref)
+    R_mod, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf_ref, pressure_surf_ref, pressure_ft_ref,
                                                                       sphum_ref)
     temp_surf_ref_change = np.diff(temp_surf_ref, axis=0).squeeze()
     # Get non-dimensional variables which multiply gamma
@@ -461,11 +469,13 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         for i in range(n_exp):
             if epsilon_ref[i] != 0: # if epsilon_ref=0, then cape_ref=0 too
                 # For ref, don't have temp_ft so compute from z_approx and epsilon
-                cape_ref[i] = get_cape_approx(temp_surf_ref[i], r_ref[i], pressure_surf, pressure_ft,
+                cape_ref[i] = get_cape_approx(temp_surf_ref[i], r_ref[i], pressure_surf_ref, pressure_ft_ref,
                                               epsilon=epsilon_ref[i], z_approx=z_approx_ref[i])[0]
             # For quant, don't have z_approx so compute from temp_ft and epsilon
-            cape_quant[i] = get_cape_approx(temp_surf_quant[i], r_quant[i], pressure_surf, pressure_ft,
-                                               epsilon=epsilon_quant[i], temp_ft=temp_ft_quant[i])[0]
+            cape_quant[i] = get_cape_approx(temp_surf_quant[i], r_quant[i],
+                                            pressure_surf_ref if pressure_surf_quant is None else pressure_surf_quant[i],
+                                            pressure_ft_ref if pressure_ft_quant is None else pressure_ft_quant[i],
+                                            epsilon=epsilon_quant[i], temp_ft=temp_ft_quant[i])[0]
         info_var['cape_change'] = np.diff(cape_quant, axis=0).squeeze()*1000 / R_mod / temp_surf_ref_change
     else:
         info_var['epsilon_change'] = np.diff(epsilon_quant, axis=0).squeeze()*1000/c_p/temp_surf_ref_change
@@ -482,7 +492,7 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     if include_non_linear:
         # Add non-linear terms
         approx_var = get_approx_terms(temp_surf_ref, temp_surf_quant, r_ref, r_quant, temp_ft_quant,
-                                      epsilon_quant, pressure_surf, pressure_ft, epsilon_ref,
+                                      epsilon_quant, pressure_surf_ref, pressure_ft_ref, epsilon_ref,
                                       z_approx_ref, simple=True, cape_form=cape_form)[0]
         for key in ['temp_ft_anom_change', 'r_change', 'anom_temp_s_r']:
             info_cont['nl_'+key] = approx_var[key]
