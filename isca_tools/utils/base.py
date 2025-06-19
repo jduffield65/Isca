@@ -194,3 +194,36 @@ def parse_int_list(value: Union[str, int, List], format_func: Callable = lambda 
     else:
         raise ValueError(f"Unsupported format: {value}")
     return [format_func(i) for i in value]
+
+
+def round_any(x: Union[float, np.ndarray], base: float, round_type: str = 'round') -> Union[float, np.ndarray]:
+    """
+    Rounds `x` to the nearest multiple of `base` with the rounding done according to `round_type`.
+
+    Args:
+        x: Number or array to round.
+        base: Rounds `x` to nearest integer multiple of value of `base`.
+        round_type: One of the following, indicating how to round `x` -
+
+            - `'round'`
+            - `'ceil'`
+            - `'float'`
+
+    Returns:
+        Rounded version of `x`.
+
+    Example:
+        ```
+        round_any(3, 5) = 5
+        round_any(3, 5, 'floor') = 0
+        ```
+    """
+    if round_type == 'round':
+        return base * np.round(x / base)
+    elif round_type == 'ceil':
+        return base * np.ceil(x / base)
+    elif round_type == 'floor':
+        return base * np.floor(x / base)
+    else:
+        raise ValueError(f"round_type specified was {round_type} but it should be one of the following:\n"
+                         f"round, ceil, floor")

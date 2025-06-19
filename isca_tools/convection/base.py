@@ -1,7 +1,9 @@
-from typing import Union, Optional
+from typing import Union, Optional, Tuple
 import numpy as np
 import numpy_indexed
 from scipy.integrate import odeint
+import metpy
+import xarray as xr
 from ..utils.constants import lapse_dry, L_v, R, epsilon, c_p, g, kappa, R_v
 from ..utils.moist_physics import saturation_vapor_pressure, mixing_ratio_from_partial_pressure, \
     mixing_ratio_from_sphum, sphum_sat, rh_from_sphum
@@ -22,6 +24,50 @@ def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
         Temperature of *LCL* in *Kelvin*.
     """
     return 1 / (1/(temp_surf-55) - np.log(rh_surf/100)/2840) + 55
+
+
+def lcl_metpy(temp_2m: xr.DataArray, sphum_2m: xr.DataArray,
+              pressure_surf: xr.DataArray) -> Tuple[xr.DataArray, xr.DataArray]:
+    """
+    Returns the pressure and temperature of the lifting condensation level, LCL.
+
+    Args:
+        temp_2m: Near-surface (2m) air temperature in *Kelvin*.
+        sphum_2m: Near-surface (2m) specific humidity in *kg/kg*.
+        pressure_surf: Surface pressure in *Pa*.
+
+    Returns:
+        p_lcl: LCL pressure in *Pa*.
+        temp_lcl: LCL temperature in *Kelvin*.
+    """
+    # Extract and convert to units
+    q = sphum_2m.values * metpy.units.units('kg/kg')
+    T = temp_2m.values * metpy.units.units.kelvin
+    P = pressure_surf.values  * metpy.units.units.pascal
+
+    # Calculate dewpoint from mixing ratio
+    dewpoint = metpy.calc.dewpoint_from_specific_humidity(P, q)
+    lcl_pressure, lcl_temperature = metpy.calc.lcl(P, T, dewpoint)
+    dims = temp_2m.dims
+    coords = temp_2m.coords
+
+    # Convert MetPy Quantities to numpy arrays and units to attributes
+    lcl_pressure_xr = xr.DataArray(
+        data=lcl_pressure.magnitude,
+        dims=dims,
+        coords=coords,
+        name='lcl_pressure',
+        attrs={'units': str(lcl_pressure.units), 'long_name': 'LCL pressure'}
+    )
+
+    lcl_temperature_xr = xr.DataArray(
+        data=lcl_temperature.magnitude,
+        dims=dims,
+        coords=coords,
+        name='lcl_temperature',
+        attrs={'units': str(lcl_temperature.units), 'long_name': 'LCL temperature'}
+    )
+    return lcl_pressure_xr, lcl_temperature_xr
 
 
 def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray],

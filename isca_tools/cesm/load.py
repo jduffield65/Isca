@@ -9,9 +9,13 @@ import logging
 import re
 from datetime import datetime, timedelta
 from ..utils.base import parse_int_list
+from isca_tools.utils.constants import g
+from isca_tools.utils.xarray import set_attrs
 
 jasmin_archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'
 local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
+jasmin_surf_geopotential_file = ('/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/cesm_inputdata/atm/cam/topo/'
+                                 'fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc')
 
 
 def load_dataset(exp_name: str, comp: str = 'atm',
@@ -266,3 +270,26 @@ def select_months(ds: xr.Dataset, month_nh: List[int], month_sh: Optional[List[i
         mask_sh = (ds.lat < 0) & (ds.time.dt.month.isin(month_sh))
         mask = mask_nh | mask_sh
     return ds.where(mask)
+
+
+def load_z2m(surf_geopotential_file: str = jasmin_surf_geopotential_file,
+             var_reindex_like: Optional[xr.DataArray] = None) -> xr.DataArray:
+    """
+    Returns 2m geopotential height for CESM simulation.
+
+    Args:
+        surf_geopotential_file: File location of input data containing the geopotential at the surface: `PHIS`.
+        var_reindex_like: Can provide a variable so `z2m` will have the same lat-lon as this variable.
+
+    Returns:
+        2m geopotential height in units of meters.
+    """
+    # PHIS is the geopotential at the surface, so to get Z at reference height, divide by g and add 2
+    ds_z2m = xr.open_dataset(surf_geopotential_file)[['PHIS']]
+    z_refht = 2   # reference height is at 2m
+    ds_z2m['ZREFHT'] = ds_z2m['PHIS'] / g + z_refht               # PHIS is geopotential in m2/s2 so need to convert
+    del ds_z2m['PHIS']
+    if var_reindex_like is not None:
+        ds_z2m = ds_z2m.reindex_like(var_reindex_like, method="nearest", tolerance=0.01)
+    ds_z2m = set_attrs(ds_z2m.ZREFHT, long_name='Geopotential height at reference height (2m)', units='m')
+    return ds_z2m
