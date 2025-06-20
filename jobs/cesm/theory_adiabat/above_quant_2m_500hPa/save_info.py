@@ -24,14 +24,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
                     stream=sys.stdout)
 
 
-def load_raw_data(exp_name: str, archive_dir: str, plev_dir: str, surf_geopotential_file: str,
+def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], surf_geopotential_file: str,
                   year_files: Optional[Union[int, List, str]] = None,
                   lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                   lat_min: Optional[float] = None, lat_max: Optional[float] = None,
                   chunks_time: Optional[int] = None, chunks_lat: Optional[int] = None, chunks_lon: Optional[int] = None,
                   load_parallel: bool = False, logger: Optional[logging.Logger] = None):
     var_surf = ['TREFHT', 'QREFHT', 'PS']
-    var_plev = ['T', 'Z3']
 
     def preprocess_land(ds):
         # Only 2 variables, and sum over all soil levels
@@ -59,20 +58,24 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: str, surf_geopotent
     # re-index so lat align - otherwise get issues because lat slightly different
     ds_land = ds_land.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
 
-    plev_path = os.path.join(archive_dir, exp_name, plev_dir)
-    if year_files is None:
-        ds_plev = xr.open_mfdataset(os.path.join(plev_path, '*.nc'))[var_plev]
-    else:
-        # Each file within directory is just the year (with 4 digits) followed by .nc
-        year_files_all = [int(var.replace('.nc', '')) for var in os.listdir(plev_path) if '.nc' in var]
-        # Get all years in files which are requested and in year_files_all
-        year_req0 = parse_int_list(year_files, format_func=lambda x: int(x), all_values=year_files_all)
-        year_req = [year_files_all[i] for i in range(len(year_files_all)) if year_files_all[i] in year_req0]
-        # Load in this dataset
-        ds_plev = xr.open_mfdataset([os.path.join(plev_path, f'{year:04d}.nc') for year in year_req])[var_plev]
-
-    # re-index so lat align - otherwise get issues because lat slightly different
-    ds_plev = ds_plev.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
+    if isinstance(plev_dir, str):
+        plev_dir = [plev_dir]
+    ds_plev = []
+    for dir in plev_dir:
+        plev_path = os.path.join(archive_dir, exp_name, dir)
+        if year_files is None:
+            ds_plev.append(xr.open_mfdataset(os.path.join(plev_path, '*.nc')))
+        else:
+            # Each file within directory is just the year (with 4 digits) followed by .nc
+            year_files_all = [int(var.replace('.nc', '')) for var in os.listdir(plev_path) if '.nc' in var]
+            # Get all years in files which are requested and in year_files_all
+            year_req0 = parse_int_list(year_files, format_func=lambda x: int(x), all_values=year_files_all)
+            year_req = [year_files_all[i] for i in range(len(year_files_all)) if year_files_all[i] in year_req0]
+            # Load in this dataset
+            ds_plev.append(xr.open_mfdataset([os.path.join(plev_path, f'{year:04d}.nc') for year in year_req]))
+        # re-index so lat align - otherwise get issues because lat slightly different
+        ds_plev[-1] = ds_plev[-1].reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
+    ds_plev = xr.merge(ds_plev)
     logger.info('Loaded pressure-level data')
 
     # PHIS is the geopotential at the surface, so to get Z at reference height, divide by g and add 2
@@ -121,9 +124,24 @@ def main(input_file_path: str):
     n_lon = ds.lon.size
     # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
     n_quant = len_safe(script_info['quant'])
+    vars_out_same_in = ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3',
+                        'p_lcl', 'T_lcl', 'Z3_lcl', 'p_at_lcl', 'T_at_lcl', 'Z3_at_lcl']
     output_info = {var: np.full((n_quant, n_lat, n_lon), np.nan, dtype=float) for var in
-                   ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse', 'SOILLIQ', 'PS', 'TREFHT', 'QREFHT',
-                    'T', 'Z3']}
+                   vars_out_same_in + ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse',
+                                       'lapse_below_lcl', 'lapse_above_lcl']}
+    # Record attribute info for output
+    output_long_name = {'rh_refht': 'Relative humidity at reference height (2m)',
+                       'mse_refht': 'Moist static energy at reference height (2m)',
+                       'mse_sat_ft': 'Saturated moist static energy at free troposphere level set by plev',
+                       'mse_lapse': 'mse_refht - mse_sat_ft averaged over days considering',
+                       'lapse_below_lcl': 'Lapse rate between REFHT (2m) and LCL',
+                       'lapse_above_lcl': 'Lapse rate between LCL and free troposphere level set by plev'}
+    output_units = {'rh_refht': 'Dimensionless', 'mse_refht': 'kJ/kg', 'mse_sat_ft': 'kJ/kg', 'mse_lapse': 'kJ/kg',
+                    'lapse_below_lcl': 'K/km', 'lapse_above_lcl': 'K/km'}
+    for var in vars_out_same_in:
+        output_long_name[var] = ds[var].long_name if 'long_name' in ds[var].attrs else ''
+        output_units[var] = ds[var].units if 'units' in ds[var].attrs else ''
+
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
         output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
@@ -160,12 +178,14 @@ def main(input_file_path: str):
                 ds_use = ds_latlon.where(quant_mask)
                 output_info['use_in_calc'][j, i, k] = quant_mask
                 var_use = {}
-                for var in ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3']:
+                for var in vars_out_same_in:
                     var_use[var] = ds_use[var]
                 var_use['rh_refht'] = ds_use.QREFHT / sphum_sat(ds_use.TREFHT, ds_use.PS)
                 var_use['mse_refht'] = moist_static_energy(ds_use.TREFHT, ds_use.QREFHT, ds_use.ZREFHT)
                 var_use['mse_sat_ft'] = moist_static_energy(ds_use.T, sphum_sat(ds_use.T, ds_use.plev), ds_use.Z3)
                 var_use['mse_lapse'] = var_use['mse_refht'] - var_use['mse_sat_ft']
+                var_use['lapse_below_lcl'] = (ds_use.T_at_lcl - ds_use.TREFHT) / (ds_use.ZREFHT - ds_use.Z3_at_lcl) * 1000  # *1000 so K/km
+                var_use['lapse_above_lcl'] = (ds_use.T - ds_use.T_at_lcl) / (ds_use.Z3_at_lcl - ds_use.Z3) * 1000
                 for key in var_use:
                     output_info[key][j, i, k] = var_use[key].mean(dim='time')
                     output_info[key + '_std'][j, i, k] = var_use[key].std(dim='time')
@@ -181,11 +201,16 @@ def main(input_file_path: str):
     for var in output_info:
         output_info[var] = xr.DataArray(output_info[var], dims=output_dims[var],
                                         coords={key: coords[key] for key in output_dims[var]})
+        if var == 'use_in_calc':
+            continue
+        output_info[var] = set_attrs(output_info[var], long_name=output_long_name[var.replace('_std','')],
+                                     units=output_units[var.replace('_std','')])
     # Add pressure level info to variables at single level
     for var in ['mse_sat_ft', 'mse_lapse', 'T', 'Z3']:
         output_info[var] = output_info[var].expand_dims(plev=ds.coords['plev'])
     # Convert dict to dataset
     ds_out = xr.Dataset(output_info)
+    ds_out = ds_out.astype('float32')           # save memory
 
     # Save output to nd2 file with compression - reduces size of file by factor of 10
     # Compression makes saving step slower

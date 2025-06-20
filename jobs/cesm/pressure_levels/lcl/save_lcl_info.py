@@ -72,10 +72,12 @@ def process_year(exp_name, archive_dir, out_dir: str,
     idx_lcl_closest = np.abs(plevs_expand - p_lcl).argmin(dim='plev')
     p_at_lcl = plevs_expand.isel(plev=idx_lcl_closest)          # approx pressure of LCL used
 
+    # Note that with extrapolate, will obtain values lower than surface
     T_at_plevs = interp_hybrid_to_pressure(data=ds['T'], ps=ds['PS'], hyam=hyam, hybm=hybm, p0=p0, new_levels=plevs,
                                            extrapolate=extrapolate, variable='other' if extrapolate else None)
     Z3_at_plevs = interp_hybrid_to_pressure(data=ds['Z3'], ps=ds['PS'], hyam=hyam, hybm=hybm, p0=p0, new_levels=plevs,
                                             extrapolate=extrapolate, variable='other' if extrapolate else None)
+    # TODO: Should set T and Z3 below surface to TREFHT and z2m respectively i.e. clipping Or extrapolate=False, so will set to nan
     del ds          # save memory by deleting dataset as no longer needed
     if load_all_at_start:
         T_at_plevs.load()
@@ -110,6 +112,9 @@ def process_year(exp_name, archive_dir, out_dir: str,
 
 
 def main(input_file_path: str):
+    logger = logging.getLogger()  # for printing to console time info
+    logger.info(f'Accessing input directory')
+
     # Run processing for all required years
     input_info = f90nml.read(input_file_path)
     script_info = input_info['script_info']
@@ -130,7 +135,6 @@ def main(input_file_path: str):
     func_arg_names = inspect.signature(process_year).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
 
-    logger = logging.getLogger()  # for printing to console time info
     logger.info(f'Years {years_consider} | Start')
     logger.info(f'Loading reference P0, hyam and hybm from Year {years_consider[0]} | Start')
     ds_ref = cesm.load_dataset(script_info['exp_name'], 'atm', script_info['archive_dir'],
