@@ -11,7 +11,7 @@ def get_bulk_lapse_rate(temp1: xr.DataArray, temp2: xr.DataArray, p1: Union[xr.D
     Compute the bulk environmental lapse rate, $\Gamma$, between pressure `p1` at environmental temperature `temp1`
     and `p2` at environmental temperature `temp2`:
 
-    $$\Gamma = \\frac{g}{R}\ln\\left(\\frac{T_1}{T_2}\\right)/\\left(\\frac{p_1}{p_2}\\right)$$
+    $$\Gamma = \\frac{g}{R}\ln\\left(\\frac{T_1}{T_2}\\right)/\ln\\left(\\frac{p_1}{p_2}\\right)$$
 
     This equation assumes hydrostatic equilibrium, ideal gas equation of state and that $\Gamma$ is constant
     between `p1` and `p2`.
@@ -36,7 +36,7 @@ def reconstruct_temp(temp3: xr.DataArray, p1: Union[xr.DataArray, float], p2: Un
     the lapse rate $\Gamma_{23}$, between $p_2$ and $p_3$; and the temperature at $p_3$, $T_3$:
 
     $$
-    T_1 = T_{3}\\left((\\frac{p_2}{p_1})^{\Gamma_{23}-\Gamma_{12}}(\\frac{p_3}{p_1})^{-\Gamma_{23}}\\right)^{R/g}$
+    T_1 = T_{3}\\left((\\frac{p_2}{p_1})^{\Gamma_{23}-\Gamma_{12}}(\\frac{p_3}{p_1})^{-\Gamma_{23}}\\right)^{R/g}
     $$
 
     Args:
