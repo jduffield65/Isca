@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from ..utils.base import parse_int_list
 from isca_tools.utils.constants import g
 from isca_tools.utils.xarray import set_attrs
+from xarray.coding.cftimeindex import CFTimeIndex
+from pandas._libs.tslibs.np_datetime import OutOfBoundsDatetime
 
 jasmin_archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'
 local_archive_dir = '/Users/joshduffield/Documents/StAndrews/Isca/cesm/archive/'
@@ -219,8 +221,12 @@ def get_exp_file_dates(exp_name: str, comp: str = 'atm', archive_dir: str = jasm
         if not date:
             continue
         file_dates.append(parse_cesm_datetime(date.group(1)))
-
-    return xr.DataArray(np.array(file_dates, dtype='datetime64[D]'), dims="time", name="time")
+    try:
+        return xr.DataArray(np.array(file_dates, dtype='datetime64[D]'), dims="time", name="time")
+    except OutOfBoundsDatetime as e:
+        warnings.warn(f"Got out of bounds error, re-trying with NoLeap Calendar and cftime\n{e}")
+        cftime_dates = [cftime.DatetimeNoLeap(dt.year, dt.month, dt.day) for dt in file_dates]
+        return xr.DataArray(CFTimeIndex(cftime_dates, calendar="noleap"), dims="time", name="time")
 
 
 
