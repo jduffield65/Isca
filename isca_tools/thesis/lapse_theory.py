@@ -57,7 +57,8 @@ def reconstruct_temp(temp3: xr.DataArray, p1: Union[xr.DataArray, float], p2: Un
 
 def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.DataArray, p_surf: xr.DataArray,
                            hyam: xr.DataArray, hybm: xr.DataArray, p0: float,
-                           plev_step: float = 1000, extrapolate: bool = False) -> xr.Dataset:
+                           plev_step: float = 1000, extrapolate: bool = False,
+                           lev_dim: str = 'lev') -> xr.Dataset:
     """
     Function to get the value of variable `var` at the pressure `p_desired`, where `p_desired` is expected to
     be a different value at each lat and lon.
@@ -75,6 +76,7 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.D
         plev_step: Will find var at value closest to `p_desired` on pressure grid with this spacing,
             so sets accuracy of interpolation.
         extrapolate: If True, below ground extrapolation for variable will be done, otherwise will return nan.
+        lev_dim: String that is the name of level dimension in input data.
 
     Returns:
         Dataset with `plev` indicating approximate value of `p_desired` used, as well as `var` interpolated
@@ -93,12 +95,12 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.D
     # Note that with extrapolate, will obtain values lower than surface
     if isinstance(var, xr.DataArray):
         var_out[var.name] = interp_hybrid_to_pressure(data=var, ps=p_surf, hyam=hyam, hybm=hybm, p0=p0,
-                                                      new_levels=plevs, extrapolate=extrapolate,
+                                                      new_levels=plevs, extrapolate=extrapolate, lev_dim=lev_dim,
                                                       variable='other' if extrapolate else None).isel(plev=idx_lcl_closest)
     elif isinstance(var, xr.Dataset):
         for key in var:
             var_out[key] = interp_hybrid_to_pressure(data=var[key], ps=p_surf, hyam=hyam, hybm=hybm, p0=p0,
-                                                     new_levels=plevs, extrapolate=extrapolate,
+                                                     new_levels=plevs, extrapolate=extrapolate, lev_dim=lev_dim,
                                                      variable='other' if extrapolate else None).isel(plev=idx_lcl_closest)
     else:
         raise ValueError('Unrecognized var. Needs to be a xr.DataArray or xr.Dataset.')

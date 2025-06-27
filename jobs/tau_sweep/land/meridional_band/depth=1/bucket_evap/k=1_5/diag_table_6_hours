@@ -1,0 +1,19 @@
+"FMS Model results"
+0001 1 1 0 0 0
+# = output files =
+# file_name, output_freq, output_units, format, time_units, long_name
+
+"atmos_6_hourly", 6, "hours", 1, "hours", "time",
+
+# = diagnostic field entries =
+# module_name, field_name, output_name, file_name, time_sampling, time_avg, other_opts, precision
+
+"dynamics", "height", "height", "atmos_6_hourly", "all", .true., "none", 2,
+"dynamics", "temp", "temp", "atmos_6_hourly", "all", .true., "none", 2,
+"dynamics", "ps", "ps", "atmos_6_hourly", "all", .true., "none", 2,
+"mixed_layer", "t_surf", "t_surf", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "precipitation", "precipitation", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "cape", "cape", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "cin", "cin", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "temp_2m", "temp_2m", "atmos_6_hourly", "all", .true., "none", 2,
+"atmosphere", "sphum_2m", "sphum_2m", "atmos_6_hourly", "all", .true., "none", 2,

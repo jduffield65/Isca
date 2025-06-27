@@ -3,6 +3,8 @@ import scipy.optimize
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 from ..utils.constants import c_p, L_v, R, g
 from typing import Tuple, Union, Optional
+import numbers
+
 
 
 def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: float,
@@ -81,7 +83,7 @@ def get_temp_adiabat(temp_surf: Union[float, np.ndarray], sphum_surf: Union[floa
     Returns:
         Adiabatic temperature at `pressure_ft` in Kelvin. If array, will be same size as `temp_surf` and `sphum_surf`.
     """
-    if isinstance(temp_surf, (int, float)):
+    if isinstance(temp_surf, numbers.Number):
         return scipy.optimize.fsolve(temp_adiabat_fit_func, guess_temp_adiabat,
                                      args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))
     elif isinstance(temp_surf, np.ndarray):
