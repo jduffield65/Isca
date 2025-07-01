@@ -4,18 +4,18 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/no_wishe/base'
+   name = 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/base_col'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/no_wishe/base_col'
    n_months_total = 180         ! Total duration of simulation in months.
    n_months_job = 180           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
+   n_cores = 1                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
-   partition = 'large-short'          ! Queue to submit job to (Slurm info).
+   partition = 'debug'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
-   max_walltime = '24:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
+   max_walltime = '2:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
 /
 
@@ -134,18 +134,26 @@
     domains_stack_size = 600000     ! default is 0
 /
 
-&spectral_dynamics_nml
-    damping_order = 4
-    water_correction_limit = 200.e2
-    reference_sea_level_press = 1.0e5
-    num_levels = 25                         ! How many pressure levels to use
+! Set column namelist to replicate spectral_dynamics_nml for previous experiments
+! column_nml does not allow for setting damping_order or water_correction_limit
+&column_nml
+    lon_max = 1                         ! All longitudes the same, so only consider 1 for speed
+    lat_max = 64                        ! Number of columns in latitude - same as T42 resolution
+    reference_sea_level_press = 1.0e5   ! This and below is just same value set in spectral_dynamics_nml for previous experiments
+    num_levels = 25                     ! How many pressure levels to use
     valid_range_t = 100.0, 800.0
     initial_sphum = 2e-06
-    vert_coord_option = 'input'             ! Use the vertical levels from Frierson 2006
+    vert_coord_option = 'input'         ! Use the vertical levels from Frierson 2006
     surf_res = 0.5
     scale_heights = 11.0
     exponent = 7.0
     robert_coeff = 0.03
+/
+
+&column_init_cond_nml
+    initial_temperature = 264           ! initial atmospheric temperature
+    surf_geopotential = 0
+    surface_wind = 10                   ! same as for no-WISHE
 /
 
 ! Specify vertical levels from Frierson 2006
