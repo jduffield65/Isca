@@ -26,6 +26,7 @@
     extrapolate = .true.        ! True means that if LCL below ground, set to ground value
     year_files =                ! Only consider files with these years in
     hist_file = 1               ! Which history file to load
+    refht_level_index =         ! Blank means using CESM REFHT, can also provide index to use as given model level index
     lat_min =                   ! leave None to consider all latitudes
     lat_max =
     lon_min =                   ! leave None to consider all longitudes

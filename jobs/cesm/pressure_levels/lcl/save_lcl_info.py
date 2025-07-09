@@ -8,6 +8,7 @@ from isca_tools.utils.base import parse_int_list, get_memory_usage, print_log, r
 from isca_tools.utils import set_attrs
 from isca_tools.convection.base import lcl_metpy
 from isca_tools.utils.constants import lapse_dry
+from isca_tools.thesis.lapse_theory import interp_var_at_pressure
 from geocat.comp.interpolation import interp_hybrid_to_pressure
 import sys
 import f90nml
@@ -19,9 +20,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
                     stream=sys.stdout)
 
 
-def process_year(exp_name, archive_dir, out_dir: str,
-                 surf_geopotential_file: str, year: int, hyam: xr.DataArray, hybm: xr.DataArray,
-                 p0: float, plev_step: float, extrapolate: bool = True, hist_file: int = 0,
+def process_year(exp_name, archive_dir, out_dir: str, surf_geopotential_file: str, year: int,
+                 hyam: xr.DataArray, hybm: xr.DataArray, p0: float, plev_step: float,
+                 refht_level_index: Optional[int] = None, extrapolate: bool = False, hist_file: int = 0,
                  lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                  lat_min: Optional[float] = None, lat_max: Optional[float] = None,
                  load_all_at_start: bool = True, overwrite: Optional[bool] = None, wait_interval: int = 20,
@@ -40,72 +41,58 @@ def process_year(exp_name, archive_dir, out_dir: str,
 
     # Load dataset for given year
     var = ['PS', 'TREFHT', 'QREFHT', 'T', 'Z3']
+    if refht_level_index is None:
+        var += ['TREFHT', 'QREFHT']
+    else:
+        var += ['Q']
     ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=hist_file, comp='atm',
                            year_files=year, logger=logger)[var]
-    z_2m = cesm.load.load_z2m(surf_geopotential_file, var_reindex_like=ds['PS'])
+    if refht_level_index is None:
+        ds['ZREFHT'] = cesm.load.load_z2m(surf_geopotential_file, var_reindex_like=ds['PS'])
+    else:
+        ds['QREFHT'] = ds.Q.isel(lev=refht_level_index)
+        ds = ds.drop_vars(['Q'])
+        ds['TREFHT'] = ds.T.isel(lev=refht_level_index)
+        ds['ZREFHT'] = ds.Z3.isel(lev=refht_level_index)
+        ds['PREFHT'] = cesm.get_pressure(ds.PS, p0, hyam.isel(lev=refht_level_index),
+                                         hybm.isel(lev=refht_level_index))
 
     ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
-    z_2m = lat_lon_range_slice(z_2m, lat_min, lat_max, lon_min, lon_max)
 
     print_log(f'Year {year} - lazy loaded | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
     if load_all_at_start:
         ds.load()
-        z_2m.load()
         print_log(f'Year {year} - fully loaded | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
 
     # Compute LCL
-    p_lcl, T_lcl = lcl_metpy(ds.TREFHT, ds.QREFHT, ds.PS)
-    Z3_lcl = z_2m + (ds.TREFHT - T_lcl) / lapse_dry
-    ds = ds.drop_vars(['TREFHT', 'QREFHT'])         # drop variables no longer need
-    del z_2m
+    p_lcl, T_lcl = lcl_metpy(ds.TREFHT, ds.QREFHT, ds.PS if refht_level_index is None else ds.PREFHT)
+    Z3_lcl = ds.ZREFHT + (ds.TREFHT - T_lcl) / lapse_dry
+    ds = ds.drop_vars(['QREFHT', 'TREFHT', 'ZREFHT'])         # drop variables no longer need
     p_lcl = set_attrs(p_lcl, long_name='Pressure of LCL', units='Pa')
     T_lcl = set_attrs(T_lcl, long_name='Temperature of LCL', units='K')
     Z3_lcl = set_attrs(Z3_lcl, long_name='Geopotential height of LCL', units='m')
 
-    plevs = np.arange(round_any(float(p_lcl.min()), plev_step, 'floor'),
-                      round_any(float(p_lcl.max()), plev_step, 'ceil')+plev_step/2, plev_step)
-    plevs_expand = xr.DataArray(
-        plevs,
-        dims=["plev"],
-        coords={"plev": np.arange(len(plevs))}
-    ).expand_dims(time=ds.time, lat=ds.lat, lon=ds.lon).transpose("time", "plev", "lat", "lon")
-    idx_lcl_closest = np.abs(plevs_expand - p_lcl).argmin(dim='plev')
-    p_at_lcl = plevs_expand.isel(plev=idx_lcl_closest)          # approx pressure of LCL used
+    # Get environmental temp and Z close to LCL level
+    ds_at_lcl = interp_var_at_pressure(ds[['T', 'Z3']], p_lcl, ds.PS, hyam, hybm, p0, plev_step, extrapolate)
+    print_log(f'Year {year} | T, Z, p at LCL lazy loaded | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
+    ds_at_lcl = ds_at_lcl.load()
+    print_log(f'Year {year} | T, Z, p at LCL fully loaded | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
 
-    # Note that with extrapolate, will obtain values lower than surface
-    T_at_plevs = interp_hybrid_to_pressure(data=ds['T'], ps=ds['PS'], hyam=hyam, hybm=hybm, p0=p0, new_levels=plevs,
-                                           extrapolate=extrapolate, variable='other' if extrapolate else None)
-    Z3_at_plevs = interp_hybrid_to_pressure(data=ds['Z3'], ps=ds['PS'], hyam=hyam, hybm=hybm, p0=p0, new_levels=plevs,
-                                            extrapolate=extrapolate, variable='other' if extrapolate else None)
-    # TODO: Should set T and Z3 below surface to TREFHT and z2m respectively i.e. clipping Or extrapolate=False, so will set to nan
-    del ds          # save memory by deleting dataset as no longer needed
-    if load_all_at_start:
-        T_at_plevs.load()
-        print_log(f'Year {year} | T on pressure-grid fully loaded | Memory used {get_memory_usage() / 1000:.1f}GB',
-                  logger)
-        Z3_at_plevs.load()
-        print_log(f'Year {year} | Z on pressure-grid fully loaded | Memory used {get_memory_usage() / 1000:.1f}GB',
-                  logger)
-
-    T_at_lcl = T_at_plevs.isel(plev=idx_lcl_closest)
-    print_log(f'Year {year} | T at LCL computed | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
-    Z3_at_lcl = Z3_at_plevs.isel(plev=idx_lcl_closest)
-    print_log(f'Year {year} | Z at LCL computed | Memory used {get_memory_usage() / 1000:.1f}GB', logger)
-
-    p_at_lcl = set_attrs(p_at_lcl, long_name='Approx pressure of LCL', units='Pa',
+    ds_at_lcl['plev'] = set_attrs(ds_at_lcl['plev'], long_name='Approx pressure of LCL', units='Pa',
                          description='This is the pressure used for T_at_lcl and Z3_at_lcl')
-    T_at_lcl = set_attrs(T_at_lcl, long_name='Temperature at LCL pressure', units='K',
+    ds_at_lcl['T'] = set_attrs(ds_at_lcl['T'], long_name='Temperature at LCL pressure', units='K',
                          description='Actually temperature at approx LCL pressure given by p_at_lcl.')
-    Z3_at_lcl = set_attrs(Z3_at_lcl, long_name='Geopotential height at LCL pressure', units='m',
+    ds_at_lcl['Z3'] = set_attrs(ds_at_lcl['Z3'], long_name='Geopotential height at LCL pressure', units='m',
                           description='Actually geopotential height at approx LCL pressure given by p_at_lcl.')
 
     ds_out = xr.Dataset({'p_lcl': p_lcl, 'T_lcl': T_lcl, 'Z3_lcl': Z3_lcl,
-                         'p_at_lcl': p_at_lcl.drop_vars('plev'), 'T_at_lcl': T_at_lcl.drop_vars('plev'),
-                         'Z3_at_lcl': Z3_at_lcl.drop_vars('plev')})
+                         'p_at_lcl': ds_at_lcl['plev'], 'T_at_lcl': ds_at_lcl['T'],
+                         'Z3_at_lcl': ds_at_lcl['Z3']})
     ds_out = ds_out.astype('float32')
     encoding = {var: {'zlib': True, 'complevel': complevel} for var in ds_out.data_vars}
 
     func_save = lambda: ds_out.to_netcdf(out_file, encoding=encoding)
+    print_log(f'Year {year} | Starting save', logger)
     run_func_loop(func_save, max_wait_time=max_wait_time, wait_interval=wait_interval, logger=logger)
     print_log(f'Year {year} - End', logger)
     return None
