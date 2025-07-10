@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates_col/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates_col/base'
+   name = 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates/no_co2_col'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates/no_co2_col'
    n_months_total = 240         ! Total duration of simulation in months.
    n_months_job = 240           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -14,7 +14,7 @@
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'large-short'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
-   compile = .true.            ! If .true. it will recompile the codebase before running the experiment.
+   compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '48:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
 /
@@ -75,7 +75,7 @@
 /
 
 &mixed_layer_nml
-    albedo_value = 0.31
+    albedo_value = 0.33                         ! different from normal value of 0.31 as getting too hot in single col
     depth = 20.0                                ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
@@ -118,9 +118,9 @@
     chunk_size = 1              ! Must be 1 for column model
     lw_spectral_filename = '/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_lw_ga7'
     sw_spectral_filename = '/home/jamd1/Isca/isca_source/src/atmos_param/socrates/src/trunk/data/spectra/ga7/sp_sw_ga7'
-    co2_ppmv = 300
+    co2_ppmv = 0                ! turn off co2 as was getting too hot in single column
     inc_h2o = .true.            ! just include the default molecules of water, CO2 and ozone
-    inc_co2 = .true.
+    inc_co2 = .false.
     stellar_constant = 1360     ! same as grey gas case
     do_read_ozone = .true.
     ozone_file_name = 'ozone'   ! use same ozone pressure profile at each latitude from file

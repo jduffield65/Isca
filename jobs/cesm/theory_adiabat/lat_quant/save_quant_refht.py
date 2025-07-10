@@ -245,14 +245,19 @@ def main(input_file_path: str):
                 var_use['lapse_below_lcl'] = (ds_use.T_at_lcl - ds_use.TREFHT) / (ds_use.ZREFHT - ds_use.Z3_at_lcl) * 1000  # *1000 so K/km
                 var_use['lapse_above_lcl'] = (ds_use.T - ds_use.T_at_lcl) / (ds_use.Z3_at_lcl - ds_use.Z3) * 1000
                 for key in var_use:
-                    output_info[key][k, j, i] = var_use[key].mean(dim=['lon', 'time'])
-                    output_info[key + '_std'][k, j, i] = var_use[key].std(dim=['lon', 'time'])
+                    # Make sure all data is float32 from the off to save memory
+                    output_info[key][k, j, i] = var_use[key].mean(dim=['lon', 'time']).astype('float32')
+                    output_info[key + '_std'][k, j, i] = var_use[key].std(dim=['lon', 'time']).astype('float32')
             time_log['calc'] += time.time() - time_log['start']
             # if (i+1) == 1 or (i+1) == n_lat or (i+1) % 10 == 0:
             # # Log info on 1st, last and every 10th latitude
         logger.info(f"Latitude {i + 1}/{n_lat} | Loading took {time_log['load']:.1f}s |"
                     f" Calculation took {time_log['calc']:.1f}s | "
                     f"Memory used {get_memory_usage() / 1000:.1f}GB")
+    plev = ds.coords['plev']
+
+    del var_use, ds, ds_lat, ds_use         # clear up memory
+    logger.info(f"Deleted un-used variables | Memory used {get_memory_usage() / 1000:.1f}GB")
 
     # Convert output dict into xarray dataset
     # Convert individual arrays
@@ -265,11 +270,13 @@ def main(input_file_path: str):
                                      units=output_units[var.replace('_std','')])
     # Add pressure level info to variables at single level
     for var in ['mse_sat_ft', 'mse_lapse', 'T', 'Z3']:
-        output_info[var] = output_info[var].expand_dims(plev=ds.coords['plev'])
+        output_info[var] = output_info[var].expand_dims(plev=plev)
+    logger.info(f"Converted output_info to xarray | Memory used {get_memory_usage() / 1000:.1f}GB")
     # Convert dict to dataset
     ds_out = xr.Dataset(output_info)
     ds_out = ds_out.astype('float32')
     ds_out['use_in_calc'] = ds_out['use_in_calc'].astype(bool)      # save memory
+    logger.info(f"Made output_info a Dataset | Memory used {get_memory_usage() / 1000:.1f}GB")
 
     # Save output to nd2 file with compression - reduces size of file by factor of 10
     # Compression makes saving step slower

@@ -111,6 +111,10 @@ def main(input_file_path: str):
     ds = load_raw_data(**func_args, logger=logger)
     logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage() / 1000:.1f}GB")
 
+    # Breakdown T_ft into zonal average and anomaly from this
+    ds['T_zonal_av'] = ds.T.mean(dim='lon')     # zonal average is computed over all surfaces
+    ds['T_anom'] = ds['T'] - ds['T_zonal_av']
+
     # Fully load data if chose to do that
     if script_info['load_all_at_start']:
         ds.load()
@@ -124,8 +128,9 @@ def main(input_file_path: str):
     n_lon = ds.lon.size
     # find quantile by looking for all values in quantile range between quant_use-quant_range to quant_use+quant_range
     n_quant = len_safe(script_info['quant'])
-    vars_out_same_in = ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'Z3',
+    vars_out_same_in = ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'T_zonal_av', 'T_anom', 'Z3',
                         'p_lcl', 'T_lcl', 'Z3_lcl', 'p_at_lcl', 'T_at_lcl', 'Z3_at_lcl']
+
     output_info = {var: np.full((n_quant, n_lat, n_lon), np.nan, dtype=float) for var in
                    vars_out_same_in + ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse',
                                        'lapse_below_lcl', 'lapse_above_lcl']}
@@ -153,6 +158,7 @@ def main(input_file_path: str):
     # Coordinate info to convert to xarray datasets
     output_dims = {var: ['quant', 'lat', 'lon'] for var in output_info}
     output_dims['use_in_calc'] = ['quant', 'lat', 'lon', 'time']
+
 
     logger.info(f"Starting iteration over {n_lat} latitudes, {n_lon} longitudes, and {n_quant} quantiles")
 

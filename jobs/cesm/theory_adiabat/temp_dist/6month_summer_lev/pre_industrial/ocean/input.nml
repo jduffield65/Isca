@@ -7,7 +7,7 @@
    time = '12:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
    n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
    cpus_per_task = 1            ! How many CPUs to allocate per task.
-   mem = 250                     ! Memory to allocate for the job in GB.
+   mem = 350                     ! Memory to allocate for the job in GB.
    partition = 'standard'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
    qos =                        ! Set to same as partition if blank
    conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
