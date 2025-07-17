@@ -1,3 +1,5 @@
+# Outdatated version of above_quant_2m_500hPa/save_info
+# This considers vertical coupling between two model levels rather than REFHT and 500hPa
 from isca_tools import cesm
 from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat

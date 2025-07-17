@@ -1,3 +1,4 @@
+# Version of ./save_quant but coded up differently, with aim to make it quicker but failed.
 from isca_tools import cesm
 from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat

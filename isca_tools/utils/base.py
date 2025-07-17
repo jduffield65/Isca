@@ -4,7 +4,7 @@ try:
 except ModuleNotFoundError:
     from xarray.computation.weighted import DataArrayWeighted      # Version issue as to where DataArrayWeighted is
 import numpy as np
-from typing import Optional, Union, List, Callable
+from typing import Optional, Union, List, Callable, Tuple
 import psutil
 import os
 import numbers
@@ -227,3 +227,19 @@ def round_any(x: Union[float, np.ndarray], base: float, round_type: str = 'round
     else:
         raise ValueError(f"round_type specified was {round_type} but it should be one of the following:\n"
                          f"round, ceil, floor")
+
+def has_out_of_range(val: Union[List, Tuple, np.ndarray, float], min_range: float, max_range: float) -> bool:
+    """
+    Check if any number within `val` is outside the range between `min_range` and `max_range`.
+
+    Args:
+        val: Numbers to check
+        min_range: Minimum allowed value.
+        max_range: Maximum allowed value.
+
+    Returns:
+        True if there is a value outside the range between `min_range` and `max_range`.
+    """
+    # If it's a single number, make it a list
+    vals = val if isinstance(val, (list, tuple, np.ndarray)) else [val]
+    return any((x < min_range or x > max_range) for x in vals)

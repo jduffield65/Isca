@@ -26,8 +26,9 @@ def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
     return 1 / (1/(temp_surf-55) - np.log(rh_surf/100)/2840) + 55
 
 
-def lcl_metpy(temp_2m: xr.DataArray, sphum_2m: xr.DataArray,
-              pressure_surf: xr.DataArray) -> Tuple[xr.DataArray, xr.DataArray]:
+def lcl_metpy(temp_2m: Union[float, np.ndarray, xr.DataArray], sphum_2m: Union[float, np.ndarray, xr.DataArray],
+              pressure_surf: Union[float, np.ndarray, xr.DataArray]) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray]]:
     """
     Returns the pressure and temperature of the lifting condensation level, LCL.
 
@@ -41,33 +42,52 @@ def lcl_metpy(temp_2m: xr.DataArray, sphum_2m: xr.DataArray,
         temp_lcl: LCL temperature in *Kelvin*.
     """
     # Extract and convert to units
-    q = sphum_2m.values * metpy.units.units('kg/kg')
-    T = temp_2m.values * metpy.units.units.kelvin
-    P = pressure_surf.values  * metpy.units.units.pascal
+    dims = None
+    coords = None
+    if isinstance(temp_2m, xr.DataArray):
+        dims = temp_2m.dims
+        coords = temp_2m.coords
+        temp_2m = temp_2m.values
+    if isinstance(sphum_2m, xr.DataArray):
+        if dims is None:
+            dims = sphum_2m.dims
+        if coords is None:
+            coords = sphum_2m.coords
+        sphum_2m = sphum_2m.values
+    if isinstance(pressure_surf, xr.DataArray):
+        if dims is None:
+            dims = pressure_surf.dims
+        if coords is None:
+            coords = pressure_surf.coords
+        pressure_surf = pressure_surf.values
+    q = sphum_2m * metpy.units.units('kg/kg')
+    T = temp_2m * metpy.units.units.kelvin
+    P = pressure_surf  * metpy.units.units.pascal
 
     # Calculate dewpoint from mixing ratio
     dewpoint = metpy.calc.dewpoint_from_specific_humidity(P, q)
     lcl_pressure, lcl_temperature = metpy.calc.lcl(P, T, dewpoint)
-    dims = temp_2m.dims
-    coords = temp_2m.coords
+    if dims is None:
+        lcl_pressure = lcl_pressure.magnitude
+        lcl_temperature = lcl_temperature.magnitude
+    else:
+        # Convert MetPy Quantities to numpy arrays and units to attributes
+        lcl_pressure = xr.DataArray(
+            data=lcl_pressure.magnitude,
+            dims=dims,
+            coords=coords,
+            name='lcl_pressure',
+            attrs={'units': str(lcl_pressure.units), 'long_name': 'LCL pressure'}
+        )
 
-    # Convert MetPy Quantities to numpy arrays and units to attributes
-    lcl_pressure_xr = xr.DataArray(
-        data=lcl_pressure.magnitude,
-        dims=dims,
-        coords=coords,
-        name='lcl_pressure',
-        attrs={'units': str(lcl_pressure.units), 'long_name': 'LCL pressure'}
-    )
-
-    lcl_temperature_xr = xr.DataArray(
-        data=lcl_temperature.magnitude,
-        dims=dims,
-        coords=coords,
-        name='lcl_temperature',
-        attrs={'units': str(lcl_temperature.units), 'long_name': 'LCL temperature'}
-    )
-    return lcl_pressure_xr, lcl_temperature_xr
+        lcl_temperature = xr.DataArray(
+            data=lcl_temperature.magnitude,
+            dims=dims,
+            coords=coords,
+            name='lcl_temperature',
+            attrs={'units': str(lcl_temperature.units), 'long_name': 'LCL temperature'}
+        )
+    return lcl_pressure, lcl_temperature
 
 
 def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray],

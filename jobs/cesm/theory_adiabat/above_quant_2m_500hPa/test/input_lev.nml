@@ -17,17 +17,17 @@
 /
 
 &script_info
-    exp_name = 'e.e20.E1850TEST.f09_g17.daily_output'        ! Name of experiment within archive_dir
+    exp_name = 'test'        ! Name of experiment within archive_dir
     archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
     out_dir =                                            ! Leave blank to set to directory containing this file
-    out_name = 'output.nd2'                              ! Name of output within out_dir
-    refht_level_index =                              ! use model level as REFHT rather than 2m if give number
-    plev_dir = 'pressure_levels/TZ_500', 'pressure_levels/lcl'
+    out_name = 'output_lev.nd2'                              ! Name of output within out_dir
+    refht_level_index = -3                             ! use model level as REFHT rather than 2m if give number
+    plev_dir = 'pressure_levels/TZ_500', 'pressure_levels/lcl_lev'          ! list of directories containing info on p levels
     surf_geopotential_file = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/cesm_inputdata/atm/cam/topo/fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc'
     quant = 0, 50, 90, 95, 99   ! Collect quantile info at these quantiles
     quant_range_below = 0       ! For each quantile in quant, consider days with near-surface temp in quantile range quant-quant_range_below to quant+quant_range_above
     quant_range_above = 100     ! Leave blank to set to same as quant_range_below
-    year_files =
+    year_files = '41:42'
     lat_min =                   ! leave None to consider all latitudes
     lat_max =
     lon_min =                   ! leave None to consider all longitudes

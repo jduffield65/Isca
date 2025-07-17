@@ -1,3 +1,5 @@
+# Script to save REFHT and 500hPa level info for averaged over days corresponding to a given quantile of TREFHT.
+# Idea is that this gives useful variables to decompose vertical coupling between REFHT and 500hPa on hot days.
 import os
 from isca_tools import cesm
 from isca_tools.papers.byrne_2021 import get_quant_ind
@@ -25,13 +27,37 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 
 
 def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], surf_geopotential_file: str,
-                  year_files: Optional[Union[int, List, str]] = None,
+                  year_files: Optional[Union[int, List, str]] = None, refht_level_index: Optional[int] = None,
                   lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                   lat_min: Optional[float] = None, lat_max: Optional[float] = None,
                   chunks_time: Optional[int] = None, chunks_lat: Optional[int] = None, chunks_lon: Optional[int] = None,
-                  load_parallel: bool = False, logger: Optional[logging.Logger] = None):
-    var_surf = ['TREFHT', 'QREFHT', 'PS']
+                  load_parallel: bool = False, logger: Optional[logging.Logger] = None) -> xr.Dataset:
+    """
+    Returns dataset with daily average variables TREFHT, QREFHT, ZREFHT, PREFHT, PS, SOILLIQ, as well as all the
+    daily average variables in plev_dir directories.
+    If `refht_level_index` is not `None`, REFHT will be the model level specified, otherwise the CESM `REFHT` is used.
 
+    Args:
+        exp_name: Name of experiment within archive_dir
+        archive_dir: Directory containing cesm experiments on JASMIN
+        plev_dir: list of directories containing info on p levels
+        surf_geopotential_file: Location of file containing PHIS which is the 2m geopotential
+        year_files: Only files with these years in their name will be loaded. Leave as None to load all years.
+        refht_level_index: use model level as REFHT rather than 2m if give number
+        lon_min:
+        lon_max:
+        lat_min:
+        lat_max:
+        chunks_time: Chunking info for less memory usage (leave empty to not chunk in given dimension)
+        chunks_lat: Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
+        chunks_lon: Chunking info for less memory usage
+        load_parallel: Whether to use parallel processing when loading
+        logger:
+
+    Returns:
+
+    """
+    # Load land data first as smallest dataset so should be quick
     def preprocess_land(ds):
         # Only 2 variables, and sum over all soil levels
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
@@ -45,19 +71,43 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
                                 logger=logger)
     logger.info('Loaded land data')
 
+    # Load REFHT atmospheric data
     def preprocess_atm(ds):
         # Preprocessing so don't load in entire dataset
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
-        return ds[var_surf]
+        if refht_level_index is None:
+            ds = ds[['TREFHT', 'QREFHT', 'PS']]
+        else:
+            ds = ds[['PS', 'T', 'Z3', 'Q']].isel(lev=refht_level_index)
+        return ds
 
     ds_surf = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='atm',
                                 year_files=year_files, chunks=chunks, parallel=load_parallel,
                                 preprocess=preprocess_atm, logger=logger)
     logger.info('Loaded near-surface data')
+    if refht_level_index is None:
+        # If use 2m, need to load in geopotential
+        ds_surf['PREFHT'] = ds_surf['PS']           # refht is 2m so assume surface pressure at this pressure
+        ds_surf['ZREFHT'] = cesm.load.load_z2m(surf_geopotential_file, var_reindex_like=ds_surf['PS'])
+        logger.info('Loaded surface geopotential')
+    else:
+        # If use model level, need to rename
+        ds_surf = ds_surf.rename({"T": "TREFHT", "Z3": "ZREFHT", "Q": "QREFHT"})
+        def get_lev_info():
+            # Use test dataset to get hybrid model levels
+            ds = cesm.load_dataset('test', archive_dir=archive_dir,
+                                   hist_file=1, year_files='first1')
+            return ds.hyam.isel(time=0), ds.hybm.isel(time=0), float(ds.P0.isel(time=0))
+
+        # Get pressure at the chosen reference level, if not surface
+        hyam, hybm, p0 = get_lev_info()
+        ds_surf['PREFHT'] = cesm.get_pressure(ds_surf['PS'], p0, hyam.isel(lev=refht_level_index),
+                                              hybm.isel(lev=refht_level_index))
 
     # re-index so lat align - otherwise get issues because lat slightly different
     ds_land = ds_land.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
 
+    # Load additional data on pressure levels, which is saved in previously created directory
     if isinstance(plev_dir, str):
         plev_dir = [plev_dir]
     ds_plev = []
@@ -78,17 +128,9 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
     ds_plev = xr.merge(ds_plev)
     logger.info('Loaded pressure-level data')
 
-    # PHIS is the geopotential at the surface, so to get Z at reference height, divide by g and add 2
-    ds_z2m = xr.open_dataset(surf_geopotential_file)[['PHIS']]
-    z_refht = 2   # reference height is at 2m
-    ds_z2m['ZREFHT'] = ds_z2m['PHIS'] / g + z_refht               # PHIS is geopotential in m2/s2 so need to convert
-    del ds_z2m['PHIS']
+    set_attrs(ds_surf.ZREFHT, long_name=ds_plev.Z3.long_name, units=ds_plev.Z3.units)
 
-    ds_z2m = ds_z2m.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
-    set_attrs(ds_z2m.ZREFHT, long_name=ds_plev.Z3.long_name, units=ds_plev.Z3.units)
-    logger.info('Loaded surface geopotential')
-
-    return xr.merge([ds_surf, ds_land, ds_plev, ds_z2m])
+    return xr.merge([ds_surf, ds_land, ds_plev])
 
 
 def main(input_file_path: str):
@@ -106,6 +148,8 @@ def main(input_file_path: str):
             # Raise error if output data already exists
             raise ValueError('Output file already exists at:\n{}'.format(out_file))
 
+    # Load daily average data
+    # Arguments required for `load_raw_data` are all in `script_info` with same name, hence inspect.signature stuff
     func_arg_names = inspect.signature(load_raw_data).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
     ds = load_raw_data(**func_args, logger=logger)
@@ -121,7 +165,6 @@ def main(input_file_path: str):
         logger.info(f"Fully loaded data | Memory used {get_memory_usage() / 1000:.1f}GB")
 
 
-
     # Initialize dict to save output data - n_surf (land or ocean) x n_lat x n_quant
     # Initialize as nan, so remains as Nan if not enough data to perform calculation
     n_lat = ds.lat.size
@@ -130,6 +173,8 @@ def main(input_file_path: str):
     n_quant = len_safe(script_info['quant'])
     vars_out_same_in = ['SOILLIQ', 'PS', 'TREFHT', 'QREFHT', 'T', 'T_zonal_av', 'T_anom', 'Z3',
                         'p_lcl', 'T_lcl', 'Z3_lcl', 'p_at_lcl', 'T_at_lcl', 'Z3_at_lcl']
+    if script_info['refht_level_index'] is not None:
+        vars_out_same_in += ['PREFHT', 'ZREFHT']        # if using model level as REFHT, save pressure and Z here
 
     output_info = {var: np.full((n_quant, n_lat, n_lon), np.nan, dtype=float) for var in
                    vars_out_same_in + ['rh_refht', 'mse_refht', 'mse_sat_ft', 'mse_lapse',
@@ -147,6 +192,7 @@ def main(input_file_path: str):
         output_long_name[var] = ds[var].long_name if 'long_name' in ds[var].attrs else ''
         output_units[var] = ds[var].units if 'units' in ds[var].attrs else ''
 
+    # Also save standard deviation for each variable, as a way to quantify error
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
         output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
@@ -183,16 +229,18 @@ def main(input_file_path: str):
                     continue
                 ds_use = ds_latlon.where(quant_mask)
                 output_info['use_in_calc'][j, i, k] = quant_mask
+                # Gather all variables, want to get quantile info for
                 var_use = {}
                 for var in vars_out_same_in:
                     var_use[var] = ds_use[var]
-                var_use['rh_refht'] = ds_use.QREFHT / sphum_sat(ds_use.TREFHT, ds_use.PS)
+                var_use['rh_refht'] = ds_use.QREFHT / sphum_sat(ds_use.TREFHT, ds_use.PREFHT)
                 var_use['mse_refht'] = moist_static_energy(ds_use.TREFHT, ds_use.QREFHT, ds_use.ZREFHT)
                 var_use['mse_sat_ft'] = moist_static_energy(ds_use.T, sphum_sat(ds_use.T, ds_use.plev), ds_use.Z3)
                 var_use['mse_lapse'] = var_use['mse_refht'] - var_use['mse_sat_ft']
                 var_use['lapse_below_lcl'] = (ds_use.T_at_lcl - ds_use.TREFHT) / (ds_use.ZREFHT - ds_use.Z3_at_lcl) * 1000  # *1000 so K/km
                 var_use['lapse_above_lcl'] = (ds_use.T - ds_use.T_at_lcl) / (ds_use.Z3_at_lcl - ds_use.Z3) * 1000
                 for key in var_use:
+                    # Average over all days in the quant_mask for each variable
                     output_info[key][j, i, k] = var_use[key].mean(dim='time')
                     output_info[key + '_std'][j, i, k] = var_use[key].std(dim='time')
             time_log['calc'] += time.time() - time_log['start']

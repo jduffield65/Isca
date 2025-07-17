@@ -1,3 +1,8 @@
+# Script to save REFHT and 500hPa level info for averaged over days and longitudes
+# corresponding to a given quantile of TREFHT, for each latitude.
+# Idea is that this gives useful variables to decompose vertical coupling between REFHT and 500hPa on hot days.
+# Different to above_quant_2m_500hPa/save_info only really in that we are averaging over time and longitude here,
+# and give option to only consider selected months e.g. summer.
 import os
 from isca_tools import cesm
 from isca_tools.papers.byrne_2021 import get_quant_ind
@@ -25,14 +30,40 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 
 
 
-
 def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], surf_geopotential_file: str,
                   year_files: Optional[Union[int, List, str]] = None, month_nh: Optional[np.ndarray] = None,
                   month_sh: Optional[np.ndarray] = None, refht_level_index: Optional[int] = None,
                   lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                   lat_min: Optional[float] = None, lat_max: Optional[float] = None,
                   chunks_time: Optional[int] = None, chunks_lat: Optional[int] = None, chunks_lon: Optional[int] = None,
-                  load_parallel: bool = False, logger: Optional[logging.Logger] = None):
+                  load_parallel: bool = False, logger: Optional[logging.Logger] = None) -> xr.Dataset:
+    """
+    Returns dataset with daily average variables TREFHT, QREFHT, ZREFHT, PREFHT, PS, SOILLIQ, as well as all the
+    daily average variables in plev_dir directories.
+    If `refht_level_index` is not `None`, REFHT will be the model level specified, otherwise the CESM `REFHT` is used.
+
+    Args:
+        exp_name: Name of experiment within archive_dir
+        archive_dir: Directory containing cesm experiments on JASMIN
+        plev_dir: list of directories containing info on p levels
+        surf_geopotential_file: Location of file containing PHIS which is the 2m geopotential
+        year_files: Only files with these years in their name will be loaded. Leave as None to load all years.
+        month_nh: Months to select for northern hemisphere, leave blank for all months (Jan is 1, Dec is 12)
+        month_sh: Months to select for southern hemisphere, leave blank for the same as month_nh
+        refht_level_index: use model level as REFHT rather than 2m if give number
+        lon_min:
+        lon_max:
+        lat_min:
+        lat_max:
+        chunks_time: Chunking info for less memory usage (leave empty to not chunk in given dimension)
+        chunks_lat: Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
+        chunks_lon: Chunking info for less memory usage
+        load_parallel: Whether to use parallel processing when loading
+        logger:
+
+    Returns:
+
+    """
     # Set to all months if not provided
     if month_nh is None:
         month_nh = np.arange(1, 13)
@@ -52,7 +83,7 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         else:
             return ds
 
-
+    # Load land data first as smallest dataset so should be quick
     def preprocess_land(ds):
         # Only 2 variables, and sum over all soil levels
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
@@ -67,6 +98,7 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
                                 logger=logger)
     logger.info('Loaded land data')
 
+    # Load REFHT atmospheric data
     def preprocess_atm(ds):
         # Preprocessing so don't load in entire dataset
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
@@ -102,6 +134,7 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
     ds_land = ds_land.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
     ds_land['landmask'] = ds_land['landmask'].max(dim='time') > 0           # remove time from landmask
 
+    # Load additional data on pressure levels, which is saved in previously created directory
     if isinstance(plev_dir, str):
         plev_dir = [plev_dir]
     ds_plev = []
@@ -151,6 +184,8 @@ def main(input_file_path: str):
     if script_info['quant_range_above'] is None:
         script_info['quant_range_above'] = script_info['quant_range_below']
 
+    # Load daily average data
+    # Arguments required for `load_raw_data` are all in `script_info` with same name, hence inspect.signature stuff
     func_arg_names = inspect.signature(load_raw_data).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
     ds = load_raw_data(**func_args, logger=logger)
@@ -191,6 +226,7 @@ def main(input_file_path: str):
         output_long_name[var] = ds[var].long_name if 'long_name' in ds[var].attrs else ''
         output_units[var] = ds[var].units if 'units' in ds[var].attrs else ''
 
+    # Also save standard deviation for each variable, as a way to quantify error
     var_keys = [key for key in output_info.keys()]
     for var in var_keys:
         output_info[var + '_std'] = np.full_like(output_info[var], np.nan, dtype=float)
@@ -226,7 +262,7 @@ def main(input_file_path: str):
             time_log['load'] += time.time() - time_log['start']
             time_log['start'] = time.time()
             for j in range(n_quant):
-                # get indices corresponding to given near-surface temp quantile
+                # get indices corresponding to given near-surface temp quantile over all time and longitude
                 quant_mask = get_quant_ind(ds_lat.TREFHT.where(is_surf), coords['quant'][j],
                                            script_info['quant_range_below'], script_info['quant_range_above'],
                                            return_mask=True, av_dim=['lon', 'time'])
@@ -235,6 +271,7 @@ def main(input_file_path: str):
                     continue
                 ds_use = ds_lat.where(quant_mask)
                 output_info['use_in_calc'][k, j, i] = quant_mask.transpose("lon", "time")
+                # Gather all variables, want to get quantile info for
                 var_use = {}
                 for var in vars_out_same_in:
                     var_use[var] = ds_use[var]
@@ -245,6 +282,7 @@ def main(input_file_path: str):
                 var_use['lapse_below_lcl'] = (ds_use.T_at_lcl - ds_use.TREFHT) / (ds_use.ZREFHT - ds_use.Z3_at_lcl) * 1000  # *1000 so K/km
                 var_use['lapse_above_lcl'] = (ds_use.T - ds_use.T_at_lcl) / (ds_use.Z3_at_lcl - ds_use.Z3) * 1000
                 for key in var_use:
+                    # Average over all days and longitudes in the quant_mask for each variable
                     # Make sure all data is float32 from the off to save memory
                     output_info[key][k, j, i] = var_use[key].mean(dim=['lon', 'time']).astype('float32')
                     output_info[key + '_std'][k, j, i] = var_use[key].std(dim=['lon', 'time']).astype('float32')

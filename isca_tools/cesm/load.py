@@ -256,7 +256,8 @@ def ds_month_shift(ds: xr.Dataset, decode_times: bool = True) -> xr.Dataset:
         ds_new = xr.decode_cf(ds_new)
     return ds_new
 
-def select_months(ds: xr.Dataset, month_nh: List[int], month_sh: Optional[List[int]] = None) -> xr.Dataset:
+def select_months(ds: xr.Dataset, month_nh: Union[np.ndarray, List[int]],
+                  month_sh: Optional[Union[np.ndarray, List[int]]] = None) -> xr.Dataset:
     """
     In dataset, keep only `month_nh` months in the northern hemisphere, and `month_sh` in the southern hemisphere.
 

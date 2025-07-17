@@ -49,6 +49,7 @@ def process_year(exp_name, archive_dir, out_dir: str, surf_geopotential_file: st
                            year_files=year, logger=logger)[var]
     if refht_level_index is None:
         ds['ZREFHT'] = cesm.load.load_z2m(surf_geopotential_file, var_reindex_like=ds['PS'])
+        # ds['PREFHT'] = ds['PS']
     else:
         ds['QREFHT'] = ds.Q.isel(lev=refht_level_index)
         ds = ds.drop_vars(['Q'])
