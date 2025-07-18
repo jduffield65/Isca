@@ -6,7 +6,7 @@ from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat
 from isca_tools.utils.ds_slicing import lat_lon_range_slice
 from isca_tools.utils import get_memory_usage, len_safe
-from isca_tools.utils.base import parse_int_list
+from isca_tools.utils.base import parse_int_list, print_log
 from isca_tools.utils.xarray import set_attrs
 from isca_tools.utils.constants import g
 import sys
@@ -26,12 +26,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
                     stream=sys.stdout)
 
 
-def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], surf_geopotential_file: str,
+def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], surf_geopotential_file: Optional[str] = None,
                   year_files: Optional[Union[int, List, str]] = None, refht_level_index: Optional[int] = None,
                   lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                   lat_min: Optional[float] = None, lat_max: Optional[float] = None,
                   chunks_time: Optional[int] = None, chunks_lat: Optional[int] = None, chunks_lon: Optional[int] = None,
-                  load_parallel: bool = False, logger: Optional[logging.Logger] = None) -> xr.Dataset:
+                  load_parallel: bool = False, logger: Optional[logging.Logger] = None, load_soilliq: bool = True) -> xr.Dataset:
     """
     Returns dataset with daily average variables TREFHT, QREFHT, ZREFHT, PREFHT, PS, SOILLIQ, as well as all the
     daily average variables in plev_dir directories.
@@ -41,7 +41,8 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         exp_name: Name of experiment within archive_dir
         archive_dir: Directory containing cesm experiments on JASMIN
         plev_dir: list of directories containing info on p levels
-        surf_geopotential_file: Location of file containing PHIS which is the 2m geopotential
+        surf_geopotential_file: Location of file containing PHIS which is the 2m geopotential.
+            Only required if `refht_level=None`
         year_files: Only files with these years in their name will be loaded. Leave as None to load all years.
         refht_level_index: use model level as REFHT rather than 2m if give number
         lon_min:
@@ -53,6 +54,7 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         chunks_lon: Chunking info for less memory usage
         load_parallel: Whether to use parallel processing when loading
         logger:
+        load_soilliq: Whether to include `SOILLIQ` variable in output
 
     Returns:
 
@@ -65,11 +67,12 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         return xr.Dataset({'SOILLIQ': soil_liq_sum})
 
     chunks = {"time": chunks_time, "lat": chunks_lat, "lon": chunks_lon}
-    ds_land = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='lnd',
-                                year_files=year_files, chunks=chunks, parallel=load_parallel,
-                                preprocess=preprocess_land,
-                                logger=logger)
-    logger.info('Loaded land data')
+    if load_soilliq:
+        ds_land = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='lnd',
+                                    year_files=year_files, chunks=chunks, parallel=load_parallel,
+                                    preprocess=preprocess_land,
+                                    logger=logger)
+        print_log('Loaded land data', logger=logger)
 
     # Load REFHT atmospheric data
     def preprocess_atm(ds):
@@ -84,12 +87,12 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
     ds_surf = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='atm',
                                 year_files=year_files, chunks=chunks, parallel=load_parallel,
                                 preprocess=preprocess_atm, logger=logger)
-    logger.info('Loaded near-surface data')
+    print_log('Loaded near-surface data', logger=logger)
     if refht_level_index is None:
         # If use 2m, need to load in geopotential
         ds_surf['PREFHT'] = ds_surf['PS']           # refht is 2m so assume surface pressure at this pressure
         ds_surf['ZREFHT'] = cesm.load.load_z2m(surf_geopotential_file, var_reindex_like=ds_surf['PS'])
-        logger.info('Loaded surface geopotential')
+        print_log('Loaded surface geopotential', logger=logger)
     else:
         # If use model level, need to rename
         ds_surf = ds_surf.rename({"T": "TREFHT", "Z3": "ZREFHT", "Q": "QREFHT"})
@@ -104,8 +107,9 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         ds_surf['PREFHT'] = cesm.get_pressure(ds_surf['PS'], p0, hyam.isel(lev=refht_level_index),
                                               hybm.isel(lev=refht_level_index))
 
-    # re-index so lat align - otherwise get issues because lat slightly different
-    ds_land = ds_land.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
+    if load_soilliq:
+        # re-index so lat align - otherwise get issues because lat slightly different
+        ds_land = ds_land.reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
 
     # Load additional data on pressure levels, which is saved in previously created directory
     if isinstance(plev_dir, str):
@@ -126,11 +130,14 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         # re-index so lat align - otherwise get issues because lat slightly different
         ds_plev[-1] = ds_plev[-1].reindex_like(ds_surf['PS'], method="nearest", tolerance=0.01)
     ds_plev = xr.merge(ds_plev)
-    logger.info('Loaded pressure-level data')
+    print_log('Loaded pressure-level data', logger=logger)
 
     set_attrs(ds_surf.ZREFHT, long_name=ds_plev.Z3.long_name, units=ds_plev.Z3.units)
 
-    return xr.merge([ds_surf, ds_land, ds_plev])
+    if load_soilliq:
+        return xr.merge([ds_surf, ds_land, ds_plev])
+    else:
+        return xr.merge([ds_surf, ds_plev])
 
 
 def main(input_file_path: str):
