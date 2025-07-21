@@ -1,8 +1,10 @@
+import copy
+
 import numpy as np
 import scipy.optimize
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 from ..utils.constants import c_p, L_v, R, g
-from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat, get_p_x
+from .adiabat_theory import get_theory_prefactor_terms, get_temp_adiabat, get_p_x, get_temp_adiabat_surf
 from typing import Tuple, Union, Optional
 
 def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np.ndarray],
@@ -1061,3 +1063,203 @@ def decompose_var_x_change_integrate(var_av: np.ndarray, var_x: np.ndarray, var_
                                 var_x_change_cont['nl_eta0'] + var_x_change_cont['nl_change']
 
     return var_x_change, var_x_change_theory, var_x_change_cont
+
+
+def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_ref: np.ndarray,
+                                      r_quant: np.ndarray, temp_ft_quant: np.ndarray,
+                                      epsilon_quant: np.ndarray,
+                                      pressure_surf_ref: float, pressure_ft_ref: float,
+                                      epsilon_ref: Optional[np.ndarray] = None,
+                                      z_approx_ref: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict, dict, dict]:
+    """
+    Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
+    to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by the linear
+    sum of mechanisms assumed independent: either anomalous values in current climate, $\Delta$, or due to the
+    variation in that parameter with warming, $\delta$.
+
+    ??? note "Reference Quantities"
+        The reference quantities, $\\tilde{\chi}$ are free to be chosen by the user. For ease of interpretation,
+        I propose the following, where $\overline{\chi}$ is the mean value of $\chi$ across all days:
+
+        * $\\tilde{T}_s = \overline{T_s}; \delta \\tilde{T}_s = \delta \overline{T_s}$
+        * $\\tilde{r}_s = \overline{r_s}; \delta \\tilde{r}_s = 0$
+        * $\\tilde{\epsilon} = 0; \delta \\tilde{\epsilon} = 0$
+        * $\\tilde{A}_z = \overline{A}_z; \delta \\tilde{A}_z = 0$
+
+        Given the choice of these four reference variables and their changes with warming, the reference free
+        troposphere temperature, $\\tilde{T}_{FT}$, can be computed according to the definition of $\\tilde{h}^{\dagger}$:
+
+        $\\tilde{h}^{\dagger} = (c_p - R^{\dagger})\\tilde{T}_s + L_v \\tilde{q}_s - \\tilde{\epsilon} =
+            (c_p + R^{\dagger}) \\tilde{T}_{FT} + L_v q^*(\\tilde{T}_{FT}, p_{FT}) + \\tilde{A}_z$
+
+        If `cape_form=True`, the reference CAPE, $\\widetilde{CAPE}$, will also be computed from these four variables
+        using `get_cape_approx`. This will be 0 if $\\tilde{\epsilon}=0$.
+
+        Poor choice of reference quantities may cause the theoretical scale factor to be a bad approximation. If this
+        is the case, `get_approx_terms` can be used to investigate what is causing the theory to break down.
+
+    ??? note "Terms in equation"
+        * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
+            (c_p + R^{\dagger}) T_{FT} + L_v q^*_{FT} + A_z$
+            where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$.
+        * $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE (at $p_s$) and
+            $h^*_{FT}$ is free tropospheric saturated MSE (at $p_{FT}$).
+        * $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
+        * $\\Delta \chi[x] = \chi[x] - \\tilde{\chi}$
+        * $\chi[x]$ is the value of $\chi$ averaged over all days
+            where near-surface temperature, $T_s$, is between percentile $x-0.5$ and $x+0.5$.
+        * $\\tilde{\chi}$ is the reference value of $\chi$, which is free to be chosen.
+        * $\\beta_{FT1} = \\frac{\partial h^{\\dagger}}{\partial T_{FT}} = c_p + R^{\dagger} + L_v \\alpha_{FT} q_{FT}^*$
+        * $\\beta_{FT2} = T_{FT} \\frac{\partial^2h^{\\dagger}}{\partial T_{FT}^2} =
+            T_{FT}\\frac{d\\beta_{FT1}}{d T_{FT}} = L_v \\alpha_{FT} q_{FT}^*(\\alpha_{FT} T_{FT} - 2)$
+        * $\\beta_{s1} = \\frac{\partial h^{\dagger}}{\partial T_s} = c_p - R^{\dagger} + L_v \\alpha_s q_s$
+        * $\\beta_{s2} = T_s \\frac{\partial^2 h^{\dagger}}{\partial T_s^2} =
+            T_s\\frac{\partial \\beta_{s1}}{\partial T_s} = L_v \\alpha_s q_s(\\alpha_s T_s - 2)$
+        * $\mu=\\frac{L_v \\alpha_s q_s}{\\beta_{s1}}$
+        * $q = rq^*$ where $q$ is the specific humidity, $r$ is relative humidity and $q^*(T, p)$
+            is saturation specific humidity which is a function of temperature and pressure.
+        * $\\alpha(T, p)$ is the clausius clapeyron parameter which is a function of temperature and pressure,
+            such that $\partial q^*/\partial T = \\alpha q^*$.
+
+    Args:
+        temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
+            Reference near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+        temp_surf_quant: `float [n_exp, n_quant]` $T_s(x)$ </br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+        r_ref: `float [n_exp]` $\\tilde{r}_s$</br>
+            Reference near surface relative humidity of each simulation. Units: dimensionless (from 0 to 1).
+        r_quant: `float [n_exp, n_quant]` $r_s[x]$</br>
+            `r_quant[i, j]` is near-surface relative humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: dimensionless.
+        temp_ft_quant: `float [n_exp, n_quant]` $T_{FT}[x]$</br>
+            `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
+        epsilon_quant: `float [n_exp, n_quant]` $\epsilon[x]$</br>
+            `epsilon_quant[i, j]` is $\epsilon = h_s - h^*_{FT}$, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kJ/kg*.
+        pressure_surf_ref:
+            Pressure at near-surface for reference day, $p_s$, in *Pa*.
+        pressure_ft_ref:
+            Pressure at free troposphere level for reference day, $p_{FT}$, in *Pa*.
+        epsilon_ref: `float [n_exp]` $\\tilde{\epsilon}_s$</br>
+            Reference value of $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE and
+            $h^*_{FT}$ is saturated MSE at `pressure_ft`. If not given, weill set to 0. Units: *kJ/kg*.
+        z_approx_ref: `float [n_exp]` $\\tilde{A}_z$</br>
+            The exact equation for modified MSE is given by: $h^{\dagger} = (c_p - R^{\dagger})T_s + L_v q_s
+            - \epsilon = (c_p + R^{\dagger})T_{FT} + L_vq^*(T_{FT}, p_{FT}) + A_z$
+            where $R^{\dagger} = R\\ln(p_s/p_{FT})/2$ and $A_z$ quantifies the error due to
+            approximation of geopotential height, as relating to temperature.</br>
+            Here you have the option of specifying the reference $A_z$ for each simulation. If not provided,
+            will set to 0. Units: *kJ/kg*.
+
+    Returns:
+        scale_factor: `float [n_quant]`</br>
+            `scale_factor[i]` refers to the theoretical temperature difference between experiments
+            for percentile `quant_use[i]`, relative to the reference temperature change, $\delta \\tilde{T_s}$.
+        info_cont: Dictionary containing contribution from each mechanism. This gives
+            the contribution from each physical mechanism to the overall scale factor.</br>
+
+    """
+    n_exp, n_quant = temp_surf_quant.shape
+    if epsilon_ref is None:
+        epsilon_ref = np.zeros(n_exp)
+    if z_approx_ref is None:
+        z_approx_ref = np.zeros(n_exp)
+
+    # Compute temp_ft_ref using base climate reference rh, epsilon and z_approx
+    temp_ft_ref = get_temp_adiabat(temp_surf_ref, r_ref[0] * sphum_sat(temp_surf_ref, pressure_surf_ref),
+                                   pressure_surf_ref, pressure_ft_ref, epsilon=epsilon_ref[0] + z_approx_ref[0])
+
+    # Get error due to approximation of z
+    R_mod = R * np.log(pressure_surf_ref / pressure_ft_ref) / 2
+    mse_mod_quant = moist_static_energy(temp_surf_quant, r_quant * sphum_sat(temp_surf_quant, pressure_surf_ref),
+                                        height=0, c_p_const=c_p - R_mod) - epsilon_quant
+    z_approx_quant = mse_mod_quant - moist_static_energy(temp_ft_quant, sphum_sat(temp_ft_quant, pressure_ft_ref),
+                                                         height=0, c_p_const=c_p + R_mod)
+
+    # Temp_ft change is different if account for ref value changes or not
+    temp_ft_ref_change = {'base': temp_ft_ref[1] - temp_ft_ref[0],
+                          'r_ref': get_temp_adiabat(temp_surf_ref, r_ref * sphum_sat(temp_surf_ref, pressure_surf_ref),
+                                                    pressure_surf_ref, pressure_ft_ref,
+                                                    epsilon=epsilon_ref[0] + z_approx_ref[0])[1] - temp_ft_ref[0],
+                          'epsilon_ref': get_temp_adiabat(temp_surf_ref, r_ref[0] * sphum_sat(temp_surf_ref, pressure_surf_ref),
+                                                          pressure_surf_ref, pressure_ft_ref,
+                                                          epsilon=epsilon_ref + z_approx_ref[0])[1] - temp_ft_ref[0],
+                          'z_approx_ref': get_temp_adiabat(temp_surf_ref, r_ref[0] * sphum_sat(temp_surf_ref, pressure_surf_ref),
+                                                          pressure_surf_ref, pressure_ft_ref,
+                                                          epsilon=epsilon_ref[0] + z_approx_ref)[1] - temp_ft_ref[0],
+                          }
+
+    # Base FT temperature to use depends on if considering anomalies in current climate or not
+    temp_ft0 = {'base': temp_ft_ref[0],
+                'r_anom': get_temp_adiabat(np.full_like(temp_surf_quant[0], temp_surf_ref[0]), r_quant[0] * sphum_sat(temp_surf_ref[0], pressure_surf_ref),
+                                           pressure_surf_ref, pressure_ft_ref, epsilon=epsilon_ref[0] + z_approx_ref[0]),
+                'temp_anom': get_temp_adiabat(temp_surf_quant[0], r_ref[0] * sphum_sat(temp_surf_quant[0], pressure_surf_ref),
+                                              pressure_surf_ref, pressure_ft_ref, epsilon=epsilon_ref[0] + z_approx_ref[0]),
+                'epsilon_anom': get_temp_adiabat(np.full_like(temp_surf_quant[0], temp_surf_ref[0]),
+                                                 np.full_like(temp_surf_quant[0], r_ref[0]) * sphum_sat(temp_surf_ref[0], pressure_surf_ref),
+                                                 pressure_surf_ref, pressure_ft_ref, epsilon=epsilon_quant[0] + z_approx_ref[0]),
+                'z_approx_anom': get_temp_adiabat(np.full_like(temp_surf_quant[0], temp_surf_ref[0]),
+                                                   np.full_like(temp_surf_quant[0], r_ref[0]) * sphum_sat(temp_surf_ref[0], pressure_surf_ref),
+                                                   pressure_surf_ref, pressure_ft_ref, epsilon=epsilon_ref[0] + z_approx_quant[0])}
+
+
+    info_cont = {key: np.full(n_quant, temp_surf_ref[1]-temp_surf_ref[0]) for key in ['r_ref_change', 'epsilon_ref_change', 'z_approx_ref_change',
+                                                    'temp_ft_change', 'r_change', 'epsilon_change', 'z_approx_change',
+                                                    'temp_anom', 'r_anom', 'epsilon_anom', 'z_approx_anom']}
+    for i in range(n_quant):
+        for key in ['r_ref', 'epsilon_ref', 'z_approx_ref']:
+            # Reference quantities change with warming but nothing else, and all ref quantities in current climate
+            if temp_ft_ref_change[key] == temp_ft_ref_change['base']:
+                continue
+            info_cont[f'{key}_change'][i] = get_temp_adiabat_surf(r_ref[0] + (r_ref[1] - r_ref[0] if key=='r_ref' else 0),
+                                                                  temp_ft0['base'] + temp_ft_ref_change[key],
+                                                                  z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                                  epsilon=epsilon_ref[0] + (epsilon_ref[1] - epsilon_ref[0] if key=='epsilon_ref' else 0)+
+                                                                          z_approx_ref[0] + (z_approx_ref[1] - z_approx_ref[0] if key=='z_approx_ref' else 0))  - temp_surf_ref[0]
+        # temp_ft changes with warming, but all ref quantities in current climate
+        info_cont['temp_ft_change'][i] = get_temp_adiabat_surf(r_ref[0], temp_ft0['base'] + temp_ft_quant[1, i]-temp_ft_quant[0, i], z_ft=None,
+                                                               pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                               epsilon=epsilon_ref[0] + z_approx_ref[0]) - temp_surf_ref[0]
+        # RH changes with warming, but all ref quantities in current climate
+        info_cont['r_change'][i] = get_temp_adiabat_surf(r_ref[0] + r_quant[1, i] - r_quant[0, i], temp_ft0['base'] + temp_ft_ref_change['base'],
+                                                         z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                         epsilon=epsilon_ref[0] + z_approx_ref[0]) - temp_surf_ref[0]
+        # epsilon changes with warming, but all ref quantities in current climate
+        info_cont['epsilon_change'][i] = get_temp_adiabat_surf(r_ref[0], temp_ft0['base'] + temp_ft_ref_change['base'],
+                                                               z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                               epsilon=epsilon_ref[0] + epsilon_quant[1,i] - epsilon_quant[0,i]
+                                                                       + z_approx_ref[0]) - temp_surf_ref[0]
+        # z_approx changes with warming, but all ref quantities in current climate
+        info_cont['z_approx_change'][i] = get_temp_adiabat_surf(r_ref[0], temp_ft0['base'] + temp_ft_ref_change['base'],
+                                                               z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                               epsilon=epsilon_ref[0] + z_approx_ref[0] + z_approx_quant[1,i] - z_approx_quant[0, i]) - temp_surf_ref[0]
+        # Only temp_ft changes with warming according to ref_change, all ref quantities in current climate except temp_surf
+        info_cont['temp_anom'][i] = get_temp_adiabat_surf(r_ref[0], temp_ft0['temp_anom'][i] + temp_ft_ref_change['base'],
+                                                          z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                          epsilon=epsilon_ref[0] + z_approx_ref[0]) - temp_surf_quant[0, i]
+        # Only temp_ft changes with warming according to ref_change, all ref quantities in current climate except RH
+        info_cont['r_anom'][i] = get_temp_adiabat_surf(r_quant[0, i], temp_ft0['r_anom'][i] + temp_ft_ref_change['base'],
+                                                       z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                       epsilon=epsilon_ref[0] + z_approx_ref[0]) - \
+                                 temp_surf_ref[0]
+        # Only temp_ft changes with warming according to ref_change, all ref quantities in current climate except epsilon
+        info_cont['epsilon_anom'][i] = get_temp_adiabat_surf(r_ref[0], temp_ft0['epsilon_anom'][i] + temp_ft_ref_change['base'],
+                                                             z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                             epsilon=epsilon_quant[0, i] + z_approx_ref[0]) - \
+                                       temp_surf_ref[0]
+        # Only temp_ft changes with warming according to ref_change, all ref quantities in current climate except z_approx
+        info_cont['z_approx_anom'][i] = get_temp_adiabat_surf(r_ref[0], temp_ft0['z_approx_anom'][i] + temp_ft_ref_change['base'],
+                                                             z_ft=None, pressure_surf=pressure_surf_ref, pressure_ft=pressure_ft_ref,
+                                                             epsilon=epsilon_ref[0] + z_approx_quant[0, i]) - \
+                                        temp_surf_ref[0]
+    for key in info_cont:
+        info_cont[key] /= (temp_surf_ref[1]-temp_surf_ref[0])       # Make it so it gives scale factor contribution
+
+    final_answer = np.asarray(sum([info_cont[key]-1 for key in info_cont])) + 1
+    return final_answer, info_cont
