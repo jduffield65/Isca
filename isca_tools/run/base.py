@@ -123,7 +123,7 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
                 f"bash {slurm_script if prev_job_id == '' else slurm_script.replace('.sh','_depend.sh')} "
                 f"{exp_details['name']} {month_job[0]} {len(month_job)} "
                 f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
-                f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} {dir_output}"
+                f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} {dir_output} "
                 f"{exp_details['nodelist']} {prev_job_id} "
             )
             output = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()   # get job just submitted info

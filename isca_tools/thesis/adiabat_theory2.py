@@ -1070,7 +1070,7 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
                                       epsilon_quant: np.ndarray,
                                       pressure_surf_ref: float, pressure_ft_ref: float,
                                       epsilon_ref: Optional[np.ndarray] = None,
-                                      z_approx_ref: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict, dict, dict]:
+                                      z_approx_ref: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
     to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by the linear
