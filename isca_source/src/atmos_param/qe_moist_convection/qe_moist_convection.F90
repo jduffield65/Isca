@@ -361,6 +361,7 @@ contains
                    ! Else, do nothing, and go back to loop over latitude and longitude 
                    Pq_parcel     = 0.
                    convflag(i,j) = 0   ! indicate that shallow convection not called - JD 15/08/2025
+                   kLZBs(i,j) = k_surface   ! JD - negative CAPE means that LZB has not been computed, so set to surface level - JD 15/08/2025
                    call set_profiles_to_full_model_values (1, k_surface, Tin(i,j,:),&
                         qin(i,j,:), Tref_parcel, deltaT_parcel, qref_parcel, &
                         deltaq_parcel)
