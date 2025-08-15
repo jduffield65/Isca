@@ -215,6 +215,7 @@ contains
     !                convflag = 0: no cape, no convection
     !                convflag = 1: shallow conv; predicted precip less than zero
     !                convflag = 2: deep convection
+    !                If cape>0 and no convection calledm will set convflag=0 not 1 as before - JD 15/08/2025
     !           kLZBs    Levels of zero buoyancy
     !           CAPE     Convectively available potential energy 
     !           CIN      Convective inhibition (this and the above are before the 
@@ -359,6 +360,7 @@ contains
                 else
                    ! Else, do nothing, and go back to loop over latitude and longitude 
                    Pq_parcel     = 0.
+                   convflag(i,j) = 0   ! indicate that shallow convection not called - JD 15/08/2025
                    call set_profiles_to_full_model_values (1, k_surface, Tin(i,j,:),&
                         qin(i,j,:), Tref_parcel, deltaT_parcel, qref_parcel, &
                         deltaq_parcel)
@@ -367,6 +369,7 @@ contains
           else
              ! If CAPE < 0, do nothing, and go back to loop over latitude and longitude
              Pq_parcel     = 0.
+             kLZBs(i,j) = k_surface   ! JD - negative CAPE means that LZB has not been computed, so set to surface level - JD 15/08/2025
              call set_profiles_to_full_model_values (1, k_surface, Tin(i,j,:),&
                         qin(i,j,:), Tref_parcel, deltaT_parcel, qref_parcel, &
                         deltaq_parcel)
