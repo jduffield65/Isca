@@ -288,6 +288,7 @@ integer ::           &
      id_cond_dt_tg,  &   ! temperature tendency from condensation
      id_cond_dt_qg,  &   ! moisture tendency from condensation
      id_t_ref,       &   ! relaxation temperature for bettsmiller scheme - JD 15/08/2025
+     id_q_ref,       &   ! relaxation humidity for bettsmiller scheme - JD 15/08/2025
      id_bucket_depth,      &   ! bucket depth variable for output
      id_bucket_depth_conv, &   ! bucket depth variation induced by convection
      id_bucket_depth_cond, &   ! bucket depth variation induced by condensation
@@ -808,6 +809,8 @@ end select
         axes(1:2), Time, 'Rain from convection','kg/m/m/s')
    id_t_ref = register_diag_field(mod_name, 't_ref',            &
         axes(1:3), Time, 'Betts-Miller reference temperature profile','K')      ! Add for convection ref profile info - JD 15/08/2025
+   id_q_ref = register_diag_field(mod_name, 'q_ref',            &
+        axes(1:3), Time, 'Betts-Miller reference humidity profile','kg/kg')      ! Add for convection ref profile info - JD 15/08/2025
 !endif
 
 if(two_stream_gray) call two_stream_gray_rad_init(is, ie, js, je, num_levels, get_axis_id(), Time, rad_lonb_2d, rad_latb_2d, dt_real)
@@ -929,6 +932,7 @@ case(SIMPLE_BETTS_CONV)
    if(id_cape  > 0) used = send_data(id_cape, cape, Time)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
    if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
+   if(id_q_ref > 0) used = send_data(id_q_ref, q_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
    if(id_klzbs  > 0) used = send_data(id_klzbs, klzbs, Time)    ! Add for convection ref profile info - JD 15/08/2025
    if(id_klcls  > 0) used = send_data(id_klcls, klcls, Time)    ! Add for convection ref profile info - JD 15/08/2025
    if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! Add for convection ref profile info - JD 15/08/2025
@@ -962,6 +966,7 @@ case(FULL_BETTS_MILLER_CONV)
    if(id_cape  > 0) used = send_data(id_cape, cape, Time)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
    if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
+   if(id_q_ref > 0) used = send_data(id_q_ref, q_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
    if(id_klzbs  > 0) used = send_data(id_klzbs, klzbs, Time)    ! Add for convection ref profile info - JD 15/08/2025
    if(id_klcls  > 0) used = send_data(id_klcls, klcls, Time)    ! Add for convection ref profile info - JD 15/08/2025
    if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! Add for convection ref profile info - JD 15/08/2025
