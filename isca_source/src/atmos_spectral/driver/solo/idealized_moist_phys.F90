@@ -933,9 +933,9 @@ case(SIMPLE_BETTS_CONV)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
    if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
    if(id_q_ref > 0) used = send_data(id_q_ref, q_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
-   if(id_klzbs  > 0) used = send_data(id_klzbs, klzbs, Time)    ! Add for convection ref profile info - JD 15/08/2025
-   if(id_klcls  > 0) used = send_data(id_klcls, klcls, Time)    ! Add for convection ref profile info - JD 15/08/2025
-   if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! Add for convection ref profile info - JD 15/08/2025
+   if(id_klzbs  > 0) used = send_data(id_klzbs, real(klzbs), Time)    ! Add for convection ref profile info, real converts integer to float - JD 15/08/2025
+   if(id_klcls  > 0) used = send_data(id_klcls, real(klcls), Time)    ! Add for convection ref profile info, real converts integer to float - JD 15/08/2025
+   if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! Add for convection ref profile info, real converts integer to float - JD 15/08/2025
 
 case(FULL_BETTS_MILLER_CONV)
 
@@ -967,8 +967,8 @@ case(FULL_BETTS_MILLER_CONV)
    if(id_cin  > 0) used = send_data(id_cin, cin, Time)
    if(id_t_ref > 0) used = send_data(id_t_ref, t_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
    if(id_q_ref > 0) used = send_data(id_q_ref, q_ref, Time)     ! Add for convection ref profile info - JD 15/08/2025
-   if(id_klzbs  > 0) used = send_data(id_klzbs, klzbs, Time)    ! Add for convection ref profile info - JD 15/08/2025
-   if(id_klcls  > 0) used = send_data(id_klcls, klcls, Time)    ! Add for convection ref profile info - JD 15/08/2025
+   if(id_klzbs  > 0) used = send_data(id_klzbs, real(klzbs), Time)    ! Add for convection ref profile info, real converts integer to float - JD 15/08/2025
+   if(id_klcls  > 0) used = send_data(id_klcls, real(klcls), Time)    ! Add for convection ref profile info, real converts integer to float - JD 15/08/2025
    if(id_convflag  > 0) used = send_data(id_convflag, real(convflag), Time)    ! Add for convection ref profile info - JD 15/08/2025
 
 case(DRY_CONV)
