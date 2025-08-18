@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'sqe_profile/column/day150'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/sqe_profile/column/day150'
+   name = 'sqe_profile/column/day150/lat=70'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/sqe_profile/column/day150/lat=70'
    n_months_total = 36         ! Total duration of simulation in months.
    n_months_job = 36           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -154,7 +154,7 @@
 /
 
 &column_grid_nml
-    lat_value = 50          ! Set latitude to 50 degrees
+    lat_value = 70          ! Set latitude to 50 degrees
 /
 
 ! Specify vertical levels from Frierson 2006
