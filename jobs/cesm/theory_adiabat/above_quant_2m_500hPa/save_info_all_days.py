@@ -115,7 +115,8 @@ def main(input_file_path: str):
     for var in ['mse_sat_ft', 'mse_lapse', 'T', 'Z3', 'T_zonal_av', 'T_anom']:
         if var not in output_info:
             continue
-        output_info[var] = output_info[var].expand_dims(plev=ds.coords['plev'])
+        # Need np.atleast1d because was getting error when plev is just a number not an array
+        output_info[var] = output_info[var].expand_dims(plev=np.atleast_1d(ds.coords['plev']))
     # Convert dict to dataset
     ds_out = xr.Dataset(output_info)
     ds_out = ds_out.expand_dims(quant=[script_info['quant']])           # add quant as a coordinate

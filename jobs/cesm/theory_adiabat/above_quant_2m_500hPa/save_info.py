@@ -33,7 +33,7 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
                   chunks_time: Optional[int] = None, chunks_lat: Optional[int] = None, chunks_lon: Optional[int] = None,
                   load_parallel: bool = False, logger: Optional[logging.Logger] = None, load_soilliq: bool = True) -> xr.Dataset:
     """
-    Returns dataset with daily average variables TREFHT, QREFHT, ZREFHT, PREFHT, PS, SOILLIQ, as well as all the
+    Returns dataset with daily average variables TREFHT, QREFHT, ZREFHT, PREFHT, PS, PRECC, PRECL, SOILLIQ, as well as all the
     daily average variables in plev_dir directories.
     If `refht_level_index` is not `None`, REFHT will be the model level specified, otherwise the CESM `REFHT` is used.
 
@@ -79,9 +79,9 @@ def load_raw_data(exp_name: str, archive_dir: str, plev_dir: Union[List, str], s
         # Preprocessing so don't load in entire dataset
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
         if refht_level_index is None:
-            ds = ds[['TREFHT', 'QREFHT', 'PS']]
+            ds = ds[['TREFHT', 'QREFHT', 'PS', 'PRECC', 'PRECL']]
         else:
-            ds = ds[['PS', 'T', 'Z3', 'Q']].isel(lev=refht_level_index)
+            ds = ds[['PS', 'T', 'Z3', 'Q', 'PRECC', 'PRECL']].isel(lev=refht_level_index)
         return ds
 
     ds_surf = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='atm',

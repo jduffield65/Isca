@@ -1,0 +1,43 @@
+! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
+&slurm_info
+   jobs_dir = '/home/users/jamd1/Isca/jobs/'                  ! Directory containing jobs on JASMIN
+   script_path = 'cesm/theory_adiabat/above_quant_2m_500hPa/save_info_all_days.py'  ! Path to python script within jobs_dir
+   script_args =                                              ! Will set to the path to this file if blank
+   job_name =                                                 ! Set to name of directory containing this file if blank
+   time = '12:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
+   n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
+   cpus_per_task = 1            ! How many CPUs to allocate per task.
+   mem = 90                     ! Memory to allocate for the job in GB.
+   partition = 'standard'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   qos =                        ! Set to same as partition if blank
+   conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
+   account = 'global_ex'        ! Account to use for submitting jobs.
+   exist_output_ok =            ! Whether to run script if console_output for `job_name` already exists
+                                ! blank will just append number if output already exists.
+/
+
+&script_info
+    exp_name = 'test'        ! Name of experiment within archive_dir
+    archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
+    out_dir =                                            ! Leave blank to set to directory containing this file
+    out_name = 'output_lev_new.nd2'                              ! Name of output within out_dir
+    use_in_calc_dir = '/home/users/jamd1/Isca/jobs/cesm/theory_adiabat/above_quant_2m_500hPa/test'
+    use_in_calc_name = 'output_lev.nd2'             ! Name of file within use_in_calc_dir. Leave empty to set to {exp_name}/{out_name}
+    refht_level_index = -3                             ! use model level as REFHT rather than 2m if give number
+    plev_dir = 'pressure_levels/TZ_500', 'pressure_levels/lcl_lev'          ! list of directories containing info on p levels
+    surf_geopotential_file = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/cesm_inputdata/atm/cam/topo/fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc'
+    quant = 95   ! Collect quantile info at these quantiles within use_in_calc_name file
+    var_save = 'PS', 'TREFHT', 'QREFHT', 'PREFHT', 'T_zonal_av', 'T_anom', 'p_at_lcl', 'T_at_lcl', 'dayofyear', 'SOILLIQ', 'PRECC', 'PRECL', 'ZREFHT', 'Z3'      ! variables to output
+    year_files = '41:42'
+    lat_min =                   ! leave None to consider all latitudes
+    lat_max =
+    lon_min =                   ! leave None to consider all longitudes
+    lon_max =
+    chunks_time =               ! Chunking info for less memory usage (leave empty to not chunk in given dimension)
+    chunks_lat =                ! Chunking info for less memory usage (1 chunk per latitude as we do lat by lat comp)
+    chunks_lon =                ! Chunking info for less memory usage
+    load_all_at_start = .true.  ! Whether to load entire year at start
+    load_parallel = .false.     ! Whether to use parallel processing when loading
+    overwrite = .false.         ! If .true. will overwrite data, if false will give error.
+    complevel = 4               ! How much compression, higher is more (1-9)
+/
