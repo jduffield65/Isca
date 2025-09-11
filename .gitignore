@@ -5,3 +5,4 @@
 *.nc
 __pycache__/
 /site
+*.idx
