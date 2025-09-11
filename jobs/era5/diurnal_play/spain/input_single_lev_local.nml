@@ -1,0 +1,63 @@
+! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
+&slurm_info
+   jobs_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/'                  ! Directory containing jobs on JASMIN
+   script_path = 'era5/climate_data_store/get_data.py'  ! Path to python script within jobs_dir
+   script_args =                                              ! Will set to the path to this file if blank
+   job_name =                                                 ! Set to name of directory containing this file if blank
+   time = '1:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
+   n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
+   cpus_per_task = 1            ! How many CPUs to allocate per task.
+   mem = 1                      ! Memory to allocate for the job in GB.
+   partition = 'debug'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   qos =                        ! Set to same as partition if blank
+   conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
+   account = 'global_ex'        ! Account to use for submitting jobs.
+   exist_output_ok =            ! Whether to run script if console_output for `job_name` already exists
+                                ! blank will just append number if output already exists.
+/
+
+&script_info
+    out_dir = '/Users/joshduffield/Desktop/spain_single'                        ! Where nd2 file saved
+    dataset = 'reanalysis-era5-single-levels'                                    ! Copernicus dataset to use
+    exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
+    one_year_per_file = .false.     ! If true, will run different job for each year. Otherwise will run one job for all years.
+/
+
+! Give all info required for the request dictionary for the cds api client
+&request
+    product_type = 'reanalysis'
+    variable = "10m_u_component_of_wind",       ! All possible surface variables related to boundary layer stuff
+        "10m_v_component_of_wind",
+        "boundary_layer_height",
+        "convective_inhibition",
+        "convective_available_potential_energy",
+        "2m_dewpoint_temperature",
+        "2m_temperature",
+        "volumetric_soil_water_layer_1",
+        "convective_precipitation",
+        "total_precipitation",
+        "evaporation",
+        "total_cloud_cover",
+        "cloud_base_height",
+        "high_cloud_cover",
+        "low_cloud_cover",
+        "medium_cloud_cover",
+        "surface_latent_heat_flux",
+        "surface_sensible_heat_flux",
+        "surface_thermal_radiation_downward_clear_sky",
+        "surface_thermal_radiation_downwards",
+        "surface_solar_radiation_downwards",
+        "surface_solar_radiation_downward_clear_sky",
+        "surface_net_solar_radiation",
+        "surface_net_solar_radiation_clear_sky",
+        "surface_net_thermal_radiation",
+        "surface_net_thermal_radiation_clear_sky",
+        "surface_pressure",
+        "boundary_layer_dissipation",
+        "instantaneous_moisture_flux"
+    area = 40.4, -5.4, 39.6, -4.6        ! North, West, South, East boundaries
+    year = 1995
+    month = 6, 7, 8                     ! Months to select, leave blank for all months (Jan is 1, Dec is 12)
+    day =                      ! Leave bank for all days
+    time = 0, 3, 6, 9, 12, 15, 18, 21       ! 3 hourly data
+/

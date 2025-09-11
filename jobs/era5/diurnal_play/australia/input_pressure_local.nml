@@ -1,0 +1,36 @@
+! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
+&slurm_info
+   jobs_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/'                  ! Directory containing jobs on JASMIN
+   script_path = 'era5/climate_data_store/get_data.py'  ! Path to python script within jobs_dir
+   script_args =                                              ! Will set to the path to this file if blank
+   job_name =                                                 ! Set to name of directory containing this file if blank
+   time = '1:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
+   n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
+   cpus_per_task = 1            ! How many CPUs to allocate per task.
+   mem = 1                      ! Memory to allocate for the job in GB.
+   partition = 'debug'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   qos =                        ! Set to same as partition if blank
+   conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
+   account = 'global_ex'        ! Account to use for submitting jobs.
+   exist_output_ok =            ! Whether to run script if console_output for `job_name` already exists
+                                ! blank will just append number if output already exists.
+/
+
+&script_info
+    out_dir = '/Users/joshduffield/Desktop/australia_pressure'                        ! Where nd2 file saved
+    dataset = "reanalysis-era5-pressure-levels"                                    ! Copernicus dataset to use
+    exist_ok = .false.              ! If output already exists, overwrite if .true. otherwise give error
+    one_year_per_file = .false.     ! If true, will run different job for each year. Otherwise will run one job for all years.
+/
+
+! Give all info required for the request dictionary for the cds api client
+&request
+    product_type = 'reanalysis'
+    variable = "geopotential", "specific_humidity", "temperature"
+    pressure_level = 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000
+    area = -23.6, 133.6, -24.4, 134.4        ! North, West, South, West boundaries
+    year = 1995
+    month = 1, 11, 12                     ! Months to select, leave blank for all months (Jan is 1, Dec is 12)
+    day =                      ! Leave bank for all days
+    time = 0, 3, 6, 9, 12, 15, 18, 21       ! 3 hourly data
+/
