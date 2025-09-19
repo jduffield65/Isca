@@ -20,7 +20,7 @@
     exp_name = 'e.e20.E1850TEST.f09_g17.co2_2x_3hour_output'        ! Name of experiment within archive_dir
     archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
     out_dir =                                            ! Leave blank to set to directory containing this file
-    out_name = 'output.nd2'                              ! Name of output within out_dir
+    out_name = 'output.nc'                              ! Name of output within out_dir
     var = 'CAPE', 'PRECC', 'PRECL', 'PS', 'Q', 'QREFHT', 'T', 'TREFHT', 'TS', 'Z3'    ! Get these variables
     temp_ft_plev = 50000        ! Pressure in Pa to compute daily, zonal average of T at. Leave blank to not compute
     year_files =
