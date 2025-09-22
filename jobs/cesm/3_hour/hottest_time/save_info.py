@@ -76,6 +76,7 @@ def main(input_file_path: str):
         logger.info(f"Fully loaded data | Memory used {get_memory_usage() / 1000:.1f}GB")
 
     if script_info['temp_ft_plev'] is not None:
+        # MISTAKE!! SHOULD HAVE USED interp_hybrid_to_pressure INSTEAD, BUT STILL WORKED I THINK AS APPROX PRESSURE WAS 500hPa
         temp_ft_zonal_daily_av = interp_var_at_pressure(ds.T.resample(time="1D").mean(dim="time").mean(dim='lon'),
                                                      np.atleast_1d(script_info['temp_ft_plev']),
                                                      ds.PS.resample(time="1D").mean(dim="time").mean(dim='lon'), hyam,
