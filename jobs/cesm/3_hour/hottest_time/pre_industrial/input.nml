@@ -21,7 +21,7 @@
     archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
     out_dir =                                            ! Leave blank to set to directory containing this file
     out_name = 'output.nc'                              ! Name of output within out_dir
-    var = 'CAPE', 'PRECC', 'PRECL', 'PS', 'Q', 'QREFHT', 'T', 'TREFHT', 'TS', 'Z3'    ! Get these variables
+    var = 'T', 'TS', 'TREFHT', 'Q', 'QREFHT', 'Z3', 'PS', 'PRECC', 'PRECL','LHFLX', 'SHFLX', 'SOLIN', 'FSNT', 'FSNS', 'FSDS', 'FSNTC', 'FSNSC', 'FSDSC', 'FLNT', 'FLUT', 'FLNS', 'FLDS', 'FLNTC', 'FLUTC', 'FLNSC', 'CAPE', 'FREQZM'    ! Get these variables
     temp_ft_plev = 50000        ! Pressure in Pa to compute daily, zonal average of T at. Leave blank to not compute
     year_files =
     lat_min =                   ! leave None to consider all latitudes
