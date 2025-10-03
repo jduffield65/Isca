@@ -55,10 +55,11 @@ def reconstruct_temp(temp3: xr.DataArray, p1: Union[xr.DataArray, float], p2: Un
     return temp3 * (sigma_12**(lapse_23-lapse_12) * sigma_13**(-lapse_23))**(R/g)
 
 
-def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.DataArray, p_surf: xr.DataArray,
+def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset, np.ndarray], p_desired: Union[xr.DataArray, np.ndarray],
+                           p_surf: Union[xr.DataArray, np.ndarray],
                            hyam: xr.DataArray, hybm: xr.DataArray, p0: float,
                            plev_step: float = 1000, extrapolate: bool = False,
-                           lev_dim: str = 'lev') -> xr.Dataset:
+                           lev_dim: str = 'lev', var_name: str = 'new_var') -> xr.Dataset:
     """
     Function to get the value of variable `var` at the pressure `p_desired`, where `p_desired` is expected to
     be a different value at each lat and lon.
@@ -77,6 +78,7 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.D
             so sets accuracy of interpolation.
         extrapolate: If True, below ground extrapolation for variable will be done, otherwise will return nan.
         lev_dim: String that is the name of level dimension in input data.
+        var_name: String that is the name of variable in input data. Only used if `var` is numpy array
 
     Returns:
         Dataset with `plev` indicating approximate value of `p_desired` used, as well as `var` interpolated
@@ -86,8 +88,12 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.D
                       round_any(float(p_desired.max()), plev_step, 'ceil')+plev_step/2, plev_step)
     plevs_expand = xr.DataArray(plevs, dims=["plev"], coords={"plev": np.arange(len(plevs))})
     # Expand to match dimensions in p_surf, preserving order
-    for dim in p_surf.dims:
-        plevs_expand = plevs_expand.expand_dims({dim: p_surf.coords[dim]})
+    if isinstance(var, np.ndarray) and var.size==hybm.size:
+        # If just numpy array, need to make it a data array for it to work
+        var = xr.DataArray(var, dims=hybm.dims, coords=hybm.coords, name=var_name)
+    if isinstance(p_surf, xr.DataArray):
+        for dim in p_surf.dims:
+            plevs_expand = plevs_expand.expand_dims({dim: p_surf.coords[dim]})
 
     idx_lcl_closest = np.abs(plevs_expand - p_desired).argmin(dim='plev')
     var_out = {'plev': plevs_expand.isel(plev=idx_lcl_closest)}     # approx pressure of p_desired used
@@ -108,3 +114,44 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset], p_desired: xr.D
         # Drop dimension of plev in all variables
         var_out[key] = var_out[key].drop_vars('plev')
     return xr.Dataset(var_out)
+
+
+def get_var_at_plev(var_env: xr.DataArray, p_env: xr.DataArray, p_desired: xr.DataArray, method: str ='log',
+                    lev_dim: str ='lev'):
+    """
+    Find the value of `var_env` at pressure `p_desired`.
+
+    Similar to `interp_hybrid_to_pressure` but handles the case where want different `p_desired` at each
+    latitude and longitude.
+
+
+    Args:
+        var_env: float `n_lat x n_lon x n_lev x ...`</br>
+            Variable to find value of at `p_desired`.
+        p_env: float `n_lat x n_lon x n_lev x ...`</br>
+            Pressure levels corresponding to `var_env`.
+        p_desired: float `n_lat x n_lon x ...`</br>
+            Pressure levels to find `var_env` at for each coordinate.
+        method: Method of interpolation either take log10 of pressure first or leave as raw values.
+        lev_dim: String that is the name of level dimension in `var_env` and `p_env`.
+
+    Returns:
+        var_desired: float `n_lat x n_lon x ...`</br>
+            The value of `var_env` at `p_desired`.
+    """
+    def _get_var_at_plev(var_env, p_env, p_desired):
+        if method == 'log':
+            return np.interp(np.log10(p_desired), np.log10(p_env), var_env)
+        else:
+            return np.interp(p_desired, p_env, var_env)
+    out = xr.apply_ufunc(
+        _get_var_at_plev,
+        var_env, p_env, p_desired,
+        input_core_dims=[[lev_dim], [lev_dim], []],
+        output_core_dims=[[]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[float],
+        kwargs={}
+    )
+    return out

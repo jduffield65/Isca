@@ -117,11 +117,11 @@ def lat_lon_coord_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Datase
     `time` and `location` with each value of `location` corresponding to a specific `(lat, lon)` combination.
     For the original `ds`, it would be a function of `time`, `lat` and `lon`.
 
-    This is inspired from a
+    This is inspired by a
     [stack overflow post](https://stackoverflow.com/questions/72179103/xarray-select-the-data-at-specific-x-and-y-coordinates).
 
     Args:
-        ds: Dataset for particular experiment.
+        ds: Dataset for a particular experiment.
         lat: `float [n_coords]`
             Latitude coordinates to keep.
         lon: `float [n_coords]`
@@ -130,7 +130,7 @@ def lat_lon_coord_slice(ds: Dataset, lat: np.ndarray, lon: np.ndarray) -> Datase
     Returns:
         Dataset only including the desired coordinates.
     """
-    # To get dataset at specific coordinates not all perutations, turn to xarray first
+    # To get dataset at specific coordinates, not all permutations, turn to xarray first
     lat_xr = xr.DataArray(lat, dims=['location'])
     lon_xr = xr.DataArray(lon, dims=['location'])
     return ds.sel(lat=lat_xr, lon=lon_xr, method="nearest")
@@ -178,13 +178,13 @@ def lat_lon_rolling(ds: Union[Dataset, DataArray], window_lat: int, window_lon: 
 
 def time_rolling(ds: Union[Dataset, DataArray], window_time: int, wrap: bool = True) -> Union[Dataset, DataArray]:
     """
-    This creates a rolling averaged version of the dataset or data-array in the time dimension. Useful for when
-    have annual average dataset.
+    This creates a rolling-averaged version of the dataset or data-array in the time dimension. Useful for when
+    you have an annual average dataset.
 
     Args:
         ds: Dataset or DataArray to find rolling mean of.
         window_time: Size of window for rolling average in time dimension [number of time units e.g. days]
-        wrap: If first time comes immediately after last time i.e. for annual mean data
+        wrap: If the first time comes immediately after the last time i.e. for annual mean data
 
     Returns:
         Rolling averaged dataset or DataArray.

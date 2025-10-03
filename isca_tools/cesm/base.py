@@ -10,7 +10,7 @@ import os
 def get_pressure(ps: Union[np.ndarray, xr.DataArray], p0: float, hya: Union[np.ndarray, xr.DataArray],
                  hyb: Union[np.ndarray, xr.DataArray]) -> Union[np.ndarray, xr.DataArray]:
     """
-    Calculates pressure at the hybrid levels, similat to
+    Calculates pressure at the hybrid levels, similar to
     [NCAR function](https://www.ncl.ucar.edu/Document/Functions/Built-in/pres_hybrid_ccm.shtml).
 
     Args:

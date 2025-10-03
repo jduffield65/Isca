@@ -9,8 +9,8 @@ import logging
 import re
 from datetime import datetime, timedelta
 from ..utils.base import parse_int_list
-from isca_tools.utils.constants import g
-from isca_tools.utils.xarray import set_attrs
+from ..utils.constants import g
+from ..utils.xarray import set_attrs
 from xarray.coding.cftimeindex import CFTimeIndex
 from pandas._libs.tslibs.np_datetime import OutOfBoundsDatetime
 
