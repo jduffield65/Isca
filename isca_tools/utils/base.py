@@ -243,3 +243,32 @@ def has_out_of_range(val: Union[List, Tuple, np.ndarray, float], min_range: floa
     # If it's a single number, make it a list
     vals = val if isinstance(val, (list, tuple, np.ndarray)) else [val]
     return any((x < min_range or x > max_range) for x in vals)
+
+def top_n_peaks_ind(
+    var: np.ndarray,
+    n: int = 1,
+    min_ind_spacing: int = 0,
+) -> np.ndarray:
+    """Return the indices of the N largest values of `var`, such that the indices of these values
+     are ≥`min_ind_spacing` apart.
+
+    Args:
+        var: 1D array containing variable values. Assumed in an order
+        n: Number of peaks to select.
+        min_ind_spacing: Minimum index spacing between selected peaks.
+
+    Returns:
+        Indices of `n` peak values of `var`.
+    """
+    # Sort indices by descending value of var
+    order = np.argsort(var)[::-1]
+    selected_ind = []
+
+    for i in order:
+        # Check spacing constraint
+        if all(abs(i - s) >= min_ind_spacing for s in selected_ind):
+            selected_ind.append(i)
+            if len(selected_ind) == n:
+                break
+
+    return np.array(selected_ind, dtype=int)
