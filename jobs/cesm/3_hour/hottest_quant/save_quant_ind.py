@@ -1,4 +1,4 @@
-# Script to save variables conditioned on times of hottest % of days
+# Script to save the time index of the hottest quant % of days
 # One value for each `sample` in the hottest % of days. Only 1 time for each day corresponding to hottest time of day
 from geocat.comp import interp_hybrid_to_pressure
 from isca_tools import cesm
@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 
 
 def load_raw_data(exp_name: str, archive_dir: str,
-                  var: Union[str, List],
+                  var: Union[str, List], var_lev = Optional[int],
                   year_files: Optional[Union[int, List, str]] = None,
                   month_files: Optional[Union[int, List, str]] = None,
                   lon_min: Optional[float] = None, lon_max: Optional[float] = None,
@@ -43,7 +43,10 @@ def load_raw_data(exp_name: str, archive_dir: str,
         if lon_ind is not None:
             ds = ds.isel(lon=parse_int_list(lon_ind, format_func=lambda x: int(x), all_values=np.arange(ds.lon.size)))
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
-        return ds[var]
+        ds = ds[var]
+        if var_lev is not None:
+            ds = ds.isel(lev=var_lev)
+        return ds
 
     ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='atm',
                            year_files=year_files, month_files=month_files, chunks=chunks, parallel=load_parallel,
@@ -52,29 +55,12 @@ def load_raw_data(exp_name: str, archive_dir: str,
     return ds
 
 
-def process_ds(ds: xr.Dataset, n_sample: int, ind_spacing: int, hyam: xr.DataArray, hybm: xr.DataArray, p0: float,
-               load_all_at_start: bool = True, temp_ft_plev: Optional[List] = None,
-               refht_level_index: Optional[int] = None, ds_name: str = 'All Data', logger: Optional[logging.Logger] = None):
+def process_ds(T_var: xr.DataArray, n_sample: int, ind_spacing: int,
+               load_all_at_start: bool = True, ds_name: str = 'All Data', logger: Optional[logging.Logger] = None):
     logger.info(f"{ds_name} | Started | Memory used {get_memory_usage() / 1000:.1f}GB")
 
     if load_all_at_start:
-        ds = ds.load()
-
-    # Optional: compute temp_ft_zonal_av for this latitude
-    if temp_ft_plev is not None:
-        temp_ft_lat = interp_hybrid_to_pressure(ds.T, ds.PS, hyam, hybm, p0,
-                                                np.atleast_1d(temp_ft_plev),
-                                                lev_dim='lev')
-
-        temp_ft_lat = temp_ft_lat.load()
-
-        temp_ft_zonal_av = temp_ft_lat.mean(dim='lon')
-        # del temp_ft_lat  # release memory early
-        logger.info(f"{ds_name} | Computed T_FT | Memory used {get_memory_usage() / 1000:.1f}GB")
-
-    # Select temperature variable
-    T_var = (ds.TREFHT if refht_level_index is None else
-             ds.T.isel(lev=refht_level_index))
+        T_var = T_var.load()
 
     # Compute indices of top N peaks
     idx_quant = xr.apply_ufunc(
@@ -91,18 +77,8 @@ def process_ds(ds: xr.Dataset, n_sample: int, ind_spacing: int, hyam: xr.DataArr
     logger.info(
         f"{ds_name} | Computed hottest {n_sample} indices | Memory used {get_memory_usage() / 1000:.1f}GB")
 
-    # Select those times and store in temporary dataset
-    ds_out = ds.isel(time=idx_quant)
-    ds_out['time_ind'] = idx_quant
-
-    if temp_ft_plev is not None:
-        ds_out['T_zonal_av'] = temp_ft_zonal_av
-
-    # Explicitly delete large intermediates
-    # del ds_lat, ds_out_lat, idx_quant, T_var
-
     logger.info(f"{ds_name} | Finished | Memory used {get_memory_usage() / 1000:.1f}GB")
-    return ds_out
+    return idx_quant
 
 
 def main(input_file_path: str):
@@ -120,20 +96,13 @@ def main(input_file_path: str):
             # Raise error if output data already exists
             raise ValueError('Output file already exists at:\n{}'.format(out_file))
 
-    if isinstance(script_info['var'], str):
-        script_info['var'] = [script_info['var']]
-    load_var = script_info['var'] + ['gw', 'hyam', 'hybm', 'P0']
-
     func_arg_names = inspect.signature(load_raw_data).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
-    func_args['var'] = load_var
+    func_args['var_lev'] = script_info['refht_level_index']
+    var_name = 'TREFHT' if script_info['refht_level_index'] is None else 'T'
+    func_args['var'] = [var_name]
     ds = load_raw_data(**func_args, logger=logger)
     logger.info(f"Finished lazy-loading datasets | Memory used {get_memory_usage() / 1000:.1f}GB")
-
-    gw = ds.gw.isel(time=0).load()
-    hyam = ds.hyam.isel(time=0).load()
-    hybm = ds.hybm.isel(time=0).load()
-    p0 = float(ds.P0.isel(time=0))
 
     # Compute temporal spacing and sampling parameters
     time_dt = (ds.time[1] - ds.time[0]) / np.timedelta64(1, 'h')
@@ -147,26 +116,26 @@ def main(input_file_path: str):
     if script_info['loop_over_lat']:
         lat_results = []
         for i, lat_val in enumerate(ds.lat.values):
-            ds_out = process_ds(ds.isel(lat=i), n_sample, ind_spacing, hyam, hybm, p0, script_info['load_all_at_start'],
-                                script_info['temp_ft_plev'], script_info['refht_level_index'], f'Lat {i}/{n_lat}',
-                                logger)
+            ds_out = process_ds(ds[var_name].isel(lat=i), n_sample, ind_spacing, script_info['load_all_at_start'],
+                                f'Lat {i}/{n_lat}', logger)
             ds_out = ds_out.expand_dims(lat=[lat_val])  # Add latitude coordinate (needed after recombining)
             lat_results.append(ds_out)
         # Concatenate along latitude
-        ds_out = xr.concat(lat_results, dim='lat')
+        idx_quant = xr.concat(lat_results, dim='lat')
         logger.info(f"Recombined all latitudes | Final memory used {get_memory_usage() / 1000:.1f}GB")
     else:
-        ds_out = process_ds(ds, n_sample, ind_spacing, hyam, hybm, p0, script_info['load_all_at_start'],
-                            script_info['temp_ft_plev'], script_info['refht_level_index'],
+        idx_quant = process_ds(ds[var_name], n_sample, ind_spacing, script_info['load_all_at_start'],
                             f'Lat {ds.lat[0]:.1f} to {ds.lat[-1]:.1f}', logger)
 
-    ds_out['gw'] = gw
-    ds_out['hyam'] = hyam
-    ds_out['hybm'] = hybm
-    ds_out['P0'] = p0
+    # Only keep TREFHT corresponding to time_ind, but save initial time coordinate as well
+    ds['time_ind'] = idx_quant
+    time_old = ds.time
+    ds = ds.isel(time=idx_quant)
+    ds = ds.drop_vars("time")
+    ds = ds.assign_coords(time=time_old)
     logger.info(f"Created ds_out | Memory used {get_memory_usage() / 1000:.1f}GB")
-    ds_out.to_netcdf(os.path.join(script_info['out_dir'], script_info['out_name']), format="NETCDF4",
-                     encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in ds_out.data_vars})
+    ds.to_netcdf(os.path.join(script_info['out_dir'], script_info['out_name']), format="NETCDF4",
+                 encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in ds.data_vars})
     logger.info('End')
 
 
