@@ -144,6 +144,17 @@ def get_var_at_plev(var_env: xr.DataArray, p_env: xr.DataArray, p_desired: xr.Da
             return np.interp(np.log10(p_desired), np.log10(p_env), var_env)
         else:
             return np.interp(p_desired, p_env, var_env)
+    if not (p_env.diff(dim=lev_dim) > 0).all():
+        # If pressure is not ascending, flip dimension along lev_dim
+        # Requirement for np.interp
+        print(f'Reversed order of {lev_dim} for interpolation so p_env is ascending')
+        lev_dim_ascending = bool((p_env[lev_dim].diff(dim=lev_dim)>0).all())
+        p_env = p_env.sortby(lev_dim, ascending=not lev_dim_ascending)
+        var_env = var_env.sortby(lev_dim, ascending=not lev_dim_ascending)
+        if not (p_env.diff(dim=lev_dim) > 0).all():
+            # Sanity check p_env is now ascending
+            raise ValueError('Pressure variable not ascending')
+
     out = xr.apply_ufunc(
         _get_var_at_plev,
         var_env, p_env, p_desired,

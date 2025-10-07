@@ -4,7 +4,7 @@ from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_st
 from ..utils.constants import c_p, L_v, R, g
 from typing import Tuple, Union, Optional
 import numbers
-
+import xarray as xr
 
 
 def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: float,
@@ -57,7 +57,8 @@ def temp_adiabat_fit_func(temp_ft_adiabat: float, temp_surf: float, sphum_surf: 
 
 def get_temp_adiabat(temp_surf: Union[float, np.ndarray], sphum_surf: Union[float, np.ndarray],
                      pressure_surf: Union[float, np.ndarray], pressure_ft: Union[float, np.ndarray],
-                     guess_temp_adiabat: float = 273, epsilon: Union[float, np.ndarray] = 0) -> Union[float, np.ndarray]:
+                     guess_temp_adiabat: float = 273, epsilon: Union[float, np.ndarray] = 0) -> Union[
+    float, np.ndarray]:
     """
     This returns the adiabatic temperature at `pressure_ft`, $T_{A, FT}$, such that surface moist static
     energy equals free troposphere saturated moist static energy
@@ -125,7 +126,8 @@ def temp_adiabat_surf_fit_func(temp_surf_adiabat: float, temp_ft: float, rh_surf
         R_mod = R * np.log(pressure_surf / pressure_ft) / 2
         mse_surf = moist_static_energy(temp_surf_adiabat, rh_surf * sphum_sat(temp_surf_adiabat, pressure_surf),
                                        height=0, c_p_const=c_p - R_mod)
-        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod) + epsilon
+        mse_sat_ft = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0,
+                                         c_p_const=c_p + R_mod) + epsilon
     else:
         mse_surf = moist_static_energy(temp_surf_adiabat, rh_surf * sphum_sat(temp_surf_adiabat, pressure_surf),
                                        height=0)
@@ -169,18 +171,49 @@ def get_temp_adiabat_surf(humidity_surf: float, temp_ft: float, z_ft: Optional[f
         Convectively maintained temperature at `pressure_surf` in Kelvin.
     """
     if rh_form:
-        return scipy.optimize.fsolve(temp_adiabat_surf_fit_func, guess_temp_surf,
-                                     args=(temp_ft, humidity_surf, z_ft, pressure_surf, pressure_ft, epsilon))
+
+        def solve_temp_adiabat(temp_guess: float, temp_ft: float, humidity_surf: float,
+                               z_ft: Optional[float], pressure_surf: float, pressure_ft: float,
+                               epsilon: float = 0) -> float:
+            """Solve for surface temperature satisfying the adiabatic moist static energy balance."""
+            sol = scipy.optimize.fsolve(
+                temp_adiabat_surf_fit_func,
+                x0=temp_guess,
+                args=(temp_ft, humidity_surf, None, pressure_surf, pressure_ft, epsilon)
+            )
+            return sol[0]
+
+        def solve_temp_adiabat_with_z(temp_guess: float, temp_ft: float, humidity_surf: float,
+                                      z_ft: float, pressure_surf: float, pressure_ft: float,
+                                      epsilon: float = 0) -> float:
+            """Solve for surface temperature satisfying the adiabatic moist static energy balance."""
+            sol = scipy.optimize.fsolve(
+                temp_adiabat_surf_fit_func,
+                x0=temp_guess,
+                args=(temp_ft, humidity_surf, z_ft, pressure_surf, pressure_ft, epsilon)
+            )
+            return sol[0]
+
+        T_solved = xr.apply_ufunc(
+            solve_temp_adiabat if z_ft is None else solve_temp_adiabat_with_z,
+            guess_temp_surf, temp_ft, humidity_surf, z_ft, pressure_surf, pressure_ft, epsilon,
+            input_core_dims=[[], [], [], [], [], [], []],  # all scalar-like per location
+            output_core_dims=[[]],
+            vectorize=True,  # broadcast over all non-core dims (lat, lon)
+            dask="parallelized",  # if arrays are Dask-backed
+            output_dtypes=[float],
+        )
+        return T_solved
     else:
         if z_ft is None:
             R_mod = R * np.log(pressure_surf / pressure_ft) / 2
             mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0,
-                                             c_p_const=c_p+R_mod) * 1000 + epsilon * 1000
-            return (mse_ft_sat - L_v * humidity_surf)/(c_p-R_mod)
+                                             c_p_const=c_p + R_mod) * 1000 + epsilon * 1000
+            return (mse_ft_sat - L_v * humidity_surf) / (c_p - R_mod)
         else:
             mse_ft_sat = moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=z_ft) * 1000 + \
-                         epsilon*1000
-            return (mse_ft_sat - L_v * humidity_surf)/c_p
+                         epsilon * 1000
+            return (mse_ft_sat - L_v * humidity_surf) / c_p
 
 
 def get_z_ft_approx(temp_surf: Union[float, np.ndarray], temp_ft: Union[float, np.ndarray],
@@ -211,7 +244,7 @@ def get_z_ft_approx(temp_surf: Union[float, np.ndarray], temp_ft: Union[float, n
             Geopotential height at `pressure_ft` in *m*.
     """
     R_mod = R * np.log(pressure_surf / pressure_ft) / 2
-    return R_mod/g * (temp_surf + temp_ft) + z_surf
+    return R_mod / g * (temp_surf + temp_ft) + z_surf
 
 
 def decompose_temp_adiabat_anomaly(temp_surf_mean: np.ndarray, temp_surf_quant: np.ndarray, sphum_mean: np.ndarray,
@@ -345,7 +378,7 @@ Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray], Un
     else:
         c_p_use = c_p - R_mod
         pressure_use = pressure_surf
-        mu = None       # set so compute later
+        mu = None  # set so compute later
     alpha = clausius_clapeyron_factor(temp, pressure_use)
     beta_1 = c_p_use + L_v * alpha * sphum
     beta_2 = L_v * alpha * sphum * (alpha * temp - 2)
@@ -425,7 +458,7 @@ def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_s
     # Get parameters required for prefactors in the theory
     _, _, _, beta_ft1, beta_ft2, beta_ft3, _ = get_theory_prefactor_terms(temp_ft, pressure_surf, pressure_ft)
     _, q_sat_surf, alpha_s, beta_s1, beta_s2, beta_s3, mu = get_theory_prefactor_terms(temp_surf, pressure_surf,
-                                                                                   pressure_ft, sphum)
+                                                                                       pressure_ft, sphum)
     rh = sphum / q_sat_surf
 
     # Record coefficients of each term in equation for delta T_s(x)
@@ -434,16 +467,16 @@ def get_gamma_factors(temp_surf: float, sphum: float, temp_ft: float, pressure_s
     gamma = {'t_mean_change': {}, 'r_mean_change': {}, 'e_mean_change': {}, 'anomaly_change': {}}
     # temp_s_mean_change terms
     key = 't_mean_change'
-    gamma_e0 = beta_ft2 * beta_s1 / beta_ft1**2 * temp_surf/temp_ft
-    gamma[key]['t0'] = gamma_e0 - beta_s2/beta_s1
-    gamma[key]['t0_r0'] = beta_s2/beta_s1 - mu * gamma_e0
+    gamma_e0 = beta_ft2 * beta_s1 / beta_ft1 ** 2 * temp_surf / temp_ft
+    gamma[key]['t0'] = gamma_e0 - beta_s2 / beta_s1
+    gamma[key]['t0_r0'] = beta_s2 / beta_s1 - mu * gamma_e0
     gamma[key]['r0'] = mu * (1 - gamma_e0 / (alpha_s * temp_surf))
     gamma[key]['e0'] = gamma_e0
 
     # Anomaly change terms
     key = 'anomaly_change'
     gamma_r_change = mu / alpha_s / rh
-    gamma_e_change = 1/beta_s1
+    gamma_e_change = 1 / beta_s1
     gamma[key]['r'] = gamma_r_change
     gamma[key]['t0_r'] = gamma_r_change * alpha_s * temp_surf
     gamma[key]['ft'] = beta_ft1 / beta_s1
@@ -614,7 +647,8 @@ def mse_mod_anom_change_ft_expansion(temp_ft_mean: np.ndarray, temp_ft_quant: np
         term_sll = 0
         term_lls = 0
         term_lsl = 0
-        term_lnl = 0 if taylor_terms == 'linear' else beta_2 / beta_1 / temp_ft_mean[0] * delta_temp_ft_anom * mse_mod_mean_change
+        term_lnl = 0 if taylor_terms == 'linear' else beta_2 / beta_1 / temp_ft_mean[
+            0] * delta_temp_ft_anom * mse_mod_mean_change
         term_snl = 0
     # Extra squared-squared terms
     if taylor_terms == 'full':
@@ -705,7 +739,8 @@ def mse_mod_change_surf_expansion(temp_surf: np.ndarray, sphum_surf: np.ndarray,
             The sum of all these prefactors multiplied by the changes equals the full theory.
             Units of prefactors are *kJ/kg* divided by units of the change term.
     """
-    _, _, _, beta_s1, beta_s2, _, _ = get_theory_prefactor_terms(temp_surf[0], pressure_surf, pressure_ft, sphum_surf[0])
+    _, _, _, beta_s1, beta_s2, _, _ = get_theory_prefactor_terms(temp_surf[0], pressure_surf, pressure_ft,
+                                                                 sphum_surf[0])
 
     delta_temp = temp_surf[1] - temp_surf[0]
     rh = sphum_surf / sphum_sat(temp_surf, pressure_surf)
@@ -878,9 +913,9 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
     # Compute epsilon
     # Quantify deviation from convective equilibrium in MSE space
     epsilon_mean = (moist_static_energy(temp_surf_mean, sphum_mean, height=0) -
-                    moist_static_energy(temp_ft_mean, sphum_sat(temp_ft_mean, pressure_ft), z_ft_mean))*1000
+                    moist_static_energy(temp_ft_mean, sphum_sat(temp_ft_mean, pressure_ft), z_ft_mean)) * 1000
     epsilon_quant = (moist_static_energy(temp_surf_quant, sphum_quant, height=0) -
-                     moist_static_energy(temp_ft_quant, sphum_sat(temp_ft_quant, pressure_ft), z_ft_quant))*1000
+                     moist_static_energy(temp_ft_quant, sphum_sat(temp_ft_quant, pressure_ft), z_ft_quant)) * 1000
     epsilon_anom = epsilon_quant - epsilon_mean[:, np.newaxis]
 
     # Get factors needed for theory
@@ -891,10 +926,10 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
         temp_mean_ft_beta_use = temp_ft_mean[0]
     gamma = get_gamma_factors(temp_surf_mean[0], sphum_mean[0], temp_mean_ft_beta_use, pressure_surf, pressure_ft)
     _, _, alpha_s, beta_s1, _, _, _ = get_theory_prefactor_terms(temp_surf_mean[0], pressure_surf, pressure_ft,
-                                                                  sphum_mean[0])
+                                                                 sphum_mean[0])
     if non_linear:
         _, _, alpha_s_x, beta_s1_x, _, _, _ = get_theory_prefactor_terms(temp_surf_quant[0], pressure_surf, pressure_ft,
-                                                                      sphum_quant[0])
+                                                                         sphum_quant[0])
         mu_x = L_v * alpha_s_x * sphum_quant[0] / beta_s1_x
         mu = L_v * alpha_s * sphum_mean[0] / beta_s1
     else:
@@ -903,20 +938,20 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
 
     if z_form:
         R_mod, _, _, beta_ft1, _, _, _ = get_theory_prefactor_terms(temp_mean_ft_beta_use, pressure_surf, pressure_ft)
-        temp_ft_anom_change = g/R_mod * np.diff(z_ft_quant - z_ft_mean[:, np.newaxis], axis=0)[0]
+        temp_ft_anom_change = g / R_mod * np.diff(z_ft_quant - z_ft_mean[:, np.newaxis], axis=0)[0]
         # Need to multiply all mu and gamma factors by beta_s1/(beta_s1+beta_ft1) if z form of theory
-        mu = mu * beta_s1 / (beta_s1+beta_ft1)
-        mu_x = mu_x * beta_s1 / (beta_s1+beta_ft1)
+        mu = mu * beta_s1 / (beta_s1 + beta_ft1)
+        mu_x = mu_x * beta_s1 / (beta_s1 + beta_ft1)
         for key1 in gamma:
             for key2 in gamma[key1]:
-                gamma[key1][key2] = gamma[key1][key2] * beta_s1 / (beta_s1+beta_ft1)
+                gamma[key1][key2] = gamma[key1][key2] * beta_s1 / (beta_s1 + beta_ft1)
     else:
         temp_ft_anom_change = np.diff(temp_ft_quant - temp_ft_mean[:, np.newaxis], axis=0)[0]
     mu_factor = 1 + mu * (r_mean[1] - r_mean[0]) / r_mean[0]
     mu_factor_x = 1 + mu_x * (r_quant[1] - r_quant[0]) / r_quant[0]
 
     anom_norm0 = {'t0': (temp_surf_quant - temp_surf_mean[:, np.newaxis])[0] / temp_surf_mean[0],
-                  'r0': r_anom[0] / r_mean[0], 'e0': epsilon_anom[0]/(beta_s1*temp_surf_mean[0])}
+                  'r0': r_anom[0] / r_mean[0], 'e0': epsilon_anom[0] / (beta_s1 * temp_surf_mean[0])}
     anom_norm0['t0_r0'] = anom_norm0['t0'] * anom_norm0['r0']
 
     # Record the sign of each term, and also normalize relative humidity change terms by climatological mean
@@ -960,8 +995,8 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
     info_change = {'t_mean_change': (temp_surf_mean[1] - temp_surf_mean[0]) * mu_factor,
                    'r_mean_change': r_mean[1] - r_mean[0],
                    'e_mean_change': epsilon_mean[1] - epsilon_mean[0],
-                   'anomaly_change': {'r': r_anom[1]-r_anom[0],
-                                      't0_r': r_anom[1]-r_anom[0],
+                   'anomaly_change': {'r': r_anom[1] - r_anom[0],
+                                      't0_r': r_anom[1] - r_anom[0],
                                       'ft': temp_ft_anom_change,
                                       'e': epsilon_anom[1] - epsilon_anom[0]}}
 
@@ -979,8 +1014,8 @@ def get_scaling_factor_theory(temp_surf_mean: np.ndarray, temp_surf_quant: np.nd
                                                                      ) / mu_factor_x
                 info_cont[key1][key2] = info_coef[key1][key2] * info_change[key1][key2]
 
-    final_answer = mu_factor/mu_factor_x + sum([sum([info_cont[key1][key2] for key2 in info_coef[key1]])
-                                                for key1 in info_coef])
+    final_answer = mu_factor / mu_factor_x + sum([sum([info_cont[key1][key2] for key2 in info_coef[key1]])
+                                                  for key1 in info_coef])
 
     return final_answer, info_coef, info_change, info_cont, mu_factor_x
 
@@ -1099,7 +1134,7 @@ def decompose_temp_ft_anom_change(temp_ft_av: np.ndarray, temp_ft_x: np.ndarray,
                            'p_x': eta_av0[0] * (p_x_anom[1] - p_x_anom[0]),
                            'eta0': eta_px0_anom[0] * (p_av[1] - p_av[0]),
                            'eta0_p_x': eta_px0_anom[0] * (p_x_anom[1] - p_x_anom[0]),
-                           'eta_p_x': (eta_px0[1]-eta_px0[0]) * (p_x[1] - p_x[0]) -
+                           'eta_p_x': (eta_px0[1] - eta_px0[0]) * (p_x[1] - p_x[0]) -
                                       (eta_av0[1] - eta_av0[0]) * (p_av[1] - p_av[0])}
 
     # Theory is sum of these terms
