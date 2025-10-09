@@ -143,7 +143,9 @@ def main_one_file(script_info: dict, ind_file: int, out_name_func: Callable, log
     ds_out['hyam'] = hyam
     ds_out['hybm'] = hybm
     ds_out['P0'] = p0
-    ds_out['time'] = quant_times        # replace time with times of the samples
+    ds_out['time'] = quant_times            # replace time with times of the samples
+    ds_out = ds_out.drop_dims("time")       # drop the dimension of time
+    ds_out = ds_out.reset_coords("time")    # convert time from coordinate to variable
     logger.info(f"Created ds_out | Memory used {get_memory_usage() / 1000:.1f}GB")
     ds_out.to_netcdf(out_file, format="NETCDF4",
                      encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in ds_out.data_vars})

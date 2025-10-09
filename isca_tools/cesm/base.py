@@ -62,7 +62,7 @@ def create_per_job_nml(input_file_path: str, files_per_job: int = 1, years_per_j
     file_dates = get_exp_file_dates(input_info['script_info']['exp_name'], 'atm',
                                     input_info['script_info']['archive_dir'], input_info['script_info']['hist_file'])
     year_files_all = np.unique(file_dates.dt.year).tolist()
-    file_ind_all = np.arange(len(file_dates))
+    file_ind_all = np.arange(len(file_dates)).tolist()
     if years_per_job is not None:
         if input_info['script_info']['year_files'] is None:
             file_consider = year_files_all
@@ -73,8 +73,9 @@ def create_per_job_nml(input_file_path: str, files_per_job: int = 1, years_per_j
         if input_info['script_info']['ind_files'] is None:
             file_consider = file_ind_all
         else:
-            file_consider = parse_int_list(input_info['script_info']['ind_file'], lambda x: int(x),
-                                           all_values=year_files_all)
+            file_consider = parse_int_list(input_info['script_info']['ind_files'], lambda x: int(x),
+                                           all_values=file_ind_all)
+    n_digit = np.max([len(str(val)) for val in file_consider])          # how many digits to use for file name
     file_jobs = split_list_max_n(file_consider, years_per_job if years_per_job is not None else files_per_job)
     out_file_names = []
     for ind in file_jobs:
@@ -82,7 +83,7 @@ def create_per_job_nml(input_file_path: str, files_per_job: int = 1, years_per_j
             input_info['script_info']['year_files'] = ind
         else:
             input_info['script_info']['ind_files'] = ind
-        out_file_names.append(input_file_path.replace('.nml', f'{ind[0]}.nml'))
+        out_file_names.append(input_file_path.replace('.nml', f'{ind[0]:{n_digit}d}.nml'))
         if os.path.exists(out_file_names[-1]):
             if exist_ok is None:
                 print(f'{ind}: Output nml file already exists. Leaving unchanged')
