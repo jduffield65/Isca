@@ -12,7 +12,7 @@ import f90nml
 import warnings
 import logging
 import inspect
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Callable
 import xarray as xr
 import gc  # garbage collector
 
@@ -23,13 +23,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 
 def load_raw_data(exp_name: str, archive_dir: str,
                   var: Union[str, List],
-                  year_files: Optional[Union[int, List, str]] = None,
-                  month_files: Optional[Union[int, List, str]] = None,
                   ind_files: Optional[Union[int, List, str]] = None,
                   lon_min: Optional[float] = None, lon_max: Optional[float] = None,
                   lat_min: Optional[float] = None, lat_max: Optional[float] = None,
                   lat_ind: Optional[Union[int, List, str]] = None, lon_ind: Optional[Union[int, List, str]] = None,
                   chunks_time: Optional[int] = None, chunks_lat: Optional[int] = None, chunks_lon: Optional[int] = None,
+                  hist_file: int = 0,
                   load_parallel: bool = False, logger: Optional[logging.Logger] = None):
     if isinstance(var, str):
         var = [var]
@@ -45,9 +44,8 @@ def load_raw_data(exp_name: str, archive_dir: str,
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
         return ds[var]
 
-    ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=1, comp='atm',
-                           year_files=year_files, month_files=month_files, ind_files=ind_files,
-                           chunks=chunks, parallel=load_parallel,
+    ds = cesm.load_dataset(exp_name, archive_dir=archive_dir, hist_file=hist_file, comp='atm',
+                           ind_files=ind_files, chunks=chunks, parallel=load_parallel,
                            preprocess=preprocess_atm, logger=logger)
     logger.info('Loaded data')
     return ds
@@ -90,15 +88,10 @@ def process_ds(ds: xr.Dataset, idx_quant: xr.DataArray, hyam: xr.DataArray, hybm
     return ds_out
 
 
-def main(input_file_path: str):
-    logger = logging.getLogger()  # for printing to console time info
-    logger.info("Start")
-    input_info = f90nml.read(input_file_path)
-    script_info = input_info['script_info']
-    if script_info['out_dir'] is None:
-        script_info['out_dir'] = os.path.dirname(input_file_path)
-    if script_info['quant_time_dir'] is None:
-        script_info['quant_time_dir'] = script_info['out_dir']
+def main_one_file(script_info: dict, ind_file: int, out_name_func: Callable, logger: Optional[logging.Logger] = None):
+    # out_name_func is a function that takes in the default out_name and ind_file; returning new out_name
+    script_info['ind_files'] = ind_file
+    script_info['out_name'] = out_name_func(script_info['out_name'], ind_file)      # include file index in output name
     out_file = os.path.join(script_info['out_dir'], script_info['out_name'])
     if os.path.exists(out_file):
         if script_info['overwrite']:
@@ -152,10 +145,36 @@ def main(input_file_path: str):
     ds_out['P0'] = p0
     ds_out['time'] = quant_times        # replace time with times of the samples
     logger.info(f"Created ds_out | Memory used {get_memory_usage() / 1000:.1f}GB")
-    ds_out.to_netcdf(os.path.join(script_info['out_dir'], script_info['out_name']), format="NETCDF4",
+    ds_out.to_netcdf(out_file, format="NETCDF4",
                      encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in ds_out.data_vars})
-    logger.info('End')
 
+def main(input_file_path: str):
+    input_info = f90nml.read(input_file_path)
+    script_info = input_info['script_info']
+    if script_info['out_dir'] is None:
+        script_info['out_dir'] = os.path.dirname(input_file_path)
+    if script_info['quant_time_dir'] is None:
+        script_info['quant_time_dir'] = script_info['out_dir']
+
+    # Determine which files to get data for
+    file_dates = cesm.get_exp_file_dates(script_info['exp_name'], 'atm', script_info['archive_dir'],
+                                         1)
+    all_file_ind = np.arange(len(file_dates)).tolist()
+    if script_info['ind_files'] is None:
+        files_ind_consider = all_file_ind
+    else:
+        files_ind_consider = parse_int_list(script_info['ind_files'], lambda x: int(x), all_values=all_file_ind)
+
+    out_name_start = script_info['out_name']
+    # Get function to modify out_name for each file
+    n_digits = len(str(len(all_file_ind) - 1))
+    out_name_func = lambda x, y: x.replace('.nc', f'{y:0{n_digits}d}.nc')
+    for i, ind in enumerate(files_ind_consider):
+        logger = logging.getLogger()  # for printing to console time info
+        logger.info(f"Start | File {i + 1}/{len(files_ind_consider)} | {str(file_dates.values[ind])}")
+        main_one_file(script_info, ind, out_name_func, logger)
+        logger.info(f"End | File {i + 1}/{len(files_ind_consider)} | {str(file_dates.values[ind])}")
+        script_info['out_name'] = out_name_start        # so don't repeatedly append number to the name
 
 if __name__ == "__main__":
     main(sys.argv[1])
