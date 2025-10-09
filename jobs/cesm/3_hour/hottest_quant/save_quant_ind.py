@@ -39,9 +39,9 @@ def load_raw_data(exp_name: str, archive_dir: str,
         # Preprocessing so don't load in entire dataset
         # Probably want to use lat_ind or lat_max. But ind computed first as indices are relative to entire dataset
         if lat_ind is not None:
-            ds = ds.isel(lat=parse_int_list(lat_ind, format_func=lambda x: int(x), all_values=np.arange(ds.lat.size)))
+            ds = ds.isel(lat=parse_int_list(lat_ind, format_func=lambda x: int(x), all_values=np.arange(ds.lat.size).tolist()))
         if lon_ind is not None:
-            ds = ds.isel(lon=parse_int_list(lon_ind, format_func=lambda x: int(x), all_values=np.arange(ds.lon.size)))
+            ds = ds.isel(lon=parse_int_list(lon_ind, format_func=lambda x: int(x), all_values=np.arange(ds.lon.size).tolist()))
         ds = lat_lon_range_slice(ds, lat_min, lat_max, lon_min, lon_max)
         ds = ds[var]
         if var_lev is not None:

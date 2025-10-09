@@ -1,7 +1,7 @@
 ! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
 &slurm_info
    jobs_dir = '/home/users/jamd1/Isca/jobs/'                  ! Directory containing jobs on JASMIN
-   script_path = 'cesm/3_hour/hottest_quant/save_quant_ind.py'  ! Path to python script within jobs_dir
+   script_path = 'cesm/3_hour/hottest_quant/save_info.py'  ! Path to python script within jobs_dir
    script_args =                                              ! Will set to the path to this file if blank
    job_name =                                                 ! Set to name of directory containing this file if blank
    time = '24:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
@@ -20,12 +20,14 @@
     exp_name = 'e.e20.E1850TEST.f09_g17.3hour_output'        ! Name of experiment within archive_dir
     archive_dir = '/gws/nopw/j04/global_ex/jamd1/cesm/CESM2.1.3/archive/'       ! Directory containing cesm experiments on JASMIN
     out_dir =                                            ! Leave blank to set to directory containing this file
-    out_name = 'time_ind_quant99.nc'                              ! Name of output within out_dir
-    quant = 99             ! Collect days hotter than this quantile
-    refht_level_index =    ! Blank means using TREFHT to find indices of hottest days, can also provide index to use as given model level index
-    hour_spacing = 13      ! The hottest times must be separated >= this many hours
+    out_name =                                         ! Name of output within out_dir
+    quant_time_dir =                                   ! Leave blank to set to out_dir
+    quant_time_name = 'time_ind_quant99.nc'            ! Name of file containing the times of quantiles
+    var = 'T', 'TS', 'TREFHT', 'Q', 'QREFHT', 'Z3', 'PS', 'PRECC', 'PRECL','LHFLX', 'SHFLX', 'SOLIN', 'FSNT', 'FSNS', 'FSDS', 'FSNTC', 'FSNSC', 'FSDSC', 'FLNT', 'FLUT', 'FLNS', 'FLDS', 'FLNTC', 'FLUTC', 'FLNSC', 'CAPE', 'FREQZM'    ! Get these variables
+    temp_ft_plev = 30000, 35000, 40000, 45000, 50000        ! Pressure in Pa to compute daily, zonal average of T at. Leave blank to not compute
     year_files =
     month_files =
+    ind_files =                 ! Select indices of files to load
     lat_ind =                   ! leave None to consider all latitudes
     lon_ind =                   ! leave None to consider all longitudes
     lat_min =                   ! leave None to consider all latitudes

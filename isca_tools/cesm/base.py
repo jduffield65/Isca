@@ -2,6 +2,7 @@ import numpy as np
 import xarray as xr
 from typing import Union, Optional, List
 import f90nml
+
 from ..utils.base import parse_int_list, split_list_max_n
 from .load import get_exp_file_dates
 import os
@@ -32,16 +33,23 @@ def get_pressure(ps: Union[np.ndarray, xr.DataArray], p0: float, hya: Union[np.n
     """
     return hya * p0 + hyb * ps
 
-def create_years_per_job_nml(input_file_path: str, years_per_job: int, exist_ok: Optional[bool] = None) -> List:
+def create_per_job_nml(input_file_path: str, files_per_job: int = 1, years_per_job: Optional[int] = None,
+                       exist_ok: Optional[bool] = None) -> List:
     """
-    Splits up list of all years into separate lists of no more than `years_per_job` in each.
-    A `nml` file is then created for each of these with name same as `input_file_path` but with first year
-    in job as a suffix e.g. `input_nml` becomes `input1985.nml` with `input_info['script_info']['years']` set to
+    Splits up list of all input files (or years) into separate lists of no more than `files_per_job` (`years_per_job`) in each.
+    A `nml` file is then created for each of these with name same as `input_file_path` but with first file (year)
+    in job as a suffix.
+
+    E.g. `input_nml` becomes `input0.nml` with `input_info['script_info']['ind_files']` set to file
+    indices to run for that job.
+
+    E.g. `input_nml` becomes `input1985.nml` with `input_info['script_info']['year_files']` set to
     years to run for that job.
 
     Args:
         input_file_path: Path to `nml` file for experiment.
-        years_per_job: Numbr of years to run for each job.
+        files_per_job: Number of files to consider for each job.
+        years_per_job: Number of years to run for each job. Overrides `files_per_job` if provided.
         exist_ok: If `True`, do not raise exception if any file to be created already exists.
             If `False`, will overwrite it. If `None` leaves the existing file unchanged.
 
@@ -54,20 +62,31 @@ def create_years_per_job_nml(input_file_path: str, years_per_job: int, exist_ok:
     file_dates = get_exp_file_dates(input_info['script_info']['exp_name'], 'atm',
                                     input_info['script_info']['archive_dir'], input_info['script_info']['hist_file'])
     year_files_all = np.unique(file_dates.dt.year).tolist()
-    if input_info['script_info']['year_files'] is None:
-        years_consider = year_files_all
+    file_ind_all = np.arange(len(file_dates))
+    if years_per_job is not None:
+        if input_info['script_info']['year_files'] is None:
+            file_consider = year_files_all
+        else:
+            file_consider = parse_int_list(input_info['script_info']['year_files'], lambda x: int(x),
+                                            all_values=year_files_all)
     else:
-        years_consider = parse_int_list(input_info['script_info']['year_files'], lambda x: int(x),
-                                        all_values=year_files_all)
-    years_jobs = split_list_max_n(years_consider, years_per_job)
+        if input_info['script_info']['ind_files'] is None:
+            file_consider = file_ind_all
+        else:
+            file_consider = parse_int_list(input_info['script_info']['ind_file'], lambda x: int(x),
+                                           all_values=year_files_all)
+    file_jobs = split_list_max_n(file_consider, years_per_job if years_per_job is not None else files_per_job)
     out_file_names = []
-    for years in years_jobs:
-        input_info['script_info']['year_files'] = years
-        out_file_names.append(input_file_path.replace('.nml', f'{years[0]}.nml'))
+    for ind in file_jobs:
+        if years_per_job is not None:
+            input_info['script_info']['year_files'] = ind
+        else:
+            input_info['script_info']['ind_files'] = ind
+        out_file_names.append(input_file_path.replace('.nml', f'{ind[0]}.nml'))
         if os.path.exists(out_file_names[-1]):
             if exist_ok is None:
-                print(f'{years}: Output nml file already exists. Leaving unchanged')
+                print(f'{ind}: Output nml file already exists. Leaving unchanged')
                 continue
         input_info.write(out_file_names[-1], force=exist_ok)
-        print(f'{years}: Output nml file created')
+        print(f'{ind}: Output nml file created')
     return out_file_names

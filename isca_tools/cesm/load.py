@@ -31,6 +31,7 @@ def load_dataset(exp_name: str, comp: str = 'atm',
                  preprocess: Optional[Callable] = None,
                  year_files: Optional[Union[int, List, str]] = None,
                  month_files: Optional[Union[int, List, str]] = None,
+                 ind_files: Optional[Union[int, List, str]] = None,
                  apply_month_shift_fix: bool = True,
                  logger: Optional[logging.Logger] = None) -> xr.Dataset:
     """
@@ -63,8 +64,10 @@ def load_dataset(exp_name: str, comp: str = 'atm',
             * `last5` will load in the last 5 years.
         month_files: Only files with these months (1 is Jan) in their names will be loaded.
             Leave as `None` to load all months.</br>
-            As well as integer or list of integers, there are three is a single string option:
-            `'2:5'` will load in all months between 2 and 5 inclusive.
+            Accepts same format as `year_files`.
+        ind_files: Will save the files with these indices, when ordered by date. Takes precident over
+            `year_files` and `month_files`.</br>
+            Accepts same format as `year_files`.
         apply_month_shift_fix: If `True`, will apply `ds_month_shift` before returning dataset.</br>
             Only used for monthly averaged data i.e. `hist_file=0`.
         logger: Optional logger.
@@ -73,10 +76,20 @@ def load_dataset(exp_name: str, comp: str = 'atm',
         Dataset containing all diagnostics specified for the experiment.
     """
     exp_dir, comp_id = get_exp_dir(exp_name, comp, archive_dir)
-    if year_files is None and month_files is None:
+    # Only load in specific years and/or months
+    data_files_all = os.listdir(exp_dir)
+    # only keep files of correct format
+    data_files_all = [file for file in data_files_all if
+                      fnmatch.fnmatch(file, f'{exp_name}.{comp_id}.h{hist_file}.*.nc')]
+    n_files_all = len(data_files_all)
+    if (year_files is None) and (month_files is None) and (ind_files is None):
         # Load all data in folder
         # * indicates where date index info is, so we combine all datasets
         data_files_load = os.path.join(exp_dir, f'{exp_name}.{comp_id}.h{hist_file}.*.nc')
+    elif ind_files is not None:
+        ind_files = parse_int_list(ind_files, format_func=lambda x: int(x), all_values=np.arange(n_files_all).tolist())
+        data_files_load = [os.path.join(exp_dir, file) for i, file in enumerate(data_files_all) if
+                           i in ind_files]
     else:
         if hist_file != 0 and month_files is not None:
             warnings.warn(f'If h{hist_file} files not saved monthly then will not have a file for each month so '
@@ -110,20 +123,15 @@ def load_dataset(exp_name: str, comp: str = 'atm',
                              f'Requested years: {year_files}\n'
                              f'Requested months: {month_files}\n')
 
-        # Only load in specific years and/or months
-        data_files_all = os.listdir(exp_dir)
-        # only keep files of correct format
-        data_files_all = [file for file in data_files_all if
-                          fnmatch.fnmatch(file, f'{exp_name}.{comp_id}.h{hist_file}.*.nc')]
         # only keep files with requested years and months in file name
         data_files_load = [os.path.join(exp_dir, file) for i, file in enumerate(data_files_all) if
                            i in file_ind_keep]
     if logger:
         if isinstance(data_files_load, str):
-            logger.info(f'Loading data from all files: {data_files_load}')
+            logger.info(f'Loading data from all {n_files_all} files: {data_files_load}')
         else:
             files_str = "\n".join(data_files_load)
-            logger.info(f'Loading data from {len(data_files_load)} files:\n{files_str}')
+            logger.info(f'Loading data from {len(data_files_load)}/{n_files_all} files:\n{files_str}')
     if apply_month_shift_fix and hist_file == 0:
         ds = xr.open_mfdataset(data_files_load, decode_times=False, concat_dim=concat_dim,
                                combine=combine, chunks=chunks, parallel=parallel, preprocess=preprocess)

@@ -235,3 +235,37 @@ def lat_lon_range_slice(ds: Union[Dataset, DataArray], lat_min: Optional[float] 
     if lon_range is not None:
         ds = ds.sel(lon=lon_range)
     return ds
+
+def get_time_sample_indices(times_sample: xr.DataArray, times_all: xr.DataArray) -> xr.DataArray:
+    """Return indices of `times_sample` in `times_all` for each coordinate.
+
+    Args:
+        times_sample: Times for each sample at each location to get index in `time_all` for (sample, lat, lon).
+        times_all: All times in a given simulation (time).
+
+    Returns:
+        time_index: Indices of `times_sample` within `times_all`, with shape (sample, lat, lon),
+                      filled with NaN where times are not found. Hence, output is float to include NaN.
+    """
+
+    # Broadcast ds1 times to full grid (sample, lat, lon)
+    times_sample_val = times_sample.values  # shape (sample, lat, lon)
+
+    # initialize indices with NaNs
+    indices = np.full(times_sample_val.shape, np.nan)
+
+    # Create lookup dict from times_all to indices
+    time_to_index = {t: i for i, t in enumerate(times_all.time.values)}
+
+    # Vectorized mapping (but must loop over unique times for efficiency)
+    unique_times = np.unique(times_sample_val)
+    for t in unique_times:
+        if t in time_to_index:
+            indices[times_sample_val == t] = time_to_index[t]
+    # Return as DataArray
+    return xr.DataArray(
+        indices,
+        dims=times_sample.dims,
+        coords={dim: times_sample.coords[dim] for dim in times_sample.dims},
+        name="time_index"
+    )
