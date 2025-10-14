@@ -454,3 +454,40 @@ def get_var_extrema_date(time: np.ndarray, var: np.ndarray, smooth_window: int =
     spline_var = CubicSpline(time_smooth, var_smooth, bc_type='periodic')
     extrema_date = get_extrema_date_from_spline(spline_var, type, thresh_extrema, max_extrema)
     return extrema_date, spline_var
+
+def interp_nan(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Set all nan values in `y` based on the two nearest values of `x` for which `y` is not nan.
+
+    Args:
+        x: `[n_points]` Independent variable e.g. pressure
+        y: `[n_points]` Dependent variable e.g. temperature
+
+    Returns:
+        y: `[n_points]` Same as input but with all nans replaced through interpolation.
+        not_valid_idx: `[n_not_valid]` Indices of nans in `y` that were replaced through interpolation.
+    """
+    # Set all nan values in x based on the two nearest indices that are not nan
+    # using linear interpolation
+    not_valid = np.isnan(y)
+    if not_valid.sum() == 0:
+        return y, np.zeros(0)
+    else:
+        valid_idx = np.where(~not_valid)[0]
+        not_valid_idx = np.where(not_valid)[0]
+        for i in not_valid_idx:
+            if i < valid_idx[0]:
+                # Case: before first valid point
+                j1, j2 = valid_idx[0], valid_idx[1]
+            elif i > valid_idx[-1]:
+                # Case: after last valid point
+                j1, j2 = valid_idx[-2], valid_idx[-1]
+            else:
+                # Case: between valid points
+                # nearest valid indices around i
+                j2 = valid_idx[valid_idx > i][0]
+                j1 = valid_idx[valid_idx < i][-1]
+            # Linear interpolation between (x[j1], y[j1]) and (x[j2], y[j2])
+            slope = (y[j2] - y[j1]) / (x[j2] - x[j1])
+            y[i] = y[j1] + slope * (x[i] - x[j1])
+    return y, not_valid_idx
