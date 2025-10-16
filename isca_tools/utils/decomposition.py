@@ -133,6 +133,9 @@ def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optio
     cluster_ind = np.full(x.shape[0], -20, dtype=int)
     x_norm = np.linalg.norm(x, axis=1)
     for i in range(n_iter):
+        # A = norm_cluster_mean[:2] # (2, n_dim)
+        # ATA_inv = np.linalg.inv(A @ A.T)  # (2, 2)
+        # coef = (ATA_inv @ A @ x[:5].T).T # (n_sample, 2), repeat for all possible permutations of atoms
         cluster_ind_old = cluster_ind.copy()
         coef = x @ norm_cluster_mean.transpose()   # because each initial_cluster_mean has norm of 1
         x_residual = x[:, :, np.newaxis] - coef[:, np.newaxis] * norm_cluster_mean.transpose()[np.newaxis]
@@ -140,6 +143,7 @@ def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optio
         cluster_ind = norm_reduction.argmax(axis=1)
         cluster_ind[x_norm <= norm_thresh] = -1             # already has low norm, so don't use in updating coefs
         top_score = norm_reduction.max(axis=1)
+        top_score[x_norm <= norm_thresh] = 0                # if no atoms fit, residual is same as start
         high_score = (top_score > score_thresh
                       ) & (top_score - np.partition(norm_reduction, -2, axis=1)[:, -2] > score_diff_thresh)
         # to help terminate
