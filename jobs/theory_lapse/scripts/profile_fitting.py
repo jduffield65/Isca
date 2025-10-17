@@ -105,6 +105,7 @@ k_output_residual = {}
 k_output_final = {}
 mse_norm_thresh = 1  # for profiles with L2 norm less than this, don't use to update clusters
 min_cluster_size = 200  # need more than this many samples to compute cluster mean
+clusters_initial = {}
 clusters_final = {}
 for key in valid:
     pca_output[key] = list(pca_on_xarray(mse_env_pnorm[key][0].isel(pnorm=slice(1, 9999)),
@@ -133,6 +134,7 @@ for key in valid:
     for i in range(n_modes):
         print(f'{key} Residual cluster {i} dot product with each k-means cluster: '
               f'{np.abs(np.round(k_output[key][0] @ k_output_residual[key][0][i], 2))}')
+    clusters_initial[key] = pca_output[key][0].to_numpy()[np.linalg.norm(k_output[key][0], axis=1)[:-1] > 0]
     clusters_final[key] = k_output[key][0][np.linalg.norm(k_output[key][0], axis=1) > 0]
     for i in range(n_modes):
         if np.linalg.norm(k_output_residual[key][0][i]) == 0:
@@ -140,13 +142,29 @@ for key in valid:
         cluster_dot_product = np.abs(np.round(clusters_final[key] @ k_output_residual[key][0][i], 2))
         print(i, cluster_dot_product, np.max(cluster_dot_product) < dot_product_thresh)
         if np.max(cluster_dot_product) < dot_product_thresh:
+            clusters_initial[key] = np.vstack([clusters_initial[key], pca_output_residual[key][0].to_numpy()[i]])
             clusters_final[key] = np.vstack([clusters_final[key], k_output_residual[key][0][i]])
     x_use = flatten_to_numpy(mse_env_pnorm[key][0].isel(pnorm=slice(1, 9999)), 'pnorm')
     k_output_final[key] = list(scaled_k_means(x_use, clusters_final[key], norm_thresh=mse_norm_thresh,
                                               n_atom_select=2, n_iter=0))       # 0 iterations so does not recompute clusters
 
 hi = 5
+def align_sign(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Multiply array `a` by either +1 or -1 to minimize least-squares error to `b`.
+    Args:
+        a (np.ndarray): Input array to be sign-aligned.
+        b (np.ndarray): Target array.
 
+    Returns:
+        np.ndarray: `a` multiplied by +1 or -1, whichever minimizes ||s*a - b||².
+    """
+    sign = np.sign(np.dot(a.ravel(), b.ravel()))
+    return sign * a
+if show_plot:
+    key = 'above'
+    for i in range(clusters_initial[key].shape[0]):
+        plt.plot(align_sign(clusters_initial[key][i], clusters_final[key][i]), pca_output_residual[key][0].pnorm, color=f'C{i}', linestyle=':')
+        plt.plot(clusters_final[key][i], pca_output_residual[key][0].pnorm, color=f'C{i}')
 # Updating 2 clusters at same time - too complicated I think
 # For final k-means, initialize with the residual PCs as well as the initial clusters
 # clusters_init[key] = k_output[key][0][np.linalg.norm(k_output[key][0], axis=1) > 0]
