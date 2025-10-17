@@ -160,7 +160,7 @@ def best_score_excluding_atom(norm_reduction: np.ndarray,
 
 
 def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optional[np.ndarray] = None,
-                   n_atom_select: int = 1, norm_thresh: float = 1, score_thresh: float = 0.5,
+                   n_atom_select: int = 1, norm_thresh: float = 0, score_thresh: float = 0.5,
                    score_diff_thresh: float = 0.1,
                    score_diff_thresh_test_converge: float = 0.05, score_thresh_multi_atom: float = 0.05,
                    min_cluster_size: int = 10,
