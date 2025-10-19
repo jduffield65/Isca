@@ -65,6 +65,8 @@ def pca_on_xarray(data: xr.DataArray, n_modes: int = 4, standardize: bool = True
     if valid is None:
         X_valid = X_all
     else:
+        if list(valid.dims) != non_feature_dims:
+            raise ValueError(f"Valid has dims {list(valid.dims)}\nShould have dims {non_feature_dims}\nOrder important too.")
         X_valid = X_all[flatten_to_numpy(valid)]
     n_valid = X_valid.shape[0]
     if n_valid < (n_modes + 1):
@@ -164,7 +166,9 @@ def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optio
                    score_diff_thresh: float = 0.1,
                    score_diff_thresh_test_converge: float = 0.05, score_thresh_multi_atom: float = 0.05,
                    min_cluster_size: int = 10,
-                   n_iter: int = 100) -> np.ndarray:
+                   n_iter: int = 100, remove_perm: Optional[np.ndarray] = None,
+                   atom_ind_no_update: Optional[np.ndarray] = None,
+                   use_norm: bool = False) -> np.ndarray:
     n_sample, n_feature = x.shape
     norm_cluster_mean = initial_cluster_mean / np.linalg.norm(initial_cluster_mean, axis=1).reshape(-1, 1)
     norm_cluster_mean = np.vstack([norm_cluster_mean, np.zeros(n_feature)])  # add an array of zeros
@@ -177,6 +181,16 @@ def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optio
     atom_perm = np.array(
         list(itertools.combinations(range(n_atom), n_atom_select)))  # all possible permutations of atoms
     atom_perm = np.sort(atom_perm, axis=1)  # ensure larger index later to ensure zeros array always last
+    if remove_perm is not None:
+        # Remove combinations of atoms that are unacceptable
+        remove_perm = np.sort(remove_perm, axis=1)
+        mask = ~np.isin(atom_perm.view([('', atom_perm.dtype)] * atom_perm.shape[1]),
+                        remove_perm.view([('', atom_perm.dtype)] * remove_perm.shape[1])).squeeze()
+        if (~mask).sum() > 0:
+            print(f"Removing the following atom permutations:\n{atom_perm[~mask]}")
+        atom_perm = atom_perm[mask]
+    if atom_ind_no_update is None:
+        atom_ind_no_update = np.zeros(0, dtype=int)
     n_perm = len(atom_perm)
     perm_zero_ind = np.where([n_atom - 1 in atom_perm[i] for i in range(n_perm)])[
         0].squeeze()  # all permutations with the last ind which is 0
@@ -233,6 +247,8 @@ def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optio
             high_score = [high_score[k] & valid for k in range(n_atom_select)]
             low_score = low_score | ~valid
         for c in range(n_atom - 1):
+            if c in atom_ind_no_update:
+                continue
             my_points = np.zeros((0, n_feature))
             for k in range(n_atom_select):
                 samples_use = (cluster_ind >= 0) & (atom_perm[cluster_ind, k] == c) & high_score[k]
@@ -251,6 +267,9 @@ def scaled_k_means(x: np.ndarray, initial_cluster_mean: np.ndarray, valid: Optio
                     0].squeeze()] = True  # make sure not used in future
                 continue
             # print(n_my_points)
+            if use_norm:
+                # Normalize so each point has equal contribution; otherwise points with more deviation have most influence
+                my_points = my_points / (np.linalg.norm(my_points, axis=1)[:, None] + 1e-20)
             eig_vals, eigs = np.linalg.eig(my_points.transpose() @ my_points / n_my_points)
             best_eig_ind = np.argmax(eig_vals)
             norm_cluster_mean[c] = eigs[:, best_eig_ind] * np.sign(eigs[:, best_eig_ind].mean())  # make them positive
