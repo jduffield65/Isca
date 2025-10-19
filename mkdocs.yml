@@ -147,12 +147,15 @@ nav:
             - Aquaplanet Theory: code/thesis/aquaplanet_theory.md
             - Extratropics Land Theory: code/thesis/extrop_land_theory.md
             - Lapse Theory: code/thesis/lapse_theory.md
+            - Profile Fitting: code/thesis/profile_fitting.md
             - Surface Energy Budget: code/thesis/surface_energy_budget.md
         - Utils:
             - Base: code/utils/base.md
             - Calculus: code/utils/calculus.md
             - Circulation: code/utils/circulation.md
             - Dataset Slicing: code/utils/ds_slicing.md
+            - Debug: code/utils/debug.md
+            - Decomposition: code/utils/decomposition.md
             - Fourier: code/utils/fourier.md
             - Land: code/utils/land.md
             - Load: code/utils/load.md

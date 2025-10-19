@@ -139,7 +139,7 @@ def interp_var_to_pnorm(var: xr.DataArray, p: xr.DataArray, var_at_low: xr.DataA
     $$p_{norm} = \\frac{\log_{10}p - \log_{10}p_{low}}{\log_{10}p_{high} - \log_{10}p_{low}}$$
 
     Args:
-        var: `[n_lev]` Variable $\Chi$ to interpolate.
+        var: `[n_lev]` Variable to interpolate.
         p: `[n_lev]` Pressure in Pa.
         var_at_low: Value of `var` at `p_low`.
         p_low: Pressure level that will correspond to $p_{norm}=0$.
