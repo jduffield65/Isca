@@ -1,7 +1,8 @@
 import xarray as xr
 import numpy as np
 from typing import Union, Optional, Tuple, Literal
-from ..utils.constants import lapse_dry
+from ..utils.base import weighted_RMS
+from ..utils.constants import lapse_dry, g
 from ..utils.numerical import interp_nan
 from ..utils.moist_physics import moist_static_energy, sphum_sat
 
@@ -209,3 +210,81 @@ def interp_var_to_pnorm(var: xr.DataArray, p: xr.DataArray, var_at_low: xr.DataA
     out = list(out)
     out[0] = out[0].assign_coords(**{pnorm_dim_name: pnorm})
     return out[0], out[1]
+
+
+def get_mse_prof_rms(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.DataArray,
+                     p_thickness: xr.DataArray, temp_at_split: Optional[xr.DataArray] = None,
+                     p_split: Optional[xr.DataArray] = None, z_at_split: Optional[np.ndarray] = None,
+                     lev_dim: str = 'lev',
+                     split_dim: str = 'lev') -> xr.DataArray:
+    """
+    For each possible split level, will compute the RMS error of $MSE_{env} - MSE^*_{split}$ where:
+
+    * Above Split: $MSE_{env}(p) = MSE^*(p)$
+    * Below Split: $MSE_{env}(p) = DSE(p) + L_v q^*_{split}$
+
+    Idea being that LCL is split level with minimum RMS error.
+
+    Args:
+        temp_env: Environmental temperature [K], dims (..., lev_dim)
+        p_env: Environmental pressure [Pa], dims (..., lev_dim)
+        z_env: Geopotential height [m], dims (..., lev_dim)
+        p_thickness: Pressure thickness between levels [Pa], dims (..., lev_dim)
+        temp_at_split: Temperature to use as `temp_at_lcl` in `get_mse_env`, dims (..., split_dim).</br>
+            If `None`, sets to `temp_env`.
+        p_split: Pressure to use as `p_lcl` in `get_mse_env`, dims (..., split_dim).</br>
+            If `None`, sets to `p_env`.
+        z_at_split: Geopotential height corresponding to `p_split`, dims (..., split_dim).</br>
+            If `None`, sets to `z_env`.
+        lev_dim: Model level dimension in `temp_env`, `p_env`, `z_env`, and `p_thickness`.
+        split_dim: Dimension corresponding to different split levels in `temp_at_split` and `p_split`.</br>
+            If `temp_at_split` is `None`, will set to `lev_dim`.
+
+    Returns:
+        mse_prof_error: Mass weighted RMS difference for each possible split level, dims (..., split_dim)
+    """
+    if (temp_at_split is None) and (p_split is None) and (z_at_split is None):
+        temp_at_split = temp_env
+        p_split = p_env
+        z_at_split = z_env
+        split_dim = lev_dim
+    elif (temp_at_split is None) or (p_split is None) or (z_at_split is None):
+        raise ValueError('Either all or none of temp_at_split, p_split, and z_at_split must be specified.')
+
+    def _core(temp_env, p_env, z_env, p_thickness, temp_at_split, p_split, z_at_split):
+        # temp_env, p_env, z_env, p_thickness: (lev,)
+        norm = []
+        for i in range(temp_at_split.shape[0]):
+            if np.isnan(temp_at_split[i]):
+                norm.append(np.nan)
+                continue
+            var = get_mse_env(temp_env, p_env, z_env,
+                              temp_at_split[i], p_split[i], 'full')
+            var = var - moist_static_energy(temp_at_split[i],
+                                            sphum_sat(temp_at_split[i], p_split[i]),
+                                            z_at_split[i])
+            # weight with p_thickness/g across lev
+            norm.append(weighted_RMS(var, p_thickness / g))
+        return np.array(norm)
+
+    # Apply across non-lev dims
+    norm = xr.apply_ufunc(
+        _core,
+        temp_env,
+        p_env,
+        z_env,
+        p_thickness,
+        temp_at_split,
+        p_split,
+        z_at_split,
+        input_core_dims=[[lev_dim], [lev_dim], [lev_dim], [lev_dim], [split_dim], [split_dim], [split_dim]],
+        output_core_dims=[[split_dim]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[float],
+    )
+
+    # Attach coordinates (pressure levels as p_lcl)
+    norm = norm.assign_coords({split_dim:(split_dim, p_split[split_dim].values)})
+    norm.name = "mse_prof_error"
+    return norm

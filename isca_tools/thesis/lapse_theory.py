@@ -116,7 +116,7 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset, np.ndarray], p_d
     return xr.Dataset(var_out)
 
 
-def get_var_at_plev(var_env: xr.DataArray, p_env: xr.DataArray, p_desired: xr.DataArray, method: str ='log',
+def get_var_at_plev(var_env: Union[xr.Dataset, xr.DataArray], p_env: xr.DataArray, p_desired: xr.DataArray, method: str ='log',
                     lev_dim: str ='lev'):
     """
     Find the value of `var_env` at pressure `p_desired`.
@@ -166,3 +166,48 @@ def get_var_at_plev(var_env: xr.DataArray, p_env: xr.DataArray, p_desired: xr.Da
         kwargs={}
     )
     return out
+
+def get_ds_in_pressure_range(ds: xr.Dataset, pressure_min: xr.DataArray,
+                             pressure_max: xr.DataArray, n_pressure: int = 20, pressure_var_name: str = 'P',
+                             method: str = 'log', lev_dim: str = 'lev',
+                             pressure_dim_name_out: str = 'plev_ind') -> xr.Dataset:
+    """
+    Extracts dataset variables interpolated (or sampled) at multiple evenly spaced
+    pressure levels between `pressure_min` and `pressure_max` for each point.
+
+    Args:
+        ds: Input dataset containing at least a pressure variable (e.g. 'P')
+            and one or more other variables dependent on pressure.
+            Expected dims: (..., lev)
+        pressure_min: Lower pressure bound for range [Pa].</br>
+            Shape: same as all non-'lev' dims of ds.
+        pressure_max: Upper pressure bound for range [Pa].</br>
+            Shape: same as all non-'lev' dims of ds.
+        n_pressure: Number of evenly spaced pressure levels to sample between
+            pressure_min and pressure_max.
+        pressure_var_name: Name of pressure variable in `ds`.
+        method: Method of interpolation either take log10 of pressure first or leave as raw values.
+        lev_dim: Name of model level dimension in `pressure_var_name`.
+        pressure_dim_name_out: Name for the new pressure dimension in the output dataset.</br>
+            The out dimension with this name will have the value `np.arange(n_pressure)`.
+
+    Returns:
+        ds_out: Dataset sampled at `n_pressure` intermediate pressure levels between
+            `pressure_min` and `pressure_max`, concatenated along a new dimension
+            named `pressure_dim_name_out`.</br>
+            Output dims: (..., plev_ind)
+    """
+    if pressure_var_name not in ds.data_vars:
+        raise ValueError(f'Pressure ({pressure_var_name}) not in dataset.')
+    if len(ds.data_vars) == 1:
+        raise ValueError(f'Must have another variable other than {pressure_var_name} in dataset.')
+    ds_out = []
+    pressure_range = pressure_max - pressure_min
+    for i in range(n_pressure):
+        p_use = pressure_min + i / np.clip(n_pressure - 1, 1, np.inf) * pressure_range
+        ds_use = get_var_at_plev(ds.drop_vars(pressure_var_name), ds[pressure_var_name], p_use, method=method,
+                                 lev_dim=lev_dim)
+        ds_use[pressure_var_name] = p_use
+        ds_out.append(ds_use)
+    return xr.concat(ds_out,
+                     dim=xr.DataArray(np.arange(n_pressure), name=pressure_dim_name_out, dims=pressure_dim_name_out))

@@ -318,31 +318,55 @@ def dp_from_pressure(p: xr.DataArray, dim: str = "lev") -> xr.DataArray:
     dp.attrs.update({"long_name": "pressure thickness", "units": "Pa"})
     return dp
 
-def weighted_RMS(var: xr.DataArray, weight: Optional[xr.DataArray] = None,
-                 dim: Optional[Union[str, List]] = None) -> xr.DataArray:
+import numpy as np
+import xarray as xr
+from typing import Optional, Union, List
+
+def weighted_RMS(
+    var: Union[xr.DataArray, np.ndarray],
+    weight: Optional[Union[xr.DataArray, np.ndarray]] = None,
+    dim: Optional[Union[str, int, List[Union[str, int]]]] = None
+) -> Union[xr.DataArray, np.ndarray]:
     """
-    Compute (weighted) RMS of an xarray DataArray along a specified dimension.
+    Compute (weighted) RMS of a DataArray or numpy array along specified dimension(s).
 
     Args:
-        var: DataArray to compute RMS for.
-        weight: Optional weights (same shape as var along `dim`). If None, computes unweighted RMS.
-        dim: Dimension to reduce along. If None, reduces over all dimensions.
+        var: Variable to compute RMS for (shape [...]).
+        weight: Weights (same shape as var along `dim`).
+            If None, computes unweighted RMS.
+        dim: Dimension(s) to reduce over.
+            - For xarray: names of dimensions.
+            - For numpy: integer axis or list of axes.
 
     Returns:
-        DataArray of RMS (same dims as var minus `dim`).
+        rms: Same type as input, reduced along `dim`.
     """
-    if isinstance(dim, str):
+
+    # --- Handle dim input uniformly ---
+    if isinstance(dim, (str, int)):
         dims = [dim]
     elif dim is None:
-        dims = list(var.dims)
+        # all dims
+        if isinstance(var, xr.DataArray):
+            dims = list(var.dims)
+        else:
+            dims = list(range(var.ndim))
     else:
         dims = dim
 
-    if weight is None:
-        # unweighted RMS
-        rms_sq = (var ** 2).mean(dim=dims)
-    else:
-        # weighted RMS
-        rms_sq = ((var ** 2) * weight).sum(dim=dims) / weight.sum(dim=dims)
+    # --- xarray branch ---
+    if isinstance(var, xr.DataArray):
+        if weight is None:
+            rms_sq = (var ** 2).mean(dim=dims)
+        else:
+            rms_sq = ((var ** 2) * weight).sum(dim=dims) / weight.sum(dim=dims)
+        return np.sqrt(rms_sq)
 
-    return np.sqrt(rms_sq)
+    # --- numpy branch ---
+    else:
+        if weight is None:
+            rms_sq = np.nanmean(var ** 2, axis=tuple(dims))
+        else:
+            rms_sq = np.nansum((var ** 2) * weight, axis=tuple(dims)) / np.nansum(weight, axis=tuple(dims))
+        return np.sqrt(rms_sq)
+

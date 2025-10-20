@@ -4,12 +4,15 @@ import xarray as xr
 import re
 import logging
 import sys
+from typing import Optional
 from isca_tools import cesm
 from isca_tools.convection import potential_temp, dry_profile_temp, lcl_metpy
-from isca_tools.thesis.lapse_theory import get_var_at_plev
-from isca_tools.thesis.profile_fitting import get_mse_env, get_lnb_lev_ind
+from isca_tools.thesis.lapse_theory import get_var_at_plev, get_ds_in_pressure_range
+from isca_tools.thesis.profile_fitting import get_mse_env, get_lnb_lev_ind, get_mse_prof_rms
 from isca_tools.utils.constants import g
 from isca_tools.utils.base import weighted_RMS, dp_from_pressure, print_log
+from isca_tools.utils.xarray import convert_ds_dtypes
+from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat
 
 def get_co2_multiplier(name):
     match = re.match(r'co2_([\d_]+)x', name)
@@ -21,77 +24,93 @@ def get_co2_multiplier(name):
     else:
         raise ValueError(f'Not valid name = {name}')
 
-def find_lcl_empirical2(temp_env, p_env, z_env, temp_start=None, p_start=None, temp_pot_thresh=2,
-                        temp_pot_thresh_lapse=0.5, lapse_thresh=8.5):
-    # Find the lowest model layer with lapse rate less than lapse_thresh
-    # LCL is the level at which the pot temp drops by 0.5K within this layer
-    if temp_start is None:
-        temp_start = temp_env.isel(lev=-1)
-    if p_start is None:
-        p_start = p_env.isel(lev=-1)
-    temp_pot_env = potential_temp(temp_env, p_env)
-
-    # First mask is pot temp close to surface pot temperature
-    temp_pot_start = potential_temp(temp_start, p_start)
-    mask_temp = np.abs(temp_pot_env - temp_pot_start) <= temp_pot_thresh
-
-    # Second mask is lapse rate close to dry adiabat
-    # lower is so append high value at surface
-    lapse = -temp_env.diff(dim='lev', label='lower') / z_env.diff(dim='lev', label='lower') * 1000
-    lapse = lapse.reindex_like(temp_env)  # make same shape
-    lapse = lapse.fillna(lapse_thresh + 5)  # ensure final value satisfies lapse criteria
-    mask_lapse = lapse > lapse_thresh
-    mask = (mask_temp & mask_lapse)
-    lcl_ind = ((mask.where(mask, other=np.nan) * np.arange(lapse.lev.size)).min(dim='lev')).astype(int)
-
-    p_low = np.log10(p_env.isel(lev=lcl_ind))  # use log as better for interpolation - gradient is approx constant
-    p_high = np.log10(p_env.isel(lev=lcl_ind - 1))  # further from surface
-
-    # print(p_low)
-    # print(p_high)
-    # print(np.log10(p_env))
-
-    temp_pot_low = temp_pot_env.isel(lev=lcl_ind)
-    temp_pot_high = temp_pot_env.isel(lev=lcl_ind - 1)
-    gradient = (temp_pot_high - temp_pot_low) / (p_high - p_low)
-    temp_pot_target = temp_pot_low + temp_pot_thresh_lapse
-    p_target = p_low + (temp_pot_target - temp_pot_low) / gradient
-    p_target = p_target.clip(min=p_high)
-    p_lcl = 10 ** p_target
-    # print(dry_profile_temp(temp_start, p_start, p_lcl))
-    # print(lapse.isel(lev=lcl_ind-1))
-    return p_lcl, dry_profile_temp(temp_start, p_start, p_lcl)
+small_ds = False
+save_processed = True
+ds_path = '/Users/joshduffield/Desktop/ds_lcl.nc'
+load_processed = os.path.exists(ds_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
 logger = logging.getLogger()  # for printing to console time info
 
-print_log('Start', logger)
-data_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/3_hour/hottest_quant'
-quant_type = 'REFHT_quant99'
-exp_name = 'pre_industrial'
-var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
-ds = xr.open_dataset(os.path.join(data_dir, exp_name, quant_type, 'output.nc'))
-ds = ds[var_keep].load()
-ds.attrs['co2'] = get_co2_multiplier(exp_name)
-p0 = float(ds.P0)
-ds = ds.drop_vars('P0')
-ds.attrs['P0'] = p0
-print_log('Loaded in Data', logger)
+# Load in Data
+if load_processed:
+    ds_lcl = xr.load_dataset(ds_path)
+    print_log(f'Dataset loaded from {ds_path}', logger)
+else:
+    print_log('Start', logger)
+    data_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/3_hour/hottest_quant'
+    quant_type = 'REFHT_quant99'
+    exp_name = 'pre_industrial'
+    var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
+    ds = xr.open_dataset(os.path.join(data_dir, exp_name, quant_type, 'output.nc'))
+    if small_ds:
+        lat_min = 0
+        lat_max = 50
+        lon_min = 0
+        lon_max = 20
+        ds = ds.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max), sample=slice(0, 2))
+        print_log(f'Only using small subset | Lat {lat_min} to {lat_max} | Lon {lon_min} to {lon_max} | Sample 1 and 2', logger)
+    ds = ds[var_keep].load()
+    ds.attrs['co2'] = get_co2_multiplier(exp_name)
+    p0 = float(ds.P0)
+    ds = ds.drop_vars('P0')
+    ds.attrs['P0'] = p0
+    print_log('Loaded in Data', logger)
 
-ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
-ds['P_diff'] = dp_from_pressure(ds.P)
-ds['TREFHT'] = ds.T.isel(lev=-1)
-ds['QREFHT'] = ds.Q.isel(lev=-1)
-ds['ZREFHT'] = ds.Z3.isel(lev=-1)
-ds['PREFHT'] = ds.P.isel(lev=-1)
-ds = ds.drop_vars('Q')
-print_log('Computed pressure difference', logger)
+    # Add variables to compute LCL
+    ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
+    ds['P_diff'] = dp_from_pressure(ds.P)
+    ds['TREFHT'] = ds.T.isel(lev=-1)
+    ds['QREFHT'] = ds.Q.isel(lev=-1)
+    ds['ZREFHT'] = ds.Z3.isel(lev=-1)
+    ds['PREFHT'] = ds.P.isel(lev=-1)
+    ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
+    ds = ds.drop_vars('Q')
+    print_log('Added variables for LCL computation', logger)
 
-ds['p_lcl'], ds['T_lcl'] = lcl_metpy(ds.TREFHT, ds.QREFHT, ds.PREFHT)
-ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
-print_log('Computed physical LCL', logger)
-small = 1
-# ds = ds.where(ds.P >= ds.P.isel(lev=ds.lnb_ind) - small)  # set to nan above LNB
-# a = weighted_RMS(ds.T, weight=ds.P_diff/g, dim='lev')
+    # Compute empirical estimate of LCL
+    print_log('Empirical LCL | Start', logger)
+    small = 1
+    use_lev = ds.P >= ds.P.isel(lev=ds.lnb_ind) - small
+    error_rms = get_mse_prof_rms(ds.T.where(use_lev), ds.P.where(use_lev), ds.Z3.where(use_lev), ds.P_diff.where(use_lev))
+    lcl_lev_ind = error_rms.argmin(dim='lev')
+    print_log('Empirical LCL | Computed best model level', logger)
+    pressure_min = ds.P.isel(lev=lcl_lev_ind-1)
+    pressure_max = ds.P.isel(lev=lcl_lev_ind+1)
+    n_split = 20
+    ds_split = get_ds_in_pressure_range(ds[['T', 'Z3', 'P']], pressure_min, pressure_max, n_split,
+                                        pressure_dim_name_out='lev_fine_ind')
+    ds_split = ds_split.drop_vars('lev')
+    print_log('Empirical LCL | Computed fine grid about model level', logger)
+    error_rms = get_mse_prof_rms(ds.T.where(use_lev), ds.P.where(use_lev), ds.Z3.where(use_lev),
+                          ds.P_diff.where(use_lev), ds_split.T, ds_split.P, ds_split.Z3, split_dim='lev_fine_ind')
+    p_lcl_emp = ds_split.P.isel(lev_fine_ind=error_rms.argmin(dim='lev_fine_ind'))
+    error_rms_emp = error_rms.min(dim='lev_fine_ind')
+    print_log('Empirical LCL | End', logger)
+
+    # Compute RMS error from physical LCL
+    p_lcl = lcl_metpy(ds.TREFHT, ds.QREFHT, ds.PREFHT)[0]
+    ds_lcl_phys = get_ds_in_pressure_range(ds[['T', 'Z3', 'P']], p_lcl, p_lcl+1, n_pressure=1,
+                                           pressure_dim_name_out='lev_fine_ind')
+    error_rms = get_mse_prof_rms(ds.T.where(use_lev), ds.P.where(use_lev), ds.Z3.where(use_lev),
+                          ds.P_diff.where(use_lev), ds_lcl_phys.T, ds_lcl_phys.P, ds_lcl_phys.Z3, split_dim='lev_fine_ind')
+    error_rms = error_rms.min(dim='lev_fine_ind')
+    print_log('Computed Physical LCL', logger)
+
+    # Correct empirical LCL to be physical if the error is less
+    p_lcl_emp = p_lcl_emp.where(error_rms_emp < error_rms, p_lcl)
+    error_rms_emp = error_rms_emp.where(error_rms_emp < error_rms, error_rms)
+
+    # Save data
+    ds_lcl = xr.Dataset({'p_lcl': p_lcl, 'error_rms': error_rms, 'p_lcl_emp': p_lcl_emp, 'error_rms_emp': error_rms_emp})
+    ds_lcl = ds_lcl.drop_vars('lev_fine_ind')
+    ds_lcl = convert_ds_dtypes(ds_lcl)
+    comp_level = 4
+    if (not os.path.exists(ds_path)) and save_processed:
+        ds_lcl.to_netcdf(ds_path, format="NETCDF4",
+                     encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lcl.data_vars})
+    print_log('End', logger)
+
 hi = 5
+
