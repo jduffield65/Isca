@@ -272,3 +272,77 @@ def top_n_peaks_ind(
                 break
 
     return np.array(selected_ind, dtype=int)
+
+def dp_from_pressure(p: xr.DataArray, dim: str = "lev") -> xr.DataArray:
+    """Compute layer pressure thickness Δp, preserving extra dims and coord order.
+
+    Args:
+        p: Pressure [Pa], with vertical dimension `dim` (n_lev).
+            Can include other dims (e.g., time, lat, lon).
+        dim: Name of the vertical coordinate.
+
+    Returns:
+        xr.DataArray: Pressure thickness Δp [Pa], same shape and coords as `p`.
+    """
+
+    def _dp_1d(p_1d: np.ndarray) -> np.ndarray:
+        # ensure increasing order (bottom→top) for calculation
+        reversed_flag = p_1d[0] < p_1d[-1]
+        if reversed_flag:
+            p_1d = p_1d[::-1]
+
+        # edges & dp calculation
+        p_edge_mid = 0.5 * (p_1d[:-1] + p_1d[1:])
+        p_edge_bot = p_1d[0] + 0.5 * (p_1d[0] - p_1d[1])
+        p_edge_top = p_1d[-1] - 0.5 * (p_1d[-2] - p_1d[-1])
+        p_edges = np.concatenate([[p_edge_bot], p_edge_mid, [p_edge_top]])
+        dp = p_edges[:-1] - p_edges[1:]
+        dp = np.abs(dp)  # ensure positive
+
+        # if we reversed order, un-reverse result to match original orientation
+        if reversed_flag:
+            dp = dp[::-1]
+        return dp
+
+    dp = xr.apply_ufunc(
+        _dp_1d,
+        p,
+        input_core_dims=[[dim]],
+        output_core_dims=[[dim]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[float],
+    )
+
+    dp.name = "dp"
+    dp.attrs.update({"long_name": "pressure thickness", "units": "Pa"})
+    return dp
+
+def weighted_RMS(var: xr.DataArray, weight: Optional[xr.DataArray] = None,
+                 dim: Optional[Union[str, List]] = None) -> xr.DataArray:
+    """
+    Compute (weighted) RMS of an xarray DataArray along a specified dimension.
+
+    Args:
+        var: DataArray to compute RMS for.
+        weight: Optional weights (same shape as var along `dim`). If None, computes unweighted RMS.
+        dim: Dimension to reduce along. If None, reduces over all dimensions.
+
+    Returns:
+        DataArray of RMS (same dims as var minus `dim`).
+    """
+    if isinstance(dim, str):
+        dims = [dim]
+    elif dim is None:
+        dims = list(var.dims)
+    else:
+        dims = dim
+
+    if weight is None:
+        # unweighted RMS
+        rms_sq = (var ** 2).mean(dim=dims)
+    else:
+        # weighted RMS
+        rms_sq = ((var ** 2) * weight).sum(dim=dims) / weight.sum(dim=dims)
+
+    return np.sqrt(rms_sq)
