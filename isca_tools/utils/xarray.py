@@ -143,12 +143,13 @@ def unflatten_from_numpy(arr: np.ndarray, var: xr.DataArray, keep_dim: Optional[
 
     return da_flat
 
-def convert_ds_dtypes(ds: xr.Dataset) -> xr.Dataset:
+def convert_ds_dtypes(ds: xr.Dataset, verbose: bool = False) -> xr.Dataset:
     """
     Convert all float variables to float32 and all int variables to int32 in an xarray Dataset.
 
     Args:
         ds: Input xarray Dataset.
+        verbose: Whether to print out variables converted
 
     Returns:
         ds_out: Dataset with all float variables converted to float32 and all int variables to int32.
@@ -165,8 +166,9 @@ def convert_ds_dtypes(ds: xr.Dataset) -> xr.Dataset:
             int_conv.append(var_name)
         else:
             converted[var_name] = da
-    if len(float_conv) > 0:
-        print(f"Converted the following float variables:\n{float_conv}")
-    if len(int_conv) > 0:
-        print(f"Converted the following integer variables:\n{int_conv}")
+    if verbose:
+        if len(float_conv) > 0:
+            print(f"Converted the following float variables:\n{float_conv}")
+        if len(int_conv) > 0:
+            print(f"Converted the following integer variables:\n{int_conv}")
     return ds.assign(**converted)

@@ -263,7 +263,16 @@ def get_mse_prof_rms(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.Data
             var = var - moist_static_energy(temp_at_split[i],
                                             sphum_sat(temp_at_split[i], p_split[i]),
                                             z_at_split[i])
+
+
+            # Set MSE above LCL to mass weighted mean in this layer, not equal to LCL MSE^* when computing optimal
+            # LCL. Because idea is MSE should be constant above, and DSE should be constant below
+            # var[p_env < p_split[i]] = smooth_threshold(var[p_env < p_split[i]], x_thresh=1)
+            # var[p_env < p_split[i]] -= np.sum((var * p_thickness)[p_env < p_split[i]]/g) / np.sum(p_thickness[p_env < p_split[i]]/g)
+            # var[p_env > p_split[i]] -= np.sum((var * p_thickness)[p_env > p_split[i]] / g) / np.sum(
+            #     p_thickness[p_env > p_split[i]] / g)
             # weight with p_thickness/g across lev
+            # var = np.clip(var, -10,10)  # don't allow extremely large error from any one level
             norm.append(weighted_RMS(var, p_thickness / g))
         return np.array(norm)
 

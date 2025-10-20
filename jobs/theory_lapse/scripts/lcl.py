@@ -1,10 +1,10 @@
+# Script to compute empirical LCL which minimizes error in MSE environmental compared to convective profile
 import numpy as np
 import os
 import xarray as xr
 import re
 import logging
 import sys
-from typing import Optional
 from isca_tools import cesm
 from isca_tools.convection import potential_temp, dry_profile_temp, lcl_metpy
 from isca_tools.thesis.lapse_theory import get_var_at_plev, get_ds_in_pressure_range
@@ -24,93 +24,134 @@ def get_co2_multiplier(name):
     else:
         raise ValueError(f'Not valid name = {name}')
 
-small_ds = False
+small_ds = False                 # use a small subset of data for testing
 save_processed = True
-ds_path = '/Users/joshduffield/Desktop/ds_lcl.nc'
-load_processed = os.path.exists(ds_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
 logger = logging.getLogger()  # for printing to console time info
 
-# Load in Data
-if load_processed:
-    ds_lcl = xr.load_dataset(ds_path)
-    print_log(f'Dataset loaded from {ds_path}', logger)
+# Always load in sample data, so can easily import into jupyter notebook
+# File location Info
+print_log('Start', logger)
+data_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/3_hour/hottest_quant'
+quant_type = 'REFHT_quant99'
+exp_name = ['pre_industrial', 'co2_2x']
+processed_dir = [os.path.join(data_dir, exp_name[i], quant_type, 'lcl_calc') for i in range(len(exp_name))]
+processed_file_name = 'ds_lcl.nc'           # combined file from all samples
+load_processed = [os.path.exists(os.path.join(processed_dir[i], processed_file_name)) for i in range(len(exp_name))]
+var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
+co2_vals = [get_co2_multiplier(i) for i in exp_name]
+
+# Load in data
+ds = [xr.open_dataset(os.path.join(data_dir, exp_name[i], quant_type, 'output.nc')) for i in range(len(exp_name))]
+ds = xr.concat(ds, dim=xr.DataArray(co2_vals, dims="co2", coords={"exp_name": ("co2", exp_name)}))
+if small_ds:
+    lat_min = 0
+    lat_max = 50
+    lon_min = 0
+    lon_max = 20
+    ds = ds.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max), sample=slice(0, 2))
+    print_log(f'Only using small subset | Lat {lat_min} to {lat_max} | Lon {lon_min} to {lon_max} | Sample 1 and 2',
+              logger)
+ds = ds[var_keep].load()
+ds['hyam'] = ds.hyam.isel(co2=0)
+ds['hybm'] = ds.hybm.isel(co2=0)
+p0 = float(ds.P0.isel(co2=0))
+ds = ds.drop_vars('P0')
+ds.attrs['P0'] = p0
+print_log('Loaded in Data', logger)
+
+# Add variables to compute LCL
+ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
+ds['P_diff'] = dp_from_pressure(ds.P)
+ds['TREFHT'] = ds.T.isel(lev=-1)
+ds['QREFHT'] = ds.Q.isel(lev=-1)
+ds['ZREFHT'] = ds.Z3.isel(lev=-1)
+ds['PREFHT'] = ds.P.isel(lev=-1)
+ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
+ds = ds.drop_vars('Q')
+print_log('Added variables for LCL computation', logger)
+
+# Load in LCL calc data if exists
+if all(load_processed):
+    ds_lcl = [xr.open_dataset(os.path.join(processed_dir[i], processed_file_name)) for i in range(len(exp_name))]
+    ds_lcl = xr.concat(ds_lcl, dim=xr.DataArray(co2_vals, dims="co2", coords={"exp_name": ("co2", exp_name)}))
+    ds_lcl = ds_lcl.load()
+    print_log(f"LCL Info loaded from {processed_file_name} files", logger)
 else:
-    print_log('Start', logger)
-    data_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/3_hour/hottest_quant'
-    quant_type = 'REFHT_quant99'
-    exp_name = 'pre_industrial'
-    var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
-    ds = xr.open_dataset(os.path.join(data_dir, exp_name, quant_type, 'output.nc'))
-    if small_ds:
-        lat_min = 0
-        lat_max = 50
-        lon_min = 0
-        lon_max = 20
-        ds = ds.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max), sample=slice(0, 2))
-        print_log(f'Only using small subset | Lat {lat_min} to {lat_max} | Lon {lon_min} to {lon_max} | Sample 1 and 2', logger)
-    ds = ds[var_keep].load()
-    ds.attrs['co2'] = get_co2_multiplier(exp_name)
-    p0 = float(ds.P0)
-    ds = ds.drop_vars('P0')
-    ds.attrs['P0'] = p0
-    print_log('Loaded in Data', logger)
+    ds_lcl = None
 
-    # Add variables to compute LCL
-    ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
-    ds['P_diff'] = dp_from_pressure(ds.P)
-    ds['TREFHT'] = ds.T.isel(lev=-1)
-    ds['QREFHT'] = ds.Q.isel(lev=-1)
-    ds['ZREFHT'] = ds.Z3.isel(lev=-1)
-    ds['PREFHT'] = ds.P.isel(lev=-1)
-    ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
-    ds = ds.drop_vars('Q')
-    print_log('Added variables for LCL computation', logger)
-
+# If run script, compute the empirical LCL - takes a while so do one sample at a time
+if (__name__ == '__main__') and not all(load_processed):
     # Compute empirical estimate of LCL
-    print_log('Empirical LCL | Start', logger)
-    small = 1
-    use_lev = ds.P >= ds.P.isel(lev=ds.lnb_ind) - small
-    error_rms = get_mse_prof_rms(ds.T.where(use_lev), ds.P.where(use_lev), ds.Z3.where(use_lev), ds.P_diff.where(use_lev))
-    lcl_lev_ind = error_rms.argmin(dim='lev')
-    print_log('Empirical LCL | Computed best model level', logger)
-    pressure_min = ds.P.isel(lev=lcl_lev_ind-1)
-    pressure_max = ds.P.isel(lev=lcl_lev_ind+1)
-    n_split = 20
-    ds_split = get_ds_in_pressure_range(ds[['T', 'Z3', 'P']], pressure_min, pressure_max, n_split,
-                                        pressure_dim_name_out='lev_fine_ind')
-    ds_split = ds_split.drop_vars('lev')
-    print_log('Empirical LCL | Computed fine grid about model level', logger)
-    error_rms = get_mse_prof_rms(ds.T.where(use_lev), ds.P.where(use_lev), ds.Z3.where(use_lev),
-                          ds.P_diff.where(use_lev), ds_split.T, ds_split.P, ds_split.Z3, split_dim='lev_fine_ind')
-    p_lcl_emp = ds_split.P.isel(lev_fine_ind=error_rms.argmin(dim='lev_fine_ind'))
-    error_rms_emp = error_rms.min(dim='lev_fine_ind')
-    print_log('Empirical LCL | End', logger)
-
-    # Compute RMS error from physical LCL
-    p_lcl = lcl_metpy(ds.TREFHT, ds.QREFHT, ds.PREFHT)[0]
-    ds_lcl_phys = get_ds_in_pressure_range(ds[['T', 'Z3', 'P']], p_lcl, p_lcl+1, n_pressure=1,
-                                           pressure_dim_name_out='lev_fine_ind')
-    error_rms = get_mse_prof_rms(ds.T.where(use_lev), ds.P.where(use_lev), ds.Z3.where(use_lev),
-                          ds.P_diff.where(use_lev), ds_lcl_phys.T, ds_lcl_phys.P, ds_lcl_phys.Z3, split_dim='lev_fine_ind')
-    error_rms = error_rms.min(dim='lev_fine_ind')
-    print_log('Computed Physical LCL', logger)
-
-    # Correct empirical LCL to be physical if the error is less
-    p_lcl_emp = p_lcl_emp.where(error_rms_emp < error_rms, p_lcl)
-    error_rms_emp = error_rms_emp.where(error_rms_emp < error_rms, error_rms)
-
-    # Save data
-    ds_lcl = xr.Dataset({'p_lcl': p_lcl, 'error_rms': error_rms, 'p_lcl_emp': p_lcl_emp, 'error_rms_emp': error_rms_emp})
-    ds_lcl = ds_lcl.drop_vars('lev_fine_ind')
-    ds_lcl = convert_ds_dtypes(ds_lcl)
+    n_files = ds.co2.size * ds.sample.size      # One file for each co2 conc and sample due to speed
+    print_log(f'Empirical and Physical LCL for {n_files} Files | Start', logger)
+    small = 1               # units of Pa just to ensure use pressure below LNB
     comp_level = 4
-    if (not os.path.exists(ds_path)) and save_processed:
-        ds_lcl.to_netcdf(ds_path, format="NETCDF4",
-                     encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lcl.data_vars})
-    print_log('End', logger)
+    n_split = 20            # number of pressure values to use in the fine grid
+    for i in range(ds.co2.size):
+        if load_processed[i]:
+            print_log(f'Files already exist for {exp_name[i]}', logger)
+            continue
+        path_use = [os.path.join(processed_dir[i], f'sample{int(ds.sample[j])}.nc') for j in range(ds.sample.size)]
+        for j in range(ds.sample.size):
+            if os.path.exists(path_use[j]):
+                print_log(f'File {i * ds.sample.size + j + 1}/{n_files} Exists Already', logger)
+                continue
+            print_log(f'File {i * ds.sample.size + j + 1}/{n_files} | Start', logger)
 
+            # Compute RMS error of MSE profile with LCL at each of the model levels
+            ds_use = ds.isel(co2=i, sample=j)
+            use_lev = ds_use.P >= ds_use.P.isel(lev=ds_use.lnb_ind) - small
+            error_rms = get_mse_prof_rms(ds_use.T.where(use_lev), ds_use.P.where(use_lev), ds_use.Z3.where(use_lev), ds_use.P_diff.where(use_lev))
+            lcl_lev_ind = error_rms.argmin(dim='lev')
+            print_log(f'File {i*ds.sample.size+j+1}/{n_files} | Computed best model level', logger)
+
+            # Build a fine grid of n_split pressure levels around best LCL model level
+            pressure_min = ds_use.P.isel(lev=np.clip(lcl_lev_ind-1, 0, ds.lev.size-1))
+            pressure_max = ds_use.P.isel(lev=np.clip(lcl_lev_ind+1, 0, ds.lev.size-1))
+            ds_split = get_ds_in_pressure_range(ds_use[['T', 'Z3', 'P']], pressure_min, pressure_max, n_split,
+                                                pressure_dim_name_out='lev_fine_ind')
+            ds_split = ds_split.drop_vars('lev')
+            print_log(f'File {i*ds.sample.size+j+1}/{n_files} | Computed fine grid about model level', logger)
+
+            # On this fine grid, repeat RMS error of MSE profile calculation - select min error as the LCL
+            error_rms = get_mse_prof_rms(ds_use.T.where(use_lev), ds_use.P.where(use_lev), ds_use.Z3.where(use_lev),
+                                  ds_use.P_diff.where(use_lev), ds_split.T, ds_split.P, ds_split.Z3, split_dim='lev_fine_ind')
+            p_lcl_emp = ds_split.P.isel(lev_fine_ind=error_rms.argmin(dim='lev_fine_ind'))
+            error_rms_emp = error_rms.min(dim='lev_fine_ind')
+            print_log(f'File {i*ds.sample.size+j+1}/{n_files} | Computed Empirical LCL', logger)
+
+            # Compute RMS error from physical LCL
+            p_lcl = lcl_metpy(ds_use.TREFHT, ds_use.QREFHT, ds_use.PREFHT)[0]
+            ds_lcl_phys = get_ds_in_pressure_range(ds_use[['T', 'Z3', 'P']], p_lcl, p_lcl+1, n_pressure=1,
+                                                   pressure_dim_name_out='lev_fine_ind')
+            error_rms = get_mse_prof_rms(ds_use.T.where(use_lev), ds_use.P.where(use_lev), ds_use.Z3.where(use_lev),
+                                  ds_use.P_diff.where(use_lev), ds_lcl_phys.T, ds_lcl_phys.P, ds_lcl_phys.Z3, split_dim='lev_fine_ind')
+            error_rms = error_rms.min(dim='lev_fine_ind')
+            print_log(f'File {i*ds.sample.size+j+1}/{n_files} | Computed Physical LCL', logger)
+
+            # Correct empirical LCL to be physical if the error is less
+            p_lcl_emp = p_lcl_emp.where(error_rms_emp < error_rms, p_lcl)
+            error_rms_emp = error_rms_emp.where(error_rms_emp < error_rms, error_rms)
+
+            # Save data
+            ds_lcl = xr.Dataset({'p_lcl': p_lcl, 'error_rms': error_rms, 'p_lcl_emp': p_lcl_emp, 'error_rms_emp': error_rms_emp})
+            ds_lcl = ds_lcl.drop_vars('lev_fine_ind')
+            ds_lcl = convert_ds_dtypes(ds_lcl)
+            if (not os.path.exists(path_use[j])) and save_processed:
+                ds_lcl.to_netcdf(path_use[j], format="NETCDF4",
+                             encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lcl.data_vars})
+            print_log(f'File {i*ds.sample.size+j+1}/{n_files} | Saved', logger)
+
+        if (not os.path.exists(os.path.join(processed_dir[i], processed_file_name))) and save_processed:
+            # Combine all sample files into a single file for each experiment
+            ds_lcl = xr.concat([xr.load_dataset(path_use[j]) for j in range(ds.sample.size)], dim=ds.sample)
+            ds_lcl.to_netcdf(os.path.join(processed_dir[i], processed_file_name), format="NETCDF4",
+                             encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lcl.data_vars})
+            print_log(f'{exp_name[i]} | Combined samples into one {processed_file_name} File', logger)
+
+print_log('End', logger)
 hi = 5
 
