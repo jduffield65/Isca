@@ -81,7 +81,7 @@ exp_name = ['pre_industrial', 'co2_2x']
 processed_dir = [os.path.join(data_dir, exp_name[i], quant_type, 'lcl_calc') for i in range(len(exp_name))]
 processed_file_name = 'ds_lcl.nc'           # combined file from all samples
 load_processed = [os.path.exists(os.path.join(processed_dir[i], processed_file_name)) for i in range(len(exp_name))]
-var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm']
+var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm', 'CAPE', 'FREQZM']
 co2_vals = [get_co2_multiplier(i) for i in exp_name]
 
 # Load in data
