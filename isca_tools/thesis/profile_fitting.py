@@ -6,9 +6,12 @@ from ..utils.constants import lapse_dry, g
 from ..utils.numerical import interp_nan
 from ..utils.moist_physics import moist_static_energy, sphum_sat
 
+
 def get_mse_env(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.DataArray,
-                 temp_at_lcl: xr.DataArray, p_lcl: xr.DataArray,
-                 prof_type: Literal['full', 'above_lcl', 'below_lcl'] = 'full') -> xr.DataArray:
+                p_lcl: xr.DataArray,
+                prof_type: Literal['full', 'above_lcl', 'below_lcl'] = 'full',
+                temp_at_lcl: Optional[xr.DataArray] = None,
+                sphum_below_lcl: Optional[xr.DataArray] = None) -> xr.DataArray:
     """
     Returns environmental MSE profile as a function of pressure $p$, which satisfies the following if
     `prof_type = full`:
@@ -23,17 +26,21 @@ def get_mse_env(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.DataArray
         temp_env: `[n_lev]` Environment temperature in Kelvin.
         p_env: `[n_lev]` Environment pressure in Pa.
         z_env: `[n_lev]` Environment geopotential height in m.
-        temp_at_lcl: Environment temperature at `p_lcl` in Kelvin.
         p_lcl: Pressure of LCL in Pa.
         prof_type: If `above_lcl`, will return $MSE^*(p)$ for all $p$.</br>
             If `below_lcl`, will return $DSE(p) + L_v q^*_{LCL}$ for all $p$.</br>
             If `full` will return different profile above and below LCL.
+        temp_at_lcl: Environment temperature at `p_lcl` in Kelvin. Only required if `sphum_below_lcl` not given.
+        sphum_below_lcl: Specific humidity to use for profile below the LCL.
+            If not given, will set to $q^*(T(p_{LCL}), p_{LCL})$.
 
     Returns:
         mse_env: `[n_lev]` Environment MSE in kJ/kg.
     """
+    if sphum_below_lcl is None:
+        sphum_below_lcl = sphum_sat(temp_at_lcl, p_lcl)
     mse_above_lcl = moist_static_energy(temp_env, sphum_sat(temp_env, p_env), z_env)
-    mse_below_lcl = moist_static_energy(temp_env, sphum_sat(temp_at_lcl, p_lcl), z_env)
+    mse_below_lcl = moist_static_energy(temp_env, sphum_below_lcl, z_env)
     if prof_type == 'full':
         return xr.where(p_env <= p_lcl, mse_above_lcl, mse_below_lcl)
     elif prof_type == 'above_lcl':
@@ -83,9 +90,11 @@ def get_lnb_lev_ind(temp_env: xr.DataArray, z_env: xr.DataArray, p_env: xr.DataA
     # lnb_ind = np.where(lapse < 0)[0][-1]
     # If lapse rate has very big variation, push LNB closer to surface
     for j in range(n_iter):
-        is_large_lapse_diff = lapse.isel(**{lev_dim: lnb_ind + 2}) - lapse.isel(**{lev_dim: lnb_ind + 1}) > lapse_change_thresh
+        is_large_lapse_diff = lapse.isel(**{lev_dim: lnb_ind + 2}) - lapse.isel(
+            **{lev_dim: lnb_ind + 1}) > lapse_change_thresh
         is_large_lapse_diff = is_large_lapse_diff & (lapse.isel(**{lev_dim: lnb_ind + 1}) < lapse_thresh)
-        is_large_lapse_diff2 = lapse.isel(**{lev_dim: lnb_ind + 3}) - lapse.isel(**{lev_dim: lnb_ind + 1}) > lapse_change_thresh
+        is_large_lapse_diff2 = lapse.isel(**{lev_dim: lnb_ind + 3}) - lapse.isel(
+            **{lev_dim: lnb_ind + 1}) > lapse_change_thresh
         is_large_lapse_diff2 = is_large_lapse_diff2 & (lapse.isel(**{lev_dim: lnb_ind + 1}) < lapse_thresh)
         is_large_lapse_diff = is_large_lapse_diff | is_large_lapse_diff2
         lnb_ind = lnb_ind + is_large_lapse_diff.astype(int)
@@ -112,7 +121,7 @@ def get_pnorm(p: Union[xr.DataArray, np.ndarray, float], p_low: Union[xr.DataArr
 
 
 def get_p_from_pnorm(pnorm: Union[xr.DataArray, np.ndarray, float], p_low: Union[xr.DataArray, np.ndarray, float],
-                        p_high: Union[xr.DataArray, np.ndarray, float]) -> Union[xr.DataArray, np.ndarray, float]:
+                     p_high: Union[xr.DataArray, np.ndarray, float]) -> Union[xr.DataArray, np.ndarray, float]:
     """
     Given the normalized pressure coordinate `pnorm`, this inverts `get_pnorm` to give the physical pressure in Pa.
 
@@ -124,7 +133,7 @@ def get_p_from_pnorm(pnorm: Union[xr.DataArray, np.ndarray, float], p_low: Union
     Returns:
         p: Pressure corresponding to `pnorm` in Pa.
     """
-    return 10**(pnorm * (np.log10(p_high) - np.log10(p_low)) + np.log10(p_low))
+    return 10 ** (pnorm * (np.log10(p_high) - np.log10(p_low)) + np.log10(p_low))
 
 
 def interp_var_to_pnorm(var: xr.DataArray, p: xr.DataArray, var_at_low: xr.DataArray, p_low: Union[xr.DataArray, float],
@@ -162,14 +171,13 @@ def interp_var_to_pnorm(var: xr.DataArray, p: xr.DataArray, var_at_low: xr.DataA
         n_extrapolate: Number of model levels used above LNB that were extrapolated.
             Only non-zero if `extrapolate` is True.
     """
-    small = 1   # a small value in units of Pa, much less than spacing of model levels
+    small = 1  # a small value in units of Pa, much less than spacing of model levels
     var = var.where(p >= p.isel(**{lev_dim: lnb_ind}) - small)  # set var to nan above LNB
     # Define target pnorm-grid
     if pnorm_custom_grid is None:
         pnorm = np.arange(0, 1 + d_pnorm, d_pnorm)
     else:
         pnorm = pnorm_custom_grid
-
 
     def _interp_onecell(var_prof, p_prof, var_at_low, p_low, var_at_high, p_high):
         # Skip missing
@@ -179,7 +187,8 @@ def interp_var_to_pnorm(var: xr.DataArray, p: xr.DataArray, var_at_low: xr.DataA
         # Shift to pnorm grid
         logp_target = np.log10(get_p_from_pnorm(pnorm, p_low, p_high))
         # Add to dataset used to perform interpolation
-        if insert_low and (np.min(np.abs(p_prof - p_low)) > small): # only insert if not already present even if request
+        if insert_low and (
+                np.min(np.abs(p_prof - p_low)) > small):  # only insert if not already present even if request
             ind_low = np.searchsorted(p_prof, p_low)
             p_prof = np.insert(p_prof, ind_low, p_low)
             var_prof = np.insert(var_prof, ind_low, var_at_low)
@@ -264,7 +273,6 @@ def get_mse_prof_rms(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.Data
                                             sphum_sat(temp_at_split[i], p_split[i]),
                                             z_at_split[i])
 
-
             # Set MSE above LCL to mass weighted mean in this layer, not equal to LCL MSE^* when computing optimal
             # LCL. Because idea is MSE should be constant above, and DSE should be constant below
             # var[p_env < p_split[i]] = smooth_threshold(var[p_env < p_split[i]], x_thresh=1)
@@ -294,6 +302,6 @@ def get_mse_prof_rms(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.Data
     )
 
     # Attach coordinates (pressure levels as p_lcl)
-    norm = norm.assign_coords({split_dim:(split_dim, p_split[split_dim].values)})
+    norm = norm.assign_coords({split_dim: (split_dim, p_split[split_dim].values)})
     norm.name = "mse_prof_error"
     return norm
