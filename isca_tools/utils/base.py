@@ -1,8 +1,9 @@
 import xarray as xr
+
 try:
     from xarray.core.weighted import DataArrayWeighted
 except ModuleNotFoundError:
-    from xarray.computation.weighted import DataArrayWeighted      # Version issue as to where DataArrayWeighted is
+    from xarray.computation.weighted import DataArrayWeighted  # Version issue as to where DataArrayWeighted is
 import numpy as np
 from typing import Optional, Union, List, Callable, Tuple
 import psutil
@@ -30,7 +31,7 @@ def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
     return var.weighted(weights)
 
 
-def print_log(text: str, logger:Optional[logging.Logger] = None) -> None:
+def print_log(text: str, logger: Optional[logging.Logger] = None) -> None:
     """
     Quick function to add to log if log exists, otherwise print it.
 
@@ -109,6 +110,7 @@ def get_memory_usage() -> float:
     mem_mb = process.memory_info().rss / (1024 * 1024)
     return mem_mb
 
+
 def len_safe(x) -> int:
     """
     Return length of `x` which can have multiple values, or just be a number.
@@ -140,7 +142,7 @@ def split_list_max_n(lst: Union[List, np.ndarray], n: int) -> List:
     """
     k = int(np.ceil(len(lst) / n))  # Number of chunks needed
     avg = int(np.ceil(len(lst) / k))
-    return [lst[i * avg : (i + 1) * avg] for i in range(k)]
+    return [lst[i * avg: (i + 1) * avg] for i in range(k)]
 
 
 def parse_int_list(value: Union[str, int, List], format_func: Callable = lambda x: str(x),
@@ -167,7 +169,7 @@ def parse_int_list(value: Union[str, int, List], format_func: Callable = lambda 
     elif isinstance(value, int):
         value = [value]
     elif isinstance(value, str):
-        value = value.strip()       # remove blank space
+        value = value.strip()  # remove blank space
         # Can specify just first or last n years
         if re.search(r'^first(\d+)', value):
             if all_values is None:
@@ -228,6 +230,7 @@ def round_any(x: Union[float, np.ndarray], base: float, round_type: str = 'round
         raise ValueError(f"round_type specified was {round_type} but it should be one of the following:\n"
                          f"round, ceil, floor")
 
+
 def has_out_of_range(val: Union[List, Tuple, np.ndarray, float], min_range: float, max_range: float) -> bool:
     """
     Check if any number within `val` is outside the range between `min_range` and `max_range`.
@@ -244,10 +247,11 @@ def has_out_of_range(val: Union[List, Tuple, np.ndarray, float], min_range: floa
     vals = val if isinstance(val, (list, tuple, np.ndarray)) else [val]
     return any((x < min_range or x > max_range) for x in vals)
 
+
 def top_n_peaks_ind(
-    var: np.ndarray,
-    n: int = 1,
-    min_ind_spacing: int = 0,
+        var: np.ndarray,
+        n: int = 1,
+        min_ind_spacing: int = 0,
 ) -> np.ndarray:
     """Return the indices of the N largest values of `var`, such that the indices of these values
      are ≥`min_ind_spacing` apart.
@@ -272,6 +276,7 @@ def top_n_peaks_ind(
                 break
 
     return np.array(selected_ind, dtype=int)
+
 
 def dp_from_pressure(p: xr.DataArray, dim: str = "lev") -> xr.DataArray:
     """Compute layer pressure thickness Δp, preserving extra dims and coord order.
@@ -318,14 +323,11 @@ def dp_from_pressure(p: xr.DataArray, dim: str = "lev") -> xr.DataArray:
     dp.attrs.update({"long_name": "pressure thickness", "units": "Pa"})
     return dp
 
-import numpy as np
-import xarray as xr
-from typing import Optional, Union, List
 
 def weighted_RMS(
-    var: Union[xr.DataArray, np.ndarray],
-    weight: Optional[Union[xr.DataArray, np.ndarray]] = None,
-    dim: Optional[Union[str, int, List[Union[str, int]]]] = None
+        var: Union[xr.DataArray, np.ndarray],
+        weight: Optional[Union[xr.DataArray, np.ndarray]] = None,
+        dim: Optional[Union[str, int, List[Union[str, int]]]] = None
 ) -> Union[xr.DataArray, np.ndarray]:
     """
     Compute (weighted) RMS of a DataArray or numpy array along specified dimension(s).
@@ -370,3 +372,66 @@ def weighted_RMS(
             rms_sq = np.nansum((var ** 2) * weight, axis=tuple(dims)) / np.nansum(weight, axis=tuple(dims))
         return np.sqrt(rms_sq)
 
+
+def insert_to_array(x_values: Union[np.ndarray, xr.DataArray], y_values: Union[np.ndarray, xr.DataArray],
+                    x_new: Union[np.ndarray, xr.DataArray, List, float], y_new: Union[np.ndarray, xr.DataArray, List, float]
+                    ) -> tuple[Union[np.ndarray, xr.DataArray], Union[np.ndarray, xr.DataArray]]:
+    """Insert multiple (x, y) pairs into arrays while preserving the sort order of x (ascending or descending).
+
+    Works for both NumPy arrays and xarray.DataArray objects.
+
+    Args:
+        x_values: Array of x-values (must be sorted, ascending or descending).
+        y_values: Array of corresponding y-values.
+        x_new: New x-values to insert.
+        y_new: Corresponding y-values to insert.
+
+    Returns:
+        x_updated: `x_values` with `x_new` inserted in correct location.
+        y_updated: `y_values` with `y_new` inserted in correct location.
+    """
+    # Extract data if xarray
+    x_is_xr = isinstance(x_values, xr.DataArray)
+    y_is_xr = isinstance(y_values, xr.DataArray)
+
+    x_data = x_values.data if x_is_xr else np.asarray(x_values)
+    y_data = y_values.data if y_is_xr else np.asarray(y_values)
+    x_new = np.atleast_1d(x_new)
+    y_new = np.atleast_1d(y_new)
+
+    # Determine if x_values are ascending or descending
+    ascending = x_data[0] < x_data[-1]
+
+    # If descending, temporarily flip for insertion logic
+    if not ascending:
+        x_data = x_data[::-1]
+        y_data = y_data[::-1]
+        x_new = -x_new
+        x_data = -x_data
+
+    # Sort new inputs by x_new
+    sort_idx = np.argsort(x_new)
+    x_new = x_new[sort_idx]
+    y_new = y_new[sort_idx]
+
+    # Find insertion indices and insert
+    insert_indices = np.searchsorted(x_data, x_new)
+    x_combined = np.insert(x_data, insert_indices, x_new)
+    y_combined = np.insert(y_data, insert_indices, y_new)
+
+    # Flip back if descending
+    if not ascending:
+        x_combined = -x_combined[::-1]
+        y_combined = y_combined[::-1]
+
+    # Wrap back into xarray if needed
+    if x_is_xr or y_is_xr:
+        # Try to preserve dimension and coordinate naming
+        dim = x_values.dims[0] if x_is_xr else (y_values.dims[0] if y_is_xr else "dim_0")
+        x_combined = xr.DataArray(x_combined, dims=[dim], name=x_values.name if x_is_xr else None)
+        y_combined = xr.DataArray(y_combined, dims=[dim], name=y_values.name if y_is_xr else None)
+
+        # Rebuild coordinates if x-values represent coordinate axis
+        x_combined = x_combined.assign_coords({dim: x_combined})
+
+    return x_combined, y_combined
