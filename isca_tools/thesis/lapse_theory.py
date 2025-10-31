@@ -115,6 +115,11 @@ def interp_var_at_pressure(var: Union[xr.DataArray, xr.Dataset, np.ndarray], p_d
         var_out[key] = var_out[key].drop_vars('plev')
     return xr.Dataset(var_out)
 
+def _get_var_at_plev(var_env, p_env, p_desired, method = 'log'):
+    if method == 'log':
+        return np.interp(np.log10(p_desired), np.log10(p_env), var_env)
+    else:
+        return np.interp(p_desired, p_env, var_env)
 
 def get_var_at_plev(var_env: Union[xr.Dataset, xr.DataArray], p_env: xr.DataArray, p_desired: xr.DataArray, method: str ='log',
                     lev_dim: str ='lev'):
@@ -139,11 +144,6 @@ def get_var_at_plev(var_env: Union[xr.Dataset, xr.DataArray], p_env: xr.DataArra
         var_desired: float `n_lat x n_lon x ...`</br>
             The value of `var_env` at `p_desired`.
     """
-    def _get_var_at_plev(var_env, p_env, p_desired):
-        if method == 'log':
-            return np.interp(np.log10(p_desired), np.log10(p_env), var_env)
-        else:
-            return np.interp(p_desired, p_env, var_env)
     if not (p_env.diff(dim=lev_dim) > 0).all():
         # If pressure is not ascending, flip dimension along lev_dim
         # Requirement for np.interp
@@ -163,7 +163,7 @@ def get_var_at_plev(var_env: Union[xr.Dataset, xr.DataArray], p_env: xr.DataArra
         vectorize=True,
         dask="parallelized",
         output_dtypes=[float],
-        kwargs={}
+        kwargs={"method": method}
     )
     return out
 
