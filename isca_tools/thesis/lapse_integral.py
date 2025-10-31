@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 from typing import Union, Optional, Tuple, Literal
-from isca_tools.utils.constants import g, R
+from ..utils.constants import g, R
 
 
 def integral_lapse_dlnp_hydrostatic(temp_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[xr.DataArray, np.ndarray],
@@ -10,8 +10,11 @@ def integral_lapse_dlnp_hydrostatic(temp_lev: Union[xr.DataArray, np.ndarray], p
                                     temp_ref_p1: Optional[float] = None, temp_ref_p2: Optional[float] = None,
                                     take_abs: bool = False) -> float:
     """
-    Compute ∫_{p1}^{p2} (-dT/dz) dlnp using the hydrostatic relation (converted to pressure integral) only (no Z required).
-    Can also compute ∫_{p1}^{p2} lapse - lapse_ref dlnp
+    Compute $\int_{p_1}^{p_2} \Gamma d\ln p$ using the hydrostatic relation (converted to pressure integral) only (no Z required),
+    where $\Gamma = -dT/dz$ is the lapse rate.
+    Can also compute $\int_{p_1}^{p_2} \Gamma - \Gamma_{ref} d\ln p$
+
+    Uses hydrostatic balance, $d\ln p = -\\frac{g}{RT(p)} dz$, to convert integral into
 
     Args:
         temp_lev: xr.DataArray
@@ -29,8 +32,8 @@ def integral_lapse_dlnp_hydrostatic(temp_lev: Union[xr.DataArray, np.ndarray], p
         temp_ref_lev: Temperature of reference profile at pressure `p_lev`.
         temp_ref_p1: Temperature of reference profile at pressure `p1`.
         temp_ref_p2: Temperature of reference profile at pressure `p2`.
-        take_abs: If `True`, and provide `temp_ref_lev`, will compute ∫_{p1}^{p2} |lapse - lapse_ref| dlnp.
-            Otherwise, will compute ∫_{p1}^{p2} lapse - lapse_ref dlnp.
+        take_abs: If `True`, and provide `temp_ref_lev`, will compute $\int_{p_1}^{p_2} |\Gamma - \Gamma_{ref}| d\ln p$.
+            Otherwise, will compute $\int_{p_1}^{p_2} \Gamma - \Gamma_{ref} d\ln p$.
 
     Returns:
         integral: Value of the integral
@@ -77,18 +80,23 @@ def integral_lapse_dlnp_hydrostatic(temp_lev: Union[xr.DataArray, np.ndarray], p
     return float(integral)
 
 
-def get_temp_const_lapse(p_lev, temp_low, p_low, lapse):
+def get_temp_const_lapse(p_lev: Union[xr.DataArray, np.ndarray, float],
+                         temp_low: Union[xr.DataArray, np.ndarray, float],
+                         p_low: Union[xr.DataArray, np.ndarray, float],
+                         lapse: Union[xr.DataArray, np.ndarray, float]) -> Union[xr.DataArray, np.ndarray, float]:
     """
     Get the temperature at `p_lev` assuming constant lapse rate up from `temp_low` at `p_low`.
 
+    This assumes hydrostatic balance: $\Gamma(p) = −\\frac{dT}{dz} = \\frac{g}{R} \\frac{d \ln T}{d\ln p}$
+
     Args:
-        p_lev:
-        temp_low:
-        p_low:
-        lapse:
+        p_lev: `[n_lev]` Pressure levels to find temperature. Units: Pa.
+        temp_low: Temperature at low pressure `p_low`. Units: K.
+        p_low: Pressure level where to start ascent from along constant lapse rate profile. Units: Pa.
+        lapse: Constant lapse rate, $\Gamma$, to use to find temperature at `p_lev`. Units: K/m.
 
     Returns:
-
+        temp_lev: `[n_lev]` Temperature at `p_lev`. Units: K.
     """
     return temp_low * (p_lev / p_low) ** (lapse * R / g)
 
@@ -99,8 +107,8 @@ def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Un
                         sanity_check: bool = False) -> Tuple[
     float, float, float, Union[xr.DataArray, np.ndarray]]:
     """
-    Find the bulk lapse rate such that $\int_{p_1}^{p^2} \Gamma_{env}(p) d \lnp = \Gamma_{bulk} \ln (p_2/p_1)$.
-    Then computes the error in this approximation: $\int_{p_1}^{p^2} |\Gamma_{env}(p) - \Gamma_{bulk}| d \lnp$.
+    Find the bulk lapse rate such that $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p = \Gamma_{bulk} \ln (p_2/p_1)$.
+    Then computes the error in this approximation: $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{bulk}| d\ln p$.
 
     Args:
         temp_env_lev: `[n_lev]` Environmental temperature at pressure `p_lev`.
@@ -113,14 +121,15 @@ def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Un
 
     Returns:
         lapse_bulk: Bulk lapse rate. Units are *K/km*.
-        integral: Result of integral `$\int_{p_1}^{p^2} \Gamma_{env}(p) d \lnp$. Units are *K/km*.
-        integral_error: Result of integral `$\int_{p_1}^{p^2} |\Gamma_{env}(p) - \Gamma_{bulk}| d \lnp$.
+        integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$. Units are *K/km*.
+        integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{bulk}| d\ln p$.
             Units are *K/km*.
         temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
     # Compute integral of actual environmental lapse rate between p_lower and p_upper
-    lapse_integral = integral_lapse_dlnp_hydrostatic(temp_env_lev, p_lev, p_lower, p_upper,
-                                                     temp_env_lower, temp_env_upper)
+    # lapse_integral = integral_lapse_dlnp_hydrostatic(temp_env_lev, p_lev, p_lower, p_upper,
+    #                                                  temp_env_lower, temp_env_upper)
+    lapse_integral = g/R * np.log(temp_env_upper / temp_env_lower)
     # Define bulk lapse rate such that a profile following constant lapse rate between p_lower and p_upper
     # would have same value of above integral as actual profile
     lapse_bulk = lapse_integral / np.log(p_upper / p_lower)
@@ -144,12 +153,33 @@ def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Un
     return lapse_bulk * 1000, lapse_integral * 1000, lapse_integral_error * 1000, temp_env_approx_lev
 
 
-def get_temp_mod_parcel_lapse(p_lev, temp_parcel_lev, temp_lower, p_lower, temp_parcel_upper, p_upper,
-                              lapse_diff_const):
+def get_temp_mod_parcel_lapse(p_lev: Union[xr.DataArray, np.ndarray, float],
+                              p_low: Union[xr.DataArray, np.ndarray, float],
+                              temp_parcel_lev: Union[xr.DataArray, np.ndarray, float],
+                              lapse_diff_const: Union[xr.DataArray, np.ndarray, float]
+                              ) -> Union[xr.DataArray, np.ndarray, float]:
+    """
+    This finds the temperature at pressure levels `p_lev` following a lapse rate $\Gamma(p) = \Gamma_p(p, T_p(p)) + \eta$
+    where $\Gamma_p(p, T)$ is the parcel (moist adiabatic) lapse rate and $\eta$ is a constant. $T_p(p)$ refers
+    to parcel temperature at pressure $p$.
+
+    This assumes hydrostatic balance: $\Gamma(p) = −\\frac{dT}{dz} = \\frac{g}{R} \\frac{d \ln T}{d\ln p}$
+
+    Args:
+        p_lev: `[n_lev]` Pressure levels to find environmental temperature. Units: Pa.
+        p_low: Pressure level where to start the ascent from along the modified parcel profile. Units: Pa.
+        temp_parcel_lev: `[n_lev]` Parcel temperature at pressure `p_lev`. Units: K.
+        lapse_diff_const: Constant, $\eta$, which is added to the parcel lapse rate at each pressure level. Units: K/m.
+
+    Returns:
+        temp_lev: `[n_lev]` Temperature at `p_lev`. Units: K.
+    """
     # Compute temperature at p_upper such that lapse rate at all levels is the same as parcel plus `lapse_diff_const`.
-    lapse_parcel_integral = integral_lapse_dlnp_hydrostatic(temp_parcel_lev, p_lev, p_lower, p_upper, temp_lower,
-                                                            temp_parcel_upper)
-    return temp_lower * (p_upper / p_lower) ** (lapse_diff_const * R / g) * np.exp(R / g * lapse_parcel_integral)
+    # lapse_parcel_integral = integral_lapse_dlnp_hydrostatic(temp_parcel_lev, p_lev, p_lower, p_upper, temp_lower,
+    #                                                         temp_parcel_upper)
+    # lapse_parcel_integral = g / R * np.log(temp_parcel_lev / temp_low)
+    # return temp_lower * (p_lev / p_low) ** (lapse_diff_const * R / g) * np.exp(R / g * lapse_parcel_integral)
+    return get_temp_const_lapse(p_lev, temp_parcel_lev, p_low, lapse_diff_const)
 
 
 def mod_parcel_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray],
@@ -161,10 +191,13 @@ def mod_parcel_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray],
                              sanity_check: bool = False) -> Tuple[
     float, float, float, Union[xr.DataArray, np.ndarray]]:
     """
-    Find the constant lapse rate, $\Gamma_{mod}$ that needs adding to parcel lapse rate such that
-    $\int_{p_1}^{p^2} \Gamma_{env}(p) d \lnp = \int_{p_1}^{p^2} \Gamma_{parcel}(p) + \Gamma_{mod} d \lnp$.
+    Find the constant, $\eta$ that needs adding to parcel lapse rate such that
+    $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p = \int_{p_1}^{p_2} \Gamma_p(p, T_p(p)) + \eta d\ln p$.
     Then computes the error in this approximation:
-    $\int_{p_1}^{p^2} |\Gamma_{env}(p) - \Gamma_{parcel}(p) - Gamma_{mod}| d \lnp$.
+    $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_p(p, T_p(p)) - \eta| d\ln p$.
+
+    where $\Gamma_p(p, T)$ is the parcel (moist adiabatic) lapse rate and $T_p(p)$ is the parcel temperature
+    at pressure $p$ starting at $p_1$.
 
     Args:
         temp_env_lev: `[n_lev]` Environmental temperature at pressure `p_lev`.
@@ -179,28 +212,28 @@ def mod_parcel_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray],
         sanity_check: If `True` will print a sanity check to ensure the calculation is correct.
 
     Returns:
-        lapse_diff_const: Lapse rate adjustment, $\Gamma_{mod}$ which needs to be added to $\Gamma_{parcel}(p)$
+        lapse_diff_const: Lapse rate adjustment, $\eta$ which needs to be added to $\Gamma_{p}(p, T_p(p))$
             so integral matches that of environmental lapse rate. Units are *K/km*.
-        integral: Result of integral `$\int_{p_1}^{p^2} \Gamma_{env}(p) d \lnp$. Units are *K/km*.
-        integral_error: Result of integral `$\int_{p_1}^{p^2} |\Gamma_{env}(p) - \Gamma_{parcel}(p) - \Gamma_{mod}| d \lnp$.
+        integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$. Units are *K/km*.
+        integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_p(p) - \eta| d\ln p$.
             Units are *K/km*.
         temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
     # Compute integral of deviation between environmental and parcel lapse rate between p_lower and p_upper
-    lapse_diff_integral = integral_lapse_dlnp_hydrostatic(temp_env_lev, p_lev, p_lower, p_upper, temp_env_lower,
-                                                          temp_env_upper, temp_parcel_lev, temp_parcel_lower,
-                                                          temp_parcel_upper)
+    # lapse_diff_integral = integral_lapse_dlnp_hydrostatic(temp_env_lev, p_lev, p_lower, p_upper, temp_env_lower,
+    #                                                       temp_env_upper, temp_parcel_lev, temp_parcel_lower,
+    #                                                       temp_parcel_upper)
+    lapse_diff_integral = g / R * (np.log(temp_env_upper / temp_env_lower) - np.log(temp_parcel_upper / temp_parcel_lower))
     # Compute the constant needed to be added to the parcel lapse rate at each level to make above integral equal 0.
     lapse_diff_const = lapse_diff_integral / np.log(p_upper / p_lower)
-    temp_env_approx_lev = np.asarray([get_temp_mod_parcel_lapse(p_lev, temp_parcel_lev, temp_env_lower, p_lower,
-                                                                float(temp_parcel_lev[i]), float(p_lev[i]),
-                                                                lapse_diff_const)
-                                      for i in range(len(p_lev))])
-    temp_env_approx_upper = get_temp_mod_parcel_lapse(p_lev, temp_parcel_lev, temp_env_lower, p_lower,
-                                                      temp_parcel_upper, p_upper, lapse_diff_const)
+    temp_env_approx_lev = get_temp_mod_parcel_lapse(p_lev, p_lower, temp_parcel_lev, lapse_diff_const)
+    temp_env_approx_upper = get_temp_mod_parcel_lapse(p_upper, p_lower, temp_parcel_upper, lapse_diff_const)
+    # temp_env_approx_upper = get_temp_mod_parcel_lapse(p_lev, temp_parcel_lev, temp_env_lower, p_lower,
+    #                                                   temp_parcel_upper, p_upper, lapse_diff_const)
 
-    lapse_integral = integral_lapse_dlnp_hydrostatic(temp_env_lev, p_lev, p_lower, p_upper,
-                                                     temp_env_lower, temp_env_upper)
+    # lapse_integral = integral_lapse_dlnp_hydrostatic(temp_env_lev, p_lev, p_lower, p_upper,
+    #                                                  temp_env_lower, temp_env_upper)
+    lapse_integral = g / R * np.log(temp_env_upper / temp_env_lower)
     if sanity_check:
         # sanity check, this should be the same as lapse_integral
         lapse_integral_approx = integral_lapse_dlnp_hydrostatic(temp_env_approx_lev, p_lev, p_lower, p_upper,
@@ -256,8 +289,8 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
     Returns:
         lapse: Lapse rate info for each layer. Bulk lapse rate if `method_layer='const'` or lapse rate adjustment
             if `method_layer='mod_parcel'`. Units are *K/km*.
-        integral: Result of integral `$\int_{p_1}^{p^2} \Gamma_{env}(p) d \lnp$ of each layer. Units are *K/km*.
-        integral_error: Result of integral `$\int_{p_1}^{p^2} |\Gamma_{env}(p) - \Gamma_{approx}| d \lnp$ of each layer.
+        integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$ of each layer. Units are *K/km*.
+        integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
             Units are *K/km*.
         temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
