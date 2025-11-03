@@ -1,1 +1,1 @@
-from .test_lapse_integral import TestLapseIntegral
+from .test_lapse_integral import TestLapseIntegral, TestFitting
