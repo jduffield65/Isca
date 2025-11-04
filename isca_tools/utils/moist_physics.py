@@ -1,4 +1,5 @@
 import numpy as np
+import xarray as xr
 from typing import Union, Optional
 from .constants import L_v, epsilon, c_p, temp_kelvin_to_celsius, g, R, R_v
 
@@ -148,9 +149,9 @@ def rh_from_sphum(sphum: Union[float, np.ndarray], temp: Union[float, np.ndarray
     return 100 * mix_ratio / (epsilon + mix_ratio) * (epsilon + sat_mix_ratio) / sat_mix_ratio
 
 
-def moist_static_energy(temp: Union[np.ndarray, float], sphum: Union[np.ndarray, float],
-                        height: Union[np.ndarray, float],
-                        c_p_const: float = c_p) -> Union[np.ndarray, float]:
+def moist_static_energy(temp: Union[np.ndarray, xr.DataArray, float], sphum: Union[np.ndarray, xr.DataArray, float],
+                        height: Union[np.ndarray, xr.DataArray, float],
+                        c_p_const: float = c_p) -> Union[np.ndarray, xr.DataArray, float]:
     """
     Returns the moist static energy in units of *kJ/kg*.
 
@@ -169,7 +170,8 @@ def moist_static_energy(temp: Union[np.ndarray, float], sphum: Union[np.ndarray,
     return (L_v * sphum + c_p_const * temp + g * height) / 1000
 
 
-def sphum_sat(temp: Union[float, np.ndarray], pressure: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def sphum_sat(temp: Union[float, xr.DataArray, np.ndarray],
+              pressure: Union[float, xr.DataArray, np.ndarray]) -> Union[float, xr.DataArray, np.ndarray]:
     """
     Returns the saturation specific humidity, $q^*$, in *kg/kg*.
 

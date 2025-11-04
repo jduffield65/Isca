@@ -85,8 +85,9 @@ def get_temp_adiabat(temp_surf: Union[float, np.ndarray], sphum_surf: Union[floa
         Adiabatic temperature at `pressure_ft` in Kelvin. If array, will be same size as `temp_surf` and `sphum_surf`.
     """
     if isinstance(temp_surf, numbers.Number):
-        return scipy.optimize.fsolve(temp_adiabat_fit_func, guess_temp_adiabat,
-                                     args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))
+        # Need [0] to make it a float
+        return float(scipy.optimize.fsolve(temp_adiabat_fit_func, guess_temp_adiabat,
+                                           args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))[0])
     elif isinstance(temp_surf, np.ndarray):
         return scipy.optimize.fsolve(temp_adiabat_fit_func, np.full_like(temp_surf, guess_temp_adiabat),
                                      args=(temp_surf, sphum_surf, pressure_surf, pressure_ft, epsilon))

@@ -218,11 +218,11 @@ def get_temp_mod_parcel_lapse(p_lev: Union[xr.DataArray, np.ndarray, float],
     return get_temp_const_lapse(p_lev, temp_parcel_lev, p_low, lapse_diff_const)
 
 
-def mod_parcel_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray],
-                             p_lev: Union[xr.DataArray, np.ndarray],
+def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
+                             p_lev: np.ndarray,
                              temp_env_lower: float, p_lower: float,
                              temp_env_upper: float, p_upper: float,
-                             temp_parcel_lev: Optional[Union[xr.DataArray, np.ndarray]] = None,
+                             temp_parcel_lev: Optional[np.ndarray] = None,
                              temp_parcel_lower: Optional[float] = None, temp_parcel_upper: Optional[float] = None,
                              n_lev_above_upper_integral: int = 0,
                              sanity_check: bool = False) -> Tuple[
@@ -293,10 +293,10 @@ def mod_parcel_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray],
     # Compute the constant needed to be added to the parcel lapse rate at each level to make above integral equal 0.
     lapse_diff_const = lapse_diff_integral / np.log(p_upper / p_lower)
     temp_env_approx_lev = get_temp_mod_parcel_lapse(p_lev, p_lower, lapse_diff_const, temp_parcel_lev=temp_parcel_lev)
-    temp_env_approx_upper = get_temp_mod_parcel_lapse(p_upper, p_lower, lapse_diff_const,
-                                                      temp_parcel_lev=temp_parcel_upper)
 
     if sanity_check:
+        temp_env_approx_upper = get_temp_mod_parcel_lapse(p_upper, p_lower, lapse_diff_const,
+                                                          temp_parcel_lev=temp_parcel_upper)
         lapse_integral = g / R * np.log(temp_env_upper / temp_env_lower)
         # sanity check, this should be the same as lapse_integral
         lapse_integral_approx = integral_lapse_dlnp_hydrostatic(temp_env_approx_lev, p_lev, p_lower, p_upper,
@@ -324,9 +324,6 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
                     temp_env_lower: float, p_lower: float,
                     temp_env_upper: float, p_upper: float,
                     temp_env_upper2: float, p_upper2: float,
-                    temp_parcel_lev: Optional[Union[xr.DataArray, np.ndarray]] = None,
-                    temp_parcel_lower: Optional[float] = None,
-                    temp_parcel_upper: Optional[float] = None, temp_parcel_upper2: Optional[float] = None,
                     method_layer1: Literal['const', 'mod_parcel'] = 'const',
                     method_layer2: Literal['const', 'mod_parcel'] = 'const',
                     n_lev_above_upper2_integral: int = 0,
@@ -364,26 +361,28 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
             Units are *K/km*.
         temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
+    if (p_upper > p_lower) | (p_upper2 > p_upper):
+        return np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan])
     if method_layer1 == 'const':
         lapse1, lapse_integral1, lapse_integral_error1 = \
-            const_lapse_fitting(temp_env_lev, p_lev, temp_env_lower, p_lower, temp_env_upper, p_upper, sanity_check)
+            const_lapse_fitting(temp_env_lev, p_lev, temp_env_lower, p_lower, temp_env_upper, p_upper,
+                                sanity_check=sanity_check)
     elif method_layer2 == 'mod_parcel':
         lapse1, lapse_integral1, lapse_integral_error1 = \
             mod_parcel_lapse_fitting(temp_env_lev, p_lev, temp_env_lower, p_lower, temp_env_upper, p_upper,
-                                     temp_parcel_lev, temp_parcel_lower, temp_parcel_upper, sanity_check)
+                                     sanity_check=sanity_check)
     else:
         raise ValueError(f'method_layer1 = {method_layer1} not recognized.')
 
     if method_layer2 == 'const':
         lapse2, lapse_integral2, lapse_integral_error2 = \
             const_lapse_fitting(temp_env_lev, p_lev, temp_env_upper, p_upper, temp_env_upper2, p_upper2,
-                                n_lev_above_upper2_integral, sanity_check)
+                                n_lev_above_upper2_integral, sanity_check=sanity_check)
     elif method_layer2 == 'mod_parcel':
         lapse2, lapse_integral2, lapse_integral_error2 = \
             mod_parcel_lapse_fitting(temp_env_lev, p_lev, temp_env_upper, p_upper, temp_env_upper2, p_upper2,
-                                     temp_parcel_lev, temp_parcel_upper, temp_parcel_upper2,
-                                     n_lev_above_upper2_integral,
-                                     sanity_check)
+                                     n_lev_above_upper_integral=n_lev_above_upper2_integral,
+                                     sanity_check=sanity_check)
     else:
         raise ValueError(f'method_layer2 = {method_layer2} not recognized.')
 
@@ -393,9 +392,34 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
     return lapse, lapse_integral, lapse_integral_error
 
 
+def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
+                       p_lev: xr.DataArray,
+                       temp_env_lower: xr.DataArray, p_lower: xr.DataArray,
+                       temp_env_upper: xr.DataArray, p_upper: xr.DataArray,
+                       temp_env_upper2: xr.DataArray, p_upper2: float,
+                       method_layer1: Literal['const', 'mod_parcel'] = 'const',
+                       method_layer2: Literal['const', 'mod_parcel'] = 'const',
+                       n_lev_above_upper2_integral: int = 0,
+                       sanity_check: bool = False, lev_dim: str = 'lev',
+                       layer_dim: str = 'layer') -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
+    return xr.apply_ufunc(
+        fitting_2_layer,
+        temp_env_lev, p_lev,  # (lat, lon, lev)
+        temp_env_lower, p_lower, temp_env_upper, p_upper, temp_env_upper2,  # (lat, lon)
+        input_core_dims=[[lev_dim], [lev_dim], [], [], [], [], []],
+        # only 'temp_env_lev' and 'lev' varies along 'lev_dim'.
+        output_core_dims=[[layer_dim], [layer_dim], [layer_dim]],
+        vectorize=True,
+        kwargs={'p_upper2': p_upper2, 'method_layer1': method_layer1,
+                'method_layer2': method_layer2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
+                'sanity_check': sanity_check}
+    )
+
+
 def get_temp_2_layer_approx(p_lev, temp_env_lower, p_lower, p_upper, lapse_layer1, lapse_layer2,
                             method_layer1: Literal['const', 'mod_parcel'] = 'const',
                             method_layer2: Literal['const', 'mod_parcel'] = 'const') -> np.ndarray:
+    # Returns the approximate temperature on model pressure levels for a given 2 layer fitting procedure
     # Expect lapse rates in K/m not K/km
     if method_layer1 == 'const':
         temp_lev = get_temp_const_lapse(p_lev, temp_env_lower, p_lower, lapse_layer1)
@@ -418,24 +442,3 @@ def get_temp_2_layer_approx(p_lev, temp_env_lower, p_lower, p_upper, lapse_layer
     else:
         raise ValueError(f'method_layer2 = {method_layer2} not recognized.')
     return temp_lev
-
-
-def const_lapse_2_layer_fitting_xr(temp_env_lev: xr.DataArray,
-                                   p_lev: xr.DataArray,
-                                   temp_env_lower: xr.DataArray, p_lower: xr.DataArray,
-                                   temp_env_upper: xr.DataArray, p_upper: xr.DataArray,
-                                   temp_env_upper2: xr.DataArray, p_upper2: float,
-                                   n_lev_above_upper2_integral: int = 0,
-                                   sanity_check: bool = False, lev_dim: str = 'lev',
-                                   layer_dim: str = 'layer') -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
-    return xr.apply_ufunc(
-        fitting_2_layer,
-        temp_env_lev, p_lev,  # (lat, lon, lev)
-        temp_env_lower, p_lower, temp_env_upper, p_upper, temp_env_upper2,  # (lat, lon)
-        input_core_dims=[[lev_dim], [lev_dim], [], [], [], [], []],
-        # only 'temp_env_lev' and 'lev' varies along 'lev_dim'.
-        output_core_dims=[[layer_dim], [layer_dim], [layer_dim]],
-        vectorize=True,
-        kwargs={'p_upper2': p_upper2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
-                'sanity_check': sanity_check}
-    )
