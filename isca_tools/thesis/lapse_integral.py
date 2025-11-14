@@ -144,7 +144,6 @@ def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Un
         integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$. Units are *K/km*.
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{bulk}| d\ln p$.
             Units are *K/km*.
-        temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
     # Compute integral of actual environmental lapse rate between p_lower and p_upper
     lapse_integral = g / R * np.log(temp_env_upper / temp_env_lower)
@@ -260,7 +259,6 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
         integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$. Units are *K/km*.
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_p(p) - \eta| d\ln p$.
             Units are *K/km*.
-        temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
     if n_lev_above_upper_integral == 0:
         p_integ_upper = p_upper
@@ -351,6 +349,9 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
             Only required if either `method_layer2 = 'mod_parcel'`.
         method_layer1: Which fitting method to use for layer 1.
         method_layer2: Which fitting method to use for layer 2.
+        n_lev_above_upper2_integral: Will return `integral` and `integral_error` not up to `p_upper2` but up to
+            the model level pressure `n_lev_above_upper2_integral` further from the surface than `p_upper2`.
+            If `n_lev_above_upper2_integral=0`, upper limit of integral will be `p_upper2`.
         sanity_check: If `True` will print a sanity check to ensure the calculation is correct.
 
     Returns:
@@ -359,7 +360,6 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
         integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$ of each layer. Units are *K/km*.
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
             Units are *K/km*.
-        temp_env_approx_lev: `[n_lev]` Estimate of environmental temperature at pressure `p_lev`.
     """
     if (p_upper > p_lower) | (p_upper2 > p_upper):
         return np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan])

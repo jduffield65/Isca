@@ -3,13 +3,16 @@ import numpy as np
 import numpy_indexed
 from scipy.integrate import odeint
 import metpy
+import metpy.calc as mpcalc
+
 import xarray as xr
 from ..utils.constants import lapse_dry, L_v, R, epsilon, c_p, g, kappa, R_v
 from ..utils.moist_physics import saturation_vapor_pressure, mixing_ratio_from_partial_pressure, \
     mixing_ratio_from_sphum, sphum_sat, rh_from_sphum
 
 
-def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
+def lcl_temp_bolton(temp_surf: Union[float, np.ndarray, xr.DataArray],
+                    rh_surf: Union[float, np.ndarray, xr.DataArray]) -> Union[float, np.ndarray, xr.DataArray]:
     """
     Returns the temperature of the lifting condensation level, *LCL*, given the surface
     temperature and relative humidity.
@@ -24,6 +27,29 @@ def lcl_temp_bolton(temp_surf: np.ndarray, rh_surf: np.ndarray) -> np.ndarray:
         Temperature of *LCL* in *Kelvin*.
     """
     return 1 / (1/(temp_surf-55) - np.log(rh_surf/100)/2840) + 55
+
+
+def lcl_sigma_bolton_simple(rh_surf: Union[float, np.ndarray, xr.DataArray],
+                            temp_surf: Union[float, np.ndarray, xr.DataArray] = 280) -> np.ndarray:
+    """
+    Computes a simple relationship for $p_{LCL}/p_s$ as a function of surface relative humidity, $r_s$, starting
+    from Equation 22 in *Bolton 1980*. The final equation is:
+
+    $$\\frac{p_{LCL}}{p_s} \\approx r_s^{\\alpha}$$
+
+    where $\\alpha = \\frac{c_p}{2840 R} \\frac{(T_s - 55)^2}{T_s}$ and $T_s$ is surface temperature.
+    The dependence on surface temperature is weak, so recommend just providing a reasonable guess,
+    so LCL variation is then just in terms of relative humidity.
+
+    Args:
+        rh_surf: Surface relative humidity ($0 < rh < 1$).
+        temp_surf: Surface temperature used in calculation. Exact value is not important.
+
+    Returns:
+        sigma_lcl: Approximate value of $p_{LCL}/p_s$.
+    """
+    alpha = c_p/R/2840 * (temp_surf-55)**2/temp_surf
+    return rh_surf**alpha
 
 
 def lcl_metpy(temp_2m: Union[float, np.ndarray, xr.DataArray], sphum_2m: Union[float, np.ndarray, xr.DataArray],
@@ -65,8 +91,8 @@ Union[float, np.ndarray, xr.DataArray]]:
     P = pressure_surf  * metpy.units.units.pascal
 
     # Calculate dewpoint from mixing ratio
-    dewpoint = metpy.calc.dewpoint_from_specific_humidity(P, q)
-    lcl_pressure, lcl_temperature = metpy.calc.lcl(P, T, dewpoint)
+    dewpoint = mpcalc.dewpoint_from_specific_humidity(P, q)
+    lcl_pressure, lcl_temperature = mpcalc.lcl(P, T, dewpoint)
     if dims is None:
         lcl_pressure = lcl_pressure.magnitude
         lcl_temperature = lcl_temperature.magnitude
