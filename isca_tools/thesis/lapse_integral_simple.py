@@ -4,57 +4,10 @@ from typing import Union, Optional, Tuple, Literal
 
 from .lapse_theory import get_var_at_plev
 from ..utils.constants import g, R, lapse_dry
-from ..utils.moist_physics import sphum_sat
-from ..thesis.adiabat_theory import get_temp_adiabat
 from .lapse_integral import get_temp_const_lapse, integral_lapse_dlnp_hydrostatic, integral_and_error_calc, \
     const_lapse_fitting
 from ..convection.base import lcl_sigma_bolton_simple, dry_profile_temp
 from .mod_parcel_theory import get_temp_mod_parcel
-
-
-def get_temp_mod_parcel_lapse(p_lev: Union[xr.DataArray, np.ndarray, float],
-                              p_low: Union[xr.DataArray, np.ndarray, float],
-                              lapse_diff_const: Union[xr.DataArray, np.ndarray, float],
-                              temp_parcel_lev: Optional[Union[xr.DataArray, np.ndarray, float]] = None,
-                              temp_parcel_surf: Optional[Union[xr.DataArray, np.ndarray, float]] = None,
-                              rh_parcel_surf: Optional[Union[xr.DataArray, np.ndarray, float]] = None,
-                              p_surf: Optional[Union[xr.DataArray, np.ndarray, float]] = None,
-                              ) -> Union[xr.DataArray, np.ndarray, float]:
-    """
-    This finds the temperature at pressure levels `p_lev` following a lapse rate $\Gamma(p) = \Gamma_p(p, T_p(p)) + \eta$
-    where $\Gamma_p(p, T)$ is the parcel (moist adiabatic) lapse rate and $\eta$ is a constant. $T_p(p)$ refers
-    to parcel temperature at pressure $p$.
-
-    This assumes hydrostatic balance: $\Gamma(p) = −\\frac{dT}{dz} = \\frac{g}{R} \\frac{d \ln T}{d\ln p}$
-
-    Different from *lapse_integral.py* in that it computes parcel temp, $T_p(p)$ by equating
-    $MSE(T_{p,s}, r_s, p_s)$ rather than $MSE^*(T_{LCL})$ to $MSE^*(T_p(p))$.
-    Where $T_{p,s}$ is the parcel temperature at the surface starting from environmental LCL temperature.
-
-    Args:
-        p_lev: `[n_lev]` Pressure levels to find environmental temperature. Units: Pa.
-        p_low: Pressure level where to start the ascent from along the modified parcel profile. Units: Pa.
-        lapse_diff_const: Constant, $\eta$, which is added to the parcel lapse rate at each pressure level. Units: K/m.
-        temp_parcel_lev: `[n_lev]` Parcel temperature at pressure `p_lev`. Units: K.</br>
-            If not provided, will compute according to $MSE^*(T(p)) = MSE(T_{p,s}, r_s, p_s)$
-        temp_parcel_surf: Temperature of the parcel at `p_surf`. Only required if `temp_parcel_lev` is `None`.
-        rh_parcel_surf: Relative humidity of the parcel at `p_surf`. Only required if `temp_parcel_lev` is `None`.
-        p_surf: Pressure at `p_surf`. Units: Pa. Only required if `temp_parcel_lev` is `None`.
-
-    Returns:
-        temp_lev: `[n_lev]` Temperature at `p_lev`. Units: K.
-    """
-    # Compute temperature at p_upper such that lapse rate at all levels is the same as parcel plus `lapse_diff_const`.
-    # lapse_parcel_integral = integral_lapse_dlnp_hydrostatic(temp_parcel_lev, p_lev, p_lower, p_upper, temp_lower,
-    #                                                         temp_parcel_upper)
-    # lapse_parcel_integral = g / R * np.log(temp_parcel_lev / temp_low)
-    # return temp_lower * (p_lev / p_low) ** (lapse_diff_const * R / g) * np.exp(R / g * lapse_parcel_integral)
-    if temp_parcel_lev is None:
-        temp_parcel_lev = np.zeros_like(p_lev)
-        sphum_parcel_surf = rh_parcel_surf * sphum_sat(temp_parcel_surf, p_surf)
-        for i in range(temp_parcel_lev.size):
-            temp_parcel_lev[i] = get_temp_adiabat(temp_parcel_surf, sphum_parcel_surf, p_surf, p_lev[i])
-    return get_temp_const_lapse(p_lev, temp_parcel_lev, p_low, lapse_diff_const)
 
 
 def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
@@ -66,7 +19,8 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
                              p_surf: float,
                              n_lev_above_upper_integral: int = 0,
                              temp_surf_lcl_calc: float = 300,
-                             sanity_check: bool = False) -> Tuple[
+                             sanity_check: bool = False,
+                             method: Literal['add', 'multiply'] = 'add') -> Tuple[
     float, float, float]:
     """
     Find the constant, $\eta$ that needs adding to parcel lapse rate such that
@@ -116,18 +70,22 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
                                             temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc)
 
 
-    # Compute integral of deviation between environmental and parcel lapse rate between p_lower and p_upper
-    lapse_diff_integral = g / R * (
-            np.log(temp_env_upper / temp_env_lower) - np.log(temp_parcel_upper / temp_env_lower))
-    # Compute the constant needed to be added to the parcel lapse rate at each level to make above integral equal 0.
-    lapse_diff_const = lapse_diff_integral / np.log(p_upper / p_lower)
-    # temp_env_approx_lev = get_temp_mod_parcel_lapse(p_lev, p_lower, lapse_diff_const, temp_parcel_lev=temp_parcel_lev)
+    if method == 'multiply':
+        lapse_diff_const = np.log(temp_env_upper / temp_env_lower) / np.log(temp_parcel_upper / temp_env_lower) - 1
+    elif method == 'add':
+        # Compute integral of deviation between environmental and parcel lapse rate between p_lower and p_upper
+        lapse_diff_integral = g / R * (
+                np.log(temp_env_upper / temp_env_lower) - np.log(temp_parcel_upper / temp_env_lower))
+        # Compute the constant needed to be added to the parcel lapse rate at each level to make above integral equal 0.
+        lapse_diff_const = lapse_diff_integral / np.log(p_upper / p_lower)
     temp_env_approx_lev = get_temp_mod_parcel(rh_parcel_surf, p_surf, p_lev, 0, lapse_diff_const,
-                                              temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc)
+                                              temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc,
+                                              method=method)
 
     if sanity_check:
         temp_env_approx_upper = get_temp_mod_parcel(rh_parcel_surf, p_surf, p_upper, 0, lapse_diff_const,
-                                                    temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc)
+                                                    temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc,
+                                                    method=method)
         lapse_integral = g / R * np.log(temp_env_upper / temp_env_lower)
         # sanity check, this should be the same as lapse_integral
         lapse_integral_approx = integral_lapse_dlnp_hydrostatic(temp_env_approx_lev, p_lev, p_lower, p_upper,
@@ -148,7 +106,7 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
                                                                        float(temp_env_lev[ind_upper]),
                                                                        float(temp_env_approx_lev[ind_upper]),
                                                                        float(p_lev[ind_upper]))
-    return lapse_diff_const * 1000, lapse_integral * 1000, lapse_integral_error * 1000
+    return lapse_diff_const * (1000 if method == 'add' else 1), lapse_integral * 1000, lapse_integral_error * 1000
 
 
 def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[xr.DataArray, np.ndarray],

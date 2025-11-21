@@ -1,15 +1,17 @@
 import numpy as np
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Literal
 import scipy.optimize
 import numbers
-from ..convection.base import lcl_sigma_bolton_simple
+
+from ..convection.base import lcl_sigma_bolton_simple, dry_profile_temp
 from ..utils.constants import c_p, L_v, R, g
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
 
 
 def temp_mod_parcel_fit_func(temp_ft: float, temp_surf: float, rh_surf: float,
                              p_surf: float, p_ft: float, lapse_mod_D: float = 0, lapse_mod_M: float = 0,
-                             temp_surf_lcl_calc: Optional[float] = 300) -> float:
+                             temp_surf_lcl_calc: Optional[float] = 300,
+                             method: Literal['add', 'multiply'] = 'add') -> float:
     """
     In the modified parcel framework, equating surface and free tropospheric moist static energy leads to the
     exact vertical coupling equation:
@@ -60,7 +62,11 @@ def temp_mod_parcel_fit_func(temp_ft: float, temp_surf: float, rh_surf: float,
     sigma_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc)
     sigma_ft = p_ft / p_surf
     temp_parcel_surf = temp_surf * sigma_lcl ** (R * lapse_mod_D / g)
-    temp_parcel_ft = temp_ft * (sigma_lcl / sigma_ft) ** (R * lapse_mod_M / g)
+    if method == 'multiply':
+        temp_lcl = dry_profile_temp(temp_parcel_surf, p_surf, sigma_lcl * p_surf)
+        temp_parcel_ft = (temp_ft/temp_lcl) ** (1/(1+lapse_mod_M)) * temp_lcl
+    else:
+        temp_parcel_ft = temp_ft * (sigma_lcl / sigma_ft) ** (R * lapse_mod_M / g)
     R_mod = R * np.log(p_surf / p_ft) / 2
     mse_mod_surf = moist_static_energy(temp_parcel_surf, rh_surf * sphum_sat(temp_parcel_surf, p_surf),
                                        height=0, c_p_const=c_p - R_mod)
@@ -74,7 +80,8 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                         lapse_mod_D: Union[float, np.ndarray] = 0,
                         lapse_mod_M: Union[float, np.ndarray] = 0, temp_surf: Optional[Union[float, np.ndarray]] = None,
                         temp_ft: Optional[Union[float, np.ndarray]] = None,
-                        temp_surf_lcl_calc: Optional[float] = 300, guess_temp_mod: float = 10) -> Union[
+                        temp_surf_lcl_calc: Optional[float] = 300, guess_temp_mod: float = 10,
+                        method: Literal['add', 'multiply'] = 'add') -> Union[
     float, np.ndarray]:
     """
     This returns the free tropospheric (or surface) temperature $T_{FT}$ ($T_s$),
@@ -135,7 +142,7 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                 p_ft=p_ft,
                 lapse_mod_D=lapse_mod_D,
                 lapse_mod_M=lapse_mod_M,
-                temp_surf_lcl_calc=temp_surf_lcl_calc,
+                temp_surf_lcl_calc=temp_surf_lcl_calc, method=method
             )
 
         guess_temp = temp_surf - guess_temp_mod  # good physical starting point
@@ -149,7 +156,7 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                 p_ft=p_ft,
                 lapse_mod_D=lapse_mod_D,
                 lapse_mod_M=lapse_mod_M,
-                temp_surf_lcl_calc=temp_surf_lcl_calc,
+                temp_surf_lcl_calc=temp_surf_lcl_calc, method=method
             )
 
         guess_temp = temp_ft + guess_temp_mod
