@@ -163,7 +163,11 @@ def get_temp_mod_parcel(rh_surf: float,
 
         guess_temp = get_temp_const_lapse(p_surf, temp_ft, p_ft, guess_lapse)
 
-    return hybrid_root_find(residual, guess_temp, valid_range)
+    try:
+        sol = hybrid_root_find(residual, guess_temp, valid_range)
+    except ValueError as e:
+        sol = np.nan
+    return sol
 
 
 def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_ref: np.ndarray,
