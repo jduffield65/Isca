@@ -1,8 +1,9 @@
 import numpy as np
 from typing import Optional, Tuple, Union, Literal
-import scipy.optimize
+from scipy.optimize import least_squares
 import numbers
 
+from .lapse_integral import get_temp_const_lapse
 from ..convection.base import lcl_sigma_bolton_simple, dry_profile_temp
 from ..utils.constants import c_p, L_v, R, g
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
@@ -80,7 +81,9 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                         lapse_mod_D: Union[float, np.ndarray] = 0,
                         lapse_mod_M: Union[float, np.ndarray] = 0, temp_surf: Optional[Union[float, np.ndarray]] = None,
                         temp_ft: Optional[Union[float, np.ndarray]] = None,
-                        temp_surf_lcl_calc: Optional[float] = 300, guess_temp_mod: float = 10,
+                        temp_surf_lcl_calc: Optional[float] = 300,
+                        guess_lapse: float = 5,
+                        valid_range: float = 100,
                         method: Literal['add', 'multiply'] = 'add') -> Union[
     float, np.ndarray]:
     """
@@ -116,8 +119,11 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
             Environmental temperature at `pressure_ft` in Kelvin. If `None`, this is the temperature returned.
         temp_surf_lcl_calc:
             Surface temperature to use when computing $\sigma_{LCL}$. If `None`, uses `temp_surf`.
-        guess_temp_mod:
-            Initial guess for temperature will be `temp_surf - guess_temp_mod` or `temp_ft + guess_temp_mod`.
+        guess_lapse:
+            Initial guess for temperature will be found assuming this bulk lapse rate
+            from `temp_surf` or `temp_ft`. Units: *K/km*
+        valid_range:
+            Valid temperature range in Kelvin for temperature. Allow +/- this much from the initial guess.
 
     Returns:
         temp: Environmental temperature in Kelvin at the pressure level `p_surf` or `p_ft` not provided.
@@ -145,7 +151,8 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                 temp_surf_lcl_calc=temp_surf_lcl_calc, method=method
             )
 
-        guess_temp = temp_surf - guess_temp_mod  # good physical starting point
+        # good physical starting point, assuming a bulk lapse rate
+        guess_temp = get_temp_const_lapse(p_ft, temp_surf, p_surf, guess_lapse / 1000)
     else:
         def residual(x):
             return temp_mod_parcel_fit_func(
@@ -158,19 +165,20 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                 lapse_mod_M=lapse_mod_M,
                 temp_surf_lcl_calc=temp_surf_lcl_calc, method=method
             )
-
-        guess_temp = temp_ft + guess_temp_mod
+        guess_temp = get_temp_const_lapse(p_surf, temp_ft, p_ft, guess_lapse / 1000)
 
     if shapes and isinstance(guess_temp, numbers.Number):
         # If any input is a numpy array, the returned value must be a numpy array too.
         # For this to be the case, the guess must be a numpy array
         guess_temp = np.full(shapes[0], guess_temp)
 
+    result = least_squares(fun=residual, x0=guess_temp,
+                           bounds=(np.clip(guess_temp - valid_range, 0, np.inf), guess_temp + valid_range))
     if isinstance(guess_temp, numbers.Number):
         # Need [0] to make it a float
-        return float(scipy.optimize.fsolve(residual, guess_temp)[0])
+        return result.x[0]
     elif isinstance(guess_temp, np.ndarray):
-        return scipy.optimize.fsolve(residual, guess_temp)
+        return result.x
     else:
         raise ValueError(
             f'Invalid value for `temp_{"ft" if temp_surf is None else "surf"}`: must be float or np.ndarray')
