@@ -62,7 +62,7 @@ def temp_mod_parcel_fit_func(temp_ft: float, temp_surf: float, rh_surf: float,
     temp_parcel_surf = temp_surf * sigma_lcl ** (R * lapse_mod_D / g)
     temp_parcel_ft = temp_ft * (sigma_lcl / sigma_ft) ** (R * lapse_mod_M / g)
     R_mod = R * np.log(p_surf / p_ft) / 2
-    mse_mod_surf = moist_static_energy(temp_parcel_surf, rh_surf * sphum_sat(temp_surf, p_surf),
+    mse_mod_surf = moist_static_energy(temp_parcel_surf, rh_surf * sphum_sat(temp_parcel_surf, p_surf),
                                        height=0, c_p_const=c_p - R_mod)
     mse_mod_ft = moist_static_energy(temp_parcel_ft, sphum_sat(temp_parcel_ft, p_ft), height=0,
                                      c_p_const=c_p + R_mod)
@@ -191,43 +191,18 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
 
         * $\\tilde{T}_s = \overline{T_s}; \delta \\tilde{T}_s = \delta \overline{T_s}$
         * $\\tilde{r}_s = \overline{r_s}; \delta \\tilde{r}_s = 0$
-        * $\\tilde{\epsilon} = 0; \delta \\tilde{\epsilon} = 0$
-        * $\\tilde{A}_z = \overline{A}_z; \delta \\tilde{A}_z = 0$
+        * $\\tilde{p}_s = \overline{p_s}; \delta \\tilde{p}_s = 0$
+        * $\\tilde{\eta_D} = 0; \delta \\tilde{\eta_D} = 0$
+        * $\\tilde{\eta_M} = 0; \delta \\tilde{\eta_M} = 0$
 
-        Given the choice of these four reference variables and their changes with warming, the reference free
+        Given the choice of these five reference variables and their changes with warming, the reference free
         troposphere temperature, $\\tilde{T}_{FT}$, can be computed according to the definition of $\\tilde{h}^{\dagger}$:
 
-        $\\tilde{h}^{\dagger} = (c_p - R^{\dagger})\\tilde{T}_s + L_v \\tilde{q}_s - \\tilde{\epsilon} =
-            (c_p + R^{\dagger}) \\tilde{T}_{FT} + L_v q^*(\\tilde{T}_{FT}, p_{FT}) + \\tilde{A}_z$
-
-        If `cape_form=True`, the reference CAPE, $\\widetilde{CAPE}$, will also be computed from these four variables
-        using `get_cape_approx`. This will be 0 if $\\tilde{\epsilon}=0$.
+        $\\tilde{h}^{\dagger} = (c_p - R^{\dagger})\\tilde{T}_{sP} + L_v \\tilde{q}_s =
+            (c_p + R^{\dagger}) \\tilde{T}_{FT} + L_v q^*(\\tilde{T}_{FTP}, p_{FT})$
 
         Poor choice of reference quantities may cause the theoretical scale factor to be a bad approximation. If this
         is the case, `get_approx_terms` can be used to investigate what is causing the theory to break down.
-
-    ??? note "Terms in equation"
-        * $h^{\dagger} = h^*_{FT} - R^{\dagger}T_s - gz_s = (c_p - R^{\dagger})T_s + L_v q_s - \epsilon =
-            (c_p + R^{\dagger}) T_{FT} + L_v q^*_{FT} + A_z$
-            where we used an approximate relation to replace $z_{FT}$ in $h^*_{FT}$.
-        * $\epsilon = h_s - h^*_{FT}$, where $h_s$ is near-surface MSE (at $p_s$) and
-            $h^*_{FT}$ is free tropospheric saturated MSE (at $p_{FT}$).
-        * $R^{\dagger} = R\\ln(p_s/p_{FT})/2$
-        * $\\Delta \chi[x] = \chi[x] - \\tilde{\chi}$
-        * $\chi[x]$ is the value of $\chi$ averaged over all days
-            where near-surface temperature, $T_s$, is between percentile $x-0.5$ and $x+0.5$.
-        * $\\tilde{\chi}$ is the reference value of $\chi$, which is free to be chosen.
-        * $\\beta_{FT1} = \\frac{\partial h^{\\dagger}}{\partial T_{FT}} = c_p + R^{\dagger} + L_v \\alpha_{FT} q_{FT}^*$
-        * $\\beta_{FT2} = T_{FT} \\frac{\partial^2h^{\\dagger}}{\partial T_{FT}^2} =
-            T_{FT}\\frac{d\\beta_{FT1}}{d T_{FT}} = L_v \\alpha_{FT} q_{FT}^*(\\alpha_{FT} T_{FT} - 2)$
-        * $\\beta_{s1} = \\frac{\partial h^{\dagger}}{\partial T_s} = c_p - R^{\dagger} + L_v \\alpha_s q_s$
-        * $\\beta_{s2} = T_s \\frac{\partial^2 h^{\dagger}}{\partial T_s^2} =
-            T_s\\frac{\partial \\beta_{s1}}{\partial T_s} = L_v \\alpha_s q_s(\\alpha_s T_s - 2)$
-        * $\mu=\\frac{L_v \\alpha_s q_s}{\\beta_{s1}}$
-        * $q = rq^*$ where $q$ is the specific humidity, $r$ is relative humidity and $q^*(T, p)$
-            is saturation specific humidity which is a function of temperature and pressure.
-        * $\\alpha(T, p)$ is the clausius clapeyron parameter which is a function of temperature and pressure,
-            such that $\partial q^*/\partial T = \\alpha q^*$.
 
     Args:
         temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>

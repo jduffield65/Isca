@@ -139,7 +139,8 @@ def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.
         return neg_dT_dz
 
 
-def dry_profile_temp(temp_start: float, p_start: float, p_levels: np.ndarray) -> np.ndarray:
+def dry_profile_temp(temp_start: Union[np.ndarray, xr.DataArray, float], p_start: Union[np.ndarray, xr.DataArray, float],
+                     p_levels: Union[np.ndarray, xr.DataArray, float]) -> Union[np.ndarray, xr.DataArray, float]:
     """
     Returns the temperature of an air parcel at the given pressure levels, assuming it follows the dry adiabat.
 
