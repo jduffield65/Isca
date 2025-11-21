@@ -58,17 +58,19 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_p(p) - \eta| d\ln p$.
             Units are *K/km*.
     """
-    if n_lev_above_upper_integral != 0:
+    if n_lev_above_upper_integral == 0:
+        p_integ_upper = p_upper
+    else:
         if n_lev_above_upper_integral < 0:
             raise ValueError('n_lev_above_upper_integral must be greater than 0')
         if p_lev[1] < p_lev[0]:
             raise ValueError('p_lev[1] must be greater than p_lev[0]')
         ind_upper = np.where(p_lev < p_upper)[0][-n_lev_above_upper_integral]
+        p_integ_upper = p_lev[ind_upper]
 
     # Get parcel upper temp following moist adiabat, using surface MSE
     temp_parcel_upper = get_temp_mod_parcel(rh_parcel_surf, p_surf, p_upper, 0, 0,
                                             temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc)
-
 
     if method == 'multiply':
         lapse_diff_const = np.log(temp_env_upper / temp_env_lower) / np.log(temp_parcel_upper / temp_env_lower) - 1
@@ -78,9 +80,15 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
                 np.log(temp_env_upper / temp_env_lower) - np.log(temp_parcel_upper / temp_env_lower))
         # Compute the constant needed to be added to the parcel lapse rate at each level to make above integral equal 0.
         lapse_diff_const = lapse_diff_integral / np.log(p_upper / p_lower)
-    temp_env_approx_lev = get_temp_mod_parcel(rh_parcel_surf, p_surf, p_lev, 0, lapse_diff_const,
-                                              temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc,
-                                              method=method)
+
+    temp_env_approx_lev = np.zeros_like(temp_env_lev)
+    for i in range(temp_env_approx_lev.size):
+        if (p_lev[i] > p_lower) | (p_lev[i] < p_integ_upper):
+            # If not in the pressure range required for integral, then keep as zero
+            continue
+        temp_env_approx_lev[i] = get_temp_mod_parcel(rh_parcel_surf, p_surf, p_lev[i], 0, lapse_diff_const,
+                                                     temp_parcel_surf, temp_surf_lcl_calc=temp_surf_lcl_calc,
+                                                     method=method)
 
     if sanity_check:
         temp_env_approx_upper = get_temp_mod_parcel(rh_parcel_surf, p_surf, p_upper, 0, lapse_diff_const,
@@ -115,6 +123,7 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
                     temp_env_upper2: float, p_upper2: float,
                     method_layer1: Literal['const'] = 'const',
                     method_layer2: Literal['const', 'mod_parcel'] = 'const',
+                    mod_parcel_method: Literal['add', 'multiply'] = 'add',
                     n_lev_above_upper2_integral: int = 0,
                     temp_surf_lcl_calc: float = 300,
                     sanity_check: bool = False) -> Tuple[
@@ -179,7 +188,8 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
             mod_parcel_lapse_fitting(temp_env_lev, p_lev, temp_env_upper, p_upper, temp_env_upper2, p_upper2,
                                      temp_parcel_surf=temp_parcel_lower, rh_parcel_surf=rh_lower, p_surf=p_lower,
                                      n_lev_above_upper_integral=n_lev_above_upper2_integral,
-                                     temp_surf_lcl_calc=temp_surf_lcl_calc, sanity_check=sanity_check)
+                                     temp_surf_lcl_calc=temp_surf_lcl_calc,
+                                     method=mod_parcel_method, sanity_check=sanity_check)
     else:
         raise ValueError(f'method_layer2 = {method_layer2} not recognized.')
 
@@ -195,6 +205,7 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
                        temp_env_upper2: xr.DataArray, p_upper2: float,
                        method_layer1: Literal['const'] = 'const',
                        method_layer2: Literal['const', 'mod_parcel'] = 'const',
+                       mod_parcel_method: Literal['add', 'multiply'] = 'add',
                        n_lev_above_upper2_integral: int = 0,
                        temp_surf_lcl_calc: Optional[Union[float, xr.DataArray]] = 300,
                        sanity_check: bool = False, lev_dim: str = 'lev',
@@ -216,13 +227,15 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
         vectorize=True,
         kwargs={'p_upper2': p_upper2, 'method_layer1': method_layer1,
                 'method_layer2': method_layer2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
-                'temp_surf_lcl_calc': temp_surf_lcl_calc, 'sanity_check': sanity_check}
+                'temp_surf_lcl_calc': temp_surf_lcl_calc, 'mod_parcel_method': mod_parcel_method,
+                'sanity_check': sanity_check}
     )
 
 
 def get_temp_2_layer_approx(p_lev, temp_env_surf, p_surf, rh_surf, lapse_layer1, lapse_layer2,
                             method_layer1: Literal['const'] = 'const',
                             method_layer2: Literal['const', 'mod_parcel'] = 'const',
+                            mod_parcel_method: Literal['add', 'multiply'] = 'add',
                             temp_lower_lcl_calc: Optional[Union[float, xr.DataArray]] = 300) -> np.ndarray:
     # Returns the approximate temperature on model pressure levels for a given 2 layer fitting procedure
     # Expect lapse rates in K/m not K/km
@@ -240,9 +253,10 @@ def get_temp_2_layer_approx(p_lev, temp_env_surf, p_surf, rh_surf, lapse_layer1,
         temp_lev = np.where(p_lev < p_upper, get_temp_const_lapse(p_lev, temp_upper, p_upper, lapse_layer2),
                             temp_lev)
     elif method_layer2 == 'mod_parcel':
-        temp_lev = np.where(p_lev < p_upper, get_temp_mod_parcel(rh_surf, p_surf, p_lev, lapse_layer1-lapse_dry,
-                                                                 lapse_layer2, temp_env_surf),
-                            temp_lev)
+        temp_lev = np.where(p_lev < p_upper,
+                            np.asarray([get_temp_mod_parcel(rh_surf, p_surf, p_lev[i], lapse_layer1 - lapse_dry,
+                                                            lapse_layer2, temp_env_surf, method=mod_parcel_method)
+                                        for i in range(p_lev.size)]), temp_lev)
     else:
         raise ValueError(f'method_layer2 = {method_layer2} not recognized.')
     return temp_lev

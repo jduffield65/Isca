@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.ndimage
 from scipy.interpolate import CubicSpline
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Callable
+from scipy.optimize import root_scalar
 import warnings
 from ..utils.fourier import get_fourier_coef, fourier_series
 
@@ -491,3 +492,86 @@ def interp_nan(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
             slope = (y[j2] - y[j1]) / (x[j2] - x[j1])
             y[i] = y[j1] + slope * (x[i] - x[j1])
     return y, not_valid_idx
+
+
+def hybrid_root_find(
+    residual: Callable,
+    guess: float,
+    search_radius: float,
+    n_bracket_samples: int = 32
+) -> float:
+    """Find a root of a 1-D function using a fast secant/brentq hybrid method.
+
+    Attempts:
+      1) Solve using two secant initialisations (fastest).
+      2) If those fail or leave the search interval, construct a local bracket
+         by scanning the interval at fixed resolution.
+      3) Solve inside the constructed bracket using brentq (guaranteed).
+
+    Args:
+        residual: Function whose root is sought. Called as residual(x).
+        guess: Initial guess around which to search for a solution.
+        search_radius: Half-width of the interval in which the root is assumed
+            to lie. The search interval is [guess - search_radius,
+            guess + search_radius].
+        n_bracket_samples: Number of sample points used to locate a sign
+            change when constructing a fallback bracket (1-D array of this
+            length is evaluated).
+
+    Returns:
+        The root of `residual` inside the specified interval.
+
+    Raises:
+        ValueError: If no sign change is located in the interval despite an
+            assumed root, or if brentq fails to converge.
+    """
+    lower = guess - search_radius
+    upper = guess + search_radius
+
+    # ---- 1. Fast attempt: secant method --------
+    try:
+        sol = root_scalar(
+            residual,
+            x0=guess,
+            x1=guess + 0.5 * search_radius,
+            method="secant"
+        )
+        if sol.converged and (lower <= sol.root <= upper):
+            return sol.root
+    except Exception:
+        pass
+
+    # ---- 2. Second secant attempt --------
+    try:
+        sol = root_scalar(
+            residual,
+            x0=guess - 0.5 * search_radius,
+            x1=guess + search_radius,
+            method="secant"
+        )
+        if sol.converged and (lower <= sol.root <= upper):
+            return sol.root
+    except Exception:
+        pass
+
+    # ---- 3. Construct a local bracket by scanning --------
+    grid = np.linspace(lower, upper, n_bracket_samples)
+    fvals = np.array([residual(x) for x in grid])
+
+    # Find intervals with sign change
+    sign_idx = np.where(np.signbit(fvals[:-1]) != np.signbit(fvals[1:]))[0]
+    if len(sign_idx) == 0:
+        raise ValueError(
+            "No sign change found in interval despite assumed root."
+        )
+
+    # Take the first sign-change interval
+    i = sign_idx[0]
+    a, b = grid[i], grid[i + 1]
+
+    # ---- 4. Guaranteed convergence using brentq --------
+    sol = root_scalar(residual, bracket=[a, b], method='brentq')
+    if not sol.converged:
+        raise ValueError("brentq did not converge within constructed bracket.")
+
+    return sol.root

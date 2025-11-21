@@ -1,12 +1,13 @@
 import numpy as np
 from typing import Optional, Tuple, Union, Literal
-from scipy.optimize import least_squares
+from scipy.optimize import root_scalar
 import numbers
 
 from .lapse_integral import get_temp_const_lapse
 from ..convection.base import lcl_sigma_bolton_simple, dry_profile_temp
-from ..utils.constants import c_p, L_v, R, g
+from ..utils.constants import c_p, L_v, R, g, lapse_dry
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
+from ..utils.numerical import hybrid_root_find
 
 
 def temp_mod_parcel_fit_func(temp_ft: float, temp_surf: float, rh_surf: float,
@@ -65,10 +66,11 @@ def temp_mod_parcel_fit_func(temp_ft: float, temp_surf: float, rh_surf: float,
     temp_parcel_surf = temp_surf * sigma_lcl ** (R * lapse_mod_D / g)
     if method == 'multiply':
         temp_lcl = dry_profile_temp(temp_parcel_surf, p_surf, sigma_lcl * p_surf)
-        temp_parcel_ft = (temp_ft/temp_lcl) ** (1/(1+lapse_mod_M)) * temp_lcl
+        temp_parcel_ft = (temp_ft / temp_lcl) ** (1 / (1 + lapse_mod_M)) * temp_lcl
     else:
         temp_parcel_ft = temp_ft * (sigma_lcl / sigma_ft) ** (R * lapse_mod_M / g)
     R_mod = R * np.log(p_surf / p_ft) / 2
+    # Could optimize by computing all the above outside this function which is called a lot by root_scalar
     mse_mod_surf = moist_static_energy(temp_parcel_surf, rh_surf * sphum_sat(temp_parcel_surf, p_surf),
                                        height=0, c_p_const=c_p - R_mod)
     mse_mod_ft = moist_static_energy(temp_parcel_ft, sphum_sat(temp_parcel_ft, p_ft), height=0,
@@ -76,13 +78,13 @@ def temp_mod_parcel_fit_func(temp_ft: float, temp_surf: float, rh_surf: float,
     return mse_mod_surf - mse_mod_ft
 
 
-def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
-                        p_surf: Union[float, np.ndarray], p_ft: Union[float, np.ndarray],
-                        lapse_mod_D: Union[float, np.ndarray] = 0,
-                        lapse_mod_M: Union[float, np.ndarray] = 0, temp_surf: Optional[Union[float, np.ndarray]] = None,
-                        temp_ft: Optional[Union[float, np.ndarray]] = None,
+def get_temp_mod_parcel(rh_surf: float,
+                        p_surf: float, p_ft: float,
+                        lapse_mod_D: float = 0,
+                        lapse_mod_M: float = 0, temp_surf: Optional[float] = None,
+                        temp_ft: Optional[float] = None,
                         temp_surf_lcl_calc: Optional[float] = 300,
-                        guess_lapse: float = 5,
+                        guess_lapse: float = lapse_dry,
                         valid_range: float = 100,
                         method: Literal['add', 'multiply'] = 'add') -> Union[
     float, np.ndarray]:
@@ -121,7 +123,7 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
             Surface temperature to use when computing $\sigma_{LCL}$. If `None`, uses `temp_surf`.
         guess_lapse:
             Initial guess for temperature will be found assuming this bulk lapse rate
-            from `temp_surf` or `temp_ft`. Units: *K/km*
+            from `temp_surf` or `temp_ft`. Units: *K/m*
         valid_range:
             Valid temperature range in Kelvin for temperature. Allow +/- this much from the initial guess.
 
@@ -130,13 +132,6 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
     """
     if (temp_ft is None) == (temp_surf is None):
         raise ValueError("Exactly one of temp_ft or temp_surf must be None.")
-
-    # Check if any input variable is a numpy array and ensure they are all the same shape
-    shapes = [v.shape for v in locals().values() if isinstance(v, np.ndarray)]
-    if shapes:
-        for s in shapes[1:]:
-            if s != shapes[0]:
-                raise ValueError(f"Inconsistent array shapes: expected {shapes[0]}, got {s}")
 
     if temp_ft is None:
         def residual(x):
@@ -152,7 +147,7 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
             )
 
         # good physical starting point, assuming a bulk lapse rate
-        guess_temp = get_temp_const_lapse(p_ft, temp_surf, p_surf, guess_lapse / 1000)
+        guess_temp = get_temp_const_lapse(p_ft, temp_surf, p_surf, guess_lapse)
     else:
         def residual(x):
             return temp_mod_parcel_fit_func(
@@ -165,23 +160,10 @@ def get_temp_mod_parcel(rh_surf: Union[float, np.ndarray],
                 lapse_mod_M=lapse_mod_M,
                 temp_surf_lcl_calc=temp_surf_lcl_calc, method=method
             )
-        guess_temp = get_temp_const_lapse(p_surf, temp_ft, p_ft, guess_lapse / 1000)
 
-    if shapes and isinstance(guess_temp, numbers.Number):
-        # If any input is a numpy array, the returned value must be a numpy array too.
-        # For this to be the case, the guess must be a numpy array
-        guess_temp = np.full(shapes[0], guess_temp)
+        guess_temp = get_temp_const_lapse(p_surf, temp_ft, p_ft, guess_lapse)
 
-    result = least_squares(fun=residual, x0=guess_temp,
-                           bounds=(np.clip(guess_temp - valid_range, 0, np.inf), guess_temp + valid_range))
-    if isinstance(guess_temp, numbers.Number):
-        # Need [0] to make it a float
-        return result.x[0]
-    elif isinstance(guess_temp, np.ndarray):
-        return result.x
-    else:
-        raise ValueError(
-            f'Invalid value for `temp_{"ft" if temp_surf is None else "surf"}`: must be float or np.ndarray')
+    return hybrid_root_find(residual, guess_temp, valid_range)
 
 
 def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_ref: np.ndarray,
