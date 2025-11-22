@@ -179,7 +179,8 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
                                       lapse_mod_D_ref: Optional[np.ndarray] = None,
                                       lapse_mod_M_ref: Optional[np.ndarray] = None,
                                       temp_surf_lcl_calc: float = 300,
-                                      guess_temp_mod: float = 10) -> Tuple[np.ndarray, dict]:
+                                      guess_lapse: float = lapse_dry,
+                                      valid_range: float = 100) -> Tuple[np.ndarray, np.ndarray, dict]:
     """
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
     to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by the linear
@@ -261,9 +262,15 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
                  lapse_mod_D=lapse_mod_D_ref[0], lapse_mod_M=lapse_mod_M_ref[0],
                  temp_surf=None, temp_ft=None):
         return get_temp_mod_parcel(rh_surf, p_surf, p_ft_ref, lapse_mod_D, lapse_mod_M, temp_surf, temp_ft,
-                                   temp_surf_lcl_calc, guess_temp_mod)
+                                   temp_surf_lcl_calc, guess_lapse, valid_range)
+
+    get_temp = np.vectorize(get_temp)  # may need optimizing in future
+
+    temp_surf_quant_approx = get_temp(r_quant, p_surf_quant, lapse_mod_D_quant, lapse_mod_M_quant,
+                                      temp_ft=temp_ft_quant)
 
     # Compute temp_ft_ref using base climate reference rh and lapse_mod
+    # No approx error in temp_surf_ref as use it to compute temp_ft_ref
     temp_ft_ref = get_temp(temp_surf=temp_surf_ref)
 
     # Temp_ft change is different if account for ref value changes or not
@@ -279,7 +286,7 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
     # Base FT temperature to use depends on if considering anomalies in current climate or not
     temp_ft0 = {'base': temp_ft_ref[0],
                 'r_anom': get_temp(temp_surf=temp_surf_ref[0], rh_surf=r_quant[0]),
-                'temp_anom': get_temp(temp_surf=temp_surf_quant[0]),
+                'temp_anom': get_temp(temp_surf=temp_surf_quant_approx[0]),
                 'p_surf_anom': get_temp(temp_surf=temp_surf_ref[0], p_surf=p_surf_quant[0]),
                 'lapse_mod_D_anom': get_temp(temp_surf=temp_surf_ref[0], lapse_mod_D=lapse_mod_D_quant[0]),
                 'lapse_mod_M_anom': get_temp(temp_surf=temp_surf_ref[0], lapse_mod_M=lapse_mod_M_quant[0])}
@@ -287,7 +294,8 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
     info_cont = {key: np.full(n_quant, temp_surf_ref[1] - temp_surf_ref[0]) for key in
                  ['r_ref_change', 'p_surf_ref_change', 'lapse_mod_D_ref_change', 'lapse_mod_M_ref_change',
                   'temp_ft_change', 'r_change', 'lapse_mod_D_change', 'lapse_mod_M_change', 'p_surf_change',
-                  'temp_anom', 'r_anom', 'lapse_mod_D_anom', 'lapse_mod_M_anom', 'p_surf_anom']}
+                  'temp_anom', 'r_anom', 'lapse_mod_D_anom', 'lapse_mod_M_anom', 'p_surf_anom',
+                  'nl_change', 'nl_anom', 'nl_anom_change']}
 
     for key in ['r_ref', 'p_surf_ref', 'lapse_mod_D_ref', 'lapse_mod_M_ref']:
         # Reference quantities change with warming but nothing else, and all ref quantities in current climate
@@ -299,52 +307,86 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
                      lapse_mod_D=lapse_mod_D_ref[1 if key == 'lapse_mod_D_ref' else 0],
                      lapse_mod_M=lapse_mod_M_ref[1 if key == 'lapse_mod_M_ref' else 0],
                      temp_ft=temp_ft0['base'] + temp_ft_ref_change[key]) - temp_surf_ref[0]
-    for i in range(n_quant):
-        # temp_ft changes with warming | All ref quantities in current climate
-        info_cont['temp_ft_change'][i] = get_temp(temp_ft=temp_ft0['base'] + temp_ft_quant[1, i] - temp_ft_quant[0, i]
-                                                  ) - temp_surf_ref[0]
-        # RH changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
-        info_cont['r_change'][i] = get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
-                                            rh_surf=r_ref[0] + r_quant[1, i] - r_quant[0, i]) - temp_surf_ref[0]
-        # p_surf changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
-        info_cont['p_surf_change'][i] = \
-            get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
-                     p_surf=p_surf_ref[0] + p_surf_quant[1, i] - p_surf_quant[0, i]
-                     ) - temp_surf_ref[0]
-        # lapse_mod_D changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
-        info_cont['lapse_mod_D_change'][i] = \
-            get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
-                     lapse_mod_D=lapse_mod_D_ref[0] + lapse_mod_D_quant[1, i] - lapse_mod_D_quant[0, i]
-                     ) - temp_surf_ref[0]
-        # lapse_mod_M changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
-        info_cont['lapse_mod_M_change'][i] = \
-            get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
-                     lapse_mod_M=lapse_mod_M_ref[0] + lapse_mod_M_quant[1, i] - lapse_mod_M_quant[0, i]
-                     ) - temp_surf_ref[0]
+    # for i in range(n_quant):
+    # temp_ft changes with warming | All ref quantities in current climate
+    info_cont['temp_ft_change'] = get_temp(temp_ft=temp_ft0['base'] + temp_ft_quant[1] - temp_ft_quant[0]
+                                              ) - temp_surf_ref[0]
+    # RH changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
+    info_cont['r_change'] = get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
+                                        rh_surf=r_ref[0] + r_quant[1] - r_quant[0]) - temp_surf_ref[0]
+    # p_surf changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
+    info_cont['p_surf_change'] = \
+        get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
+                 p_surf=p_surf_ref[0] + p_surf_quant[1] - p_surf_quant[0]
+                 ) - temp_surf_ref[0]
+    # lapse_mod_D changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
+    info_cont['lapse_mod_D_change'] = \
+        get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
+                 lapse_mod_D=lapse_mod_D_ref[0] + lapse_mod_D_quant[1] - lapse_mod_D_quant[0]
+                 ) - temp_surf_ref[0]
+    # lapse_mod_M changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
+    info_cont['lapse_mod_M_change'] = \
+        get_temp(temp_ft=temp_ft0['base'] + temp_ft_ref_change['base'],
+                 lapse_mod_M=lapse_mod_M_ref[0] + lapse_mod_M_quant[1] - lapse_mod_M_quant[0]
+                 ) - temp_surf_ref[0]
 
-        # All ref quantities in current climate except temp_surf | temp_ft changes due temp_surf_ref
-        # Subtract temp_surf_quant not temp_surf_ref because it is starting surface temp for this mechanism
-        info_cont['temp_anom'][i] = \
-            get_temp(temp_ft=temp_ft0['temp_anom'][i] + temp_ft_ref_change['base']) - temp_surf_quant[0, i]
-        # All ref quantities in current climate except rh_surf | temp_ft changes due temp_surf_ref
-        info_cont['r_anom'][i] = \
-            get_temp(temp_ft=temp_ft0['r_anom'][i] + temp_ft_ref_change['base'],
-                     rh_surf=r_quant[0, i]) - temp_surf_ref[0]
-        # All ref quantities in current climate except p_surf | temp_ft changes due temp_surf_ref
-        info_cont['p_surf_anom'][i] = \
-            get_temp(temp_ft=temp_ft0['p_surf_anom'][i] + temp_ft_ref_change['base'],
-                     p_surf=p_surf_quant[0, i]) - temp_surf_ref[0]
-        # All ref quantities in current climate except lapse_mod_D | temp_ft changes due temp_surf_ref
-        info_cont['lapse_mod_D_anom'][i] = \
-            get_temp(temp_ft=temp_ft0['lapse_mod_D_anom'][i] + temp_ft_ref_change['base'],
-                     lapse_mod_D=lapse_mod_D_quant[0, i]) - temp_surf_ref[0]
-        # All ref quantities in current climate except lapse_mod_M | temp_ft changes due temp_surf_ref
-        info_cont['lapse_mod_M_anom'][i] = \
-            get_temp(temp_ft=temp_ft0['lapse_mod_M_anom'][i] + temp_ft_ref_change['base'],
-                     lapse_mod_M=lapse_mod_M_quant[0, i]) - temp_surf_ref[0]
+    # All ref quantities in current climate except temp_surf | temp_ft changes due temp_surf_ref
+    # Subtract temp_surf_quant not temp_surf_ref because it is starting surface temp for this mechanism
+    info_cont['temp_anom'] = \
+        get_temp(temp_ft=temp_ft0['temp_anom'] + temp_ft_ref_change['base']) - temp_surf_quant_approx[0]
+    # All ref quantities in current climate except rh_surf | temp_ft changes due temp_surf_ref
+    info_cont['r_anom'] = \
+        get_temp(temp_ft=temp_ft0['r_anom'] + temp_ft_ref_change['base'],
+                 rh_surf=r_quant[0]) - temp_surf_ref[0]
+    # All ref quantities in current climate except p_surf | temp_ft changes due temp_surf_ref
+    info_cont['p_surf_anom'] = \
+        get_temp(temp_ft=temp_ft0['p_surf_anom'] + temp_ft_ref_change['base'],
+                 p_surf=p_surf_quant[0]) - temp_surf_ref[0]
+    # All ref quantities in current climate except lapse_mod_D | temp_ft changes due temp_surf_ref
+    info_cont['lapse_mod_D_anom'] = \
+        get_temp(temp_ft=temp_ft0['lapse_mod_D_anom'] + temp_ft_ref_change['base'],
+                 lapse_mod_D=lapse_mod_D_quant[0]) - temp_surf_ref[0]
+    # All ref quantities in current climate except lapse_mod_M | temp_ft changes due temp_surf_ref
+    info_cont['lapse_mod_M_anom'] = \
+        get_temp(temp_ft=temp_ft0['lapse_mod_M_anom'] + temp_ft_ref_change['base'],
+                 lapse_mod_M=lapse_mod_M_quant[0]) - temp_surf_ref[0]
 
+    # Non-linear change mechanisms
+    info_cont['nl_change'] = get_temp(
+        temp_ft=temp_ft0['base'] + temp_ft_quant[1] - temp_ft_quant[0],
+        rh_surf=r_ref[0] + r_quant[1] - r_quant[0],
+        p_surf=p_surf_ref[0] + p_surf_quant[1] - p_surf_quant[0],
+        lapse_mod_D=lapse_mod_D_ref[0] + lapse_mod_D_quant[1] - lapse_mod_D_quant[0],
+        lapse_mod_M=lapse_mod_M_ref[0] + lapse_mod_M_quant[1] - lapse_mod_M_quant[0]) - temp_surf_ref[0]
+    for key in ['temp_ft', 'r', 'p_surf', 'lapse_mod_D', 'lapse_mod_M']:
+        info_cont['nl_change'] -= (info_cont[f'{key}_change'] - (temp_surf_ref[1] - temp_surf_ref[0]))
+
+    # Non-linear anom mechanisms
+    info_cont['nl_anom'] = \
+        get_temp(temp_ft=temp_ft_quant[0] + temp_ft_ref_change['base'],
+                 rh_surf=r_quant[0], p_surf=p_surf_quant[0],
+                 lapse_mod_D=lapse_mod_D_quant[0],
+                 lapse_mod_M=lapse_mod_M_quant[0]) - temp_surf_quant_approx[0]
+    for key in ['temp', 'r', 'p_surf', 'lapse_mod_D', 'lapse_mod_M']:
+        info_cont['nl_anom'] -= (info_cont[f'{key}_anom'] - (temp_surf_ref[1] - temp_surf_ref[0]))
+
+    # Non-linear anom+change mechanisms - have anom and their changes together (basically residual)
+    info_cont['nl_anom_change'] = \
+        temp_surf_quant_approx[1] - temp_surf_quant_approx[0]
+    for key in ['temp', 'r', 'p_surf', 'lapse_mod_D', 'lapse_mod_M', 'nl']:
+        info_cont['nl_anom_change'] -= (info_cont[f'{key}_anom'] - (temp_surf_ref[1] - temp_surf_ref[0]))
+    for key in ['temp_ft', 'r', 'p_surf', 'lapse_mod_D', 'lapse_mod_M', 'nl']:
+        info_cont['nl_anom_change'] -= (info_cont[f'{key}_change'] - (temp_surf_ref[1] - temp_surf_ref[0]))
+
+
+    # Account for the fact that the average variables may not lead to the average surface temp due to averaging error
+    info_cont['error_av_change'] = temp_surf_quant - temp_surf_quant_approx
+    info_cont['error_av_change'] = info_cont['error_av_change'][1] - info_cont['error_av_change'][0] + temp_surf_ref[
+        1] - temp_surf_ref[0]
     for key in info_cont:
         info_cont[key] /= (temp_surf_ref[1] - temp_surf_ref[0])  # Make it so it gives scale factor contribution
 
     final_answer = np.asarray(sum([info_cont[key] - 1 for key in info_cont])) + 1
-    return final_answer, info_cont
+    final_answer_linear = np.asarray(sum([info_cont[key] - 1 for key in info_cont if
+                                          (('nl' not in key) and ('error' not in key))])) + 1
+    return final_answer, final_answer_linear, info_cont
