@@ -311,6 +311,8 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
                                            temp_ft=temp_ft0 + temp_ft_change) - temp_surf
         return temp_surf_change_theory
 
+    # Compute the expected surface temperature given the variables and our mod_parcel framework.
+    # Will likely differ from temp_surf_quant if averaging done.
     temp_surf_quant_approx = get_temp(r_quant, p_surf_quant, lapse_mod_D_quant, lapse_mod_M_quant,
                                       temp_ft=temp_ft_quant)
 
@@ -372,7 +374,7 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
     # lapse_mod_D changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
     info_cont['lapse_mod_D_change'] = get_temp_change(lapse_mod_D_change=lapse_mod_D_quant[1] - lapse_mod_D_quant[0])
     # lapse_mod_M changes with warming | All ref quantities in current climate | temp_ft changes due temp_surf_ref
-    info_cont['lapse_mod_M_change'] = get_temp(lapse_mod_M_change=lapse_mod_M_quant[1] - lapse_mod_M_quant[0])
+    info_cont['lapse_mod_M_change'] = get_temp_change(lapse_mod_M_change=lapse_mod_M_quant[1] - lapse_mod_M_quant[0])
 
     # All ref quantities in current climate except temp_surf | temp_ft changes due temp_surf_ref
     # Subtract temp_surf_quant not temp_surf_ref because it is starting surface temp for this mechanism
