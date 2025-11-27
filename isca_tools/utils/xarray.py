@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable, Any, Sequence, Literal
 import xarray as xr
 import numpy as np
 
@@ -172,3 +172,50 @@ def convert_ds_dtypes(ds: xr.Dataset, verbose: bool = False) -> xr.Dataset:
         if len(int_conv) > 0:
             print(f"Converted the following integer variables:\n{int_conv}")
     return ds.assign(**converted)
+
+def wrap_with_apply_ufunc(
+    func: Callable,
+    input_core_dims: Optional[Sequence[Sequence[str]]] = None,
+    output_core_dims: Optional[Sequence[Sequence[str]]] = None,
+    dask: Literal["forbidden", "allowed", "parallelized"] = "parallelized",
+    vectorize: bool = True,
+    **ufunc_kwargs: Any,
+) -> Callable:
+    """Wrap a function for use with xarray.apply_ufunc.
+
+    Args:
+        func: The function to wrap.
+        input_core_dims: Core dimensions for input parameters by the function. Defaults
+            to ``[[]]`` for a single scalar-like output.
+        output_core_dims: Core dimensions produced by the function. Defaults
+            to ``[[]]`` for a single scalar-like output.
+        dask: Dask handling mode.
+        vectorize: Whether to auto-vectorize over non-core dims.
+        **ufunc_kwargs: Extra apply_ufunc keyword arguments.
+
+    Returns:
+        A callable that behaves like ``func`` but operates on xarray objects.
+    """
+
+    def wrapped(*args: Any, **kwargs: Any):
+        # Default: one empty core-dim list for each input argument
+        if input_core_dims is None:
+            input_core = [[] for _ in args]
+        else:
+            input_core = input_core_dims
+
+        # Default: one empty core-dim list for the function output
+        output_core = output_core_dims if output_core_dims is not None else [[]]
+
+        return xr.apply_ufunc(
+            func,
+            *args,
+            input_core_dims=input_core,
+            output_core_dims=output_core,
+            dask=dask,
+            vectorize=vectorize,
+            kwargs=kwargs,
+            **ufunc_kwargs,
+        )
+
+    return wrapped

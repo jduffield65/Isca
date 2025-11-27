@@ -32,6 +32,8 @@ def pca_on_xarray(data: xr.DataArray, n_modes: int = 4, standardize: bool = True
         scores: PC coefficients with same dims as `data` but `mode` replacing `feature_dim_name`.
         mean_profile: The reference_mean actually used (dim `feature_dim_name`).
         std_profile: Std used for scaling (dim `feature_dim_name`). Ones if `standardize=False`.
+        var_explained: Variance explained (dim `n_modes`).
+        frac_var_explained: Fraction of variance explained (dim `n_modes`).
 
     Notes:
         - This function uses np.linalg.svd directly so there is NO automatic re-centering:
