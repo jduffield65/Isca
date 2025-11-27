@@ -143,7 +143,7 @@ def fig_resize(fig: plt.Figure, width_fig_desired: Optional[float]=None, ar: flo
     return None
 
 
-def update_fontsize(fig: plt.Figure, base_fontsize: float=8, base_ax_width: float=2.464) -> None:
+def update_fontsize(fig: plt.Figure, base_fontsize: float=8, base_ax_width: float=2.464) -> float:
     """
     Resize fontsize based on subplot width, given that `base_fontsize` is a good fontsize for a subplot
     of width `base_ax_width` inches.
@@ -153,13 +153,15 @@ def update_fontsize(fig: plt.Figure, base_fontsize: float=8, base_ax_width: floa
         base_fontsize: A good fontsize for a subplot of width `base_ax_width` inches.
         base_ax_width: A subplot of width `base_ax_width` inches, looks good with fontsize set to `base_fontsize`.
 
+    Returns:
+        new_fontsize: The new fontsize
     """
     ax_width = fig.axes[0].get_position().width * fig.get_size_inches()[0]      # use first axes to get subplot width
     scale_factor = ax_width/base_ax_width
     new_fontsize = scale_factor * base_fontsize
     for text in fig.findobj(plt.Text):  # Find all text objects
         text.set_fontsize(new_fontsize)
-    return None
+    return new_fontsize
 
 
 def update_linewidth(fig: plt.Figure, base_linewidth: float=1, base_ax_width: float=2.464) -> None:
