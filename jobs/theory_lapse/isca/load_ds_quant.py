@@ -120,6 +120,7 @@ else:
 
     ds['rh_REFHT'] = ds.QREFHT / sphum_sat(ds.TREFHT, ds.PREFHT)
     ds['T_ft_env'] = get_var_at_plev(ds.T, get_P(ds), p_ft)
+    ds['T_ft_env_zonal_av'] = ds['T_ft_env'].mean(dim='lon')
 
     ## -- Get Data Conditioned on Quantile of TREFHT
     def get_ds_quant_single_coord(ds, quant=90, range_below=0.5, range_above=0.5):
