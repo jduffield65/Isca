@@ -4,7 +4,7 @@ from geocat.comp import interp_hybrid_to_pressure
 from isca_tools import cesm
 from isca_tools.utils.ds_slicing import lat_lon_range_slice, get_time_sample_indices
 from isca_tools.utils import get_memory_usage
-from isca_tools.utils.base import top_n_peaks_ind, parse_int_list
+from isca_tools.utils.base import top_n_peaks_ind, parse_int_list, split_list_max_n
 import sys
 import os
 import numpy as np
@@ -149,6 +149,7 @@ def main_one_file(script_info: dict, ind_file: int, out_name_func: Callable, log
     logger.info(f"Created ds_out | Memory used {get_memory_usage() / 1000:.1f}GB")
     ds_out.to_netcdf(out_file, format="NETCDF4",
                      encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in ds_out.data_vars})
+    return ds_out
 
 def main(input_file_path: str):
     input_info = f90nml.read(input_file_path)
@@ -171,11 +172,36 @@ def main(input_file_path: str):
     # Get function to modify out_name for each file
     n_digits = len(str(len(all_file_ind) - 1))
     out_name_func = lambda x, y: x.replace('.nc', f'{y:0{n_digits}d}.nc')
+
+    # Split up file names so don't save one day per file
+    file_ind_consider_split = split_list_max_n(files_ind_consider,
+                                               int(np.ceil(len(files_ind_consider)/script_info['n_out_file'])))
+    file_ind_consider_split_end = [var[-1] for var in file_ind_consider_split]
+
+    ds_out = []
+    j = 0
     for i, ind in enumerate(files_ind_consider):
+        # If file j exists, skip to j+1
         logger = logging.getLogger()  # for printing to console time info
         logger.info(f"Start | File {i + 1}/{len(files_ind_consider)} | {str(file_dates.values[ind])}")
-        main_one_file(script_info, ind, out_name_func, logger)
+        ds_out.append(main_one_file(script_info, ind, out_name_func, logger))
         logger.info(f"End | File {i + 1}/{len(files_ind_consider)} | {str(file_dates.values[ind])}")
+        if ind in file_ind_consider_split_end:
+            ds_out = xr.concat(ds_out, dim=xr.DataArray(file_ind_consider_split[j], dims="sample"))
+            j += 1
+            # script_info['out_name'] = out_name_func(script_info['out_name'],
+            #                                         ind_file)  # include file index in output name
+            # out_file = os.path.join(script_info['out_dir'], script_info['out_name'])
+            # if os.path.exists(out_file):
+            #     if script_info['overwrite']:
+            #         warnings.warn(f'Output file already exists at:\n{out_file}\nWill be overwriten')
+            #     else:
+            #         # Raise error if output data already exists
+            #         raise ValueError('Output file already exists at:\n{}'.format(out_file))
+            ds_out.to_netcdf(out_file, format="NETCDF4",
+                             encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in
+                                       ds_out.data_vars})
+            ds_out = []
         script_info['out_name'] = out_name_start        # so don't repeatedly append number to the name
 
 if __name__ == "__main__":

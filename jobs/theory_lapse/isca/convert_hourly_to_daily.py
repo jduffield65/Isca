@@ -56,13 +56,15 @@ if __name__ == "__main__":
         ds_use = ds.isel(lat=i)
         temp_use = ds_use.temp_2m.load()
         print_log(f'Lat {i + 1}/{ds.lat.size} | Loaded temp_2m', logger)
-        time_idx = get_idx_time(ds_use.temp_2m, n=n_days, min_ind_spacing=ind_spacing)
+        time_idx = get_idx_time(temp_use, n=n_days, min_ind_spacing=ind_spacing)
         time_idx = sort_xr(time_idx)
         ds_use = ds_use.isel(time=time_idx).rename({"time": "sample"})      # select time indices, rename coord to sample
         ds_use = ds_use.assign_coords(sample=time_days) # Set sample value to daily time
         ds_use = ds_use.rename({"sample": "time"})      # rename sample to time
         ds_use = ds_use.assign_coords(time=time_days)
         print_log(f'Lat {i + 1}/{ds.lat.size} | Found daily data', logger)
+        # ds_use = ds_use.load()
+        # print_log(f'Lat {i + 1}/{ds.lat.size} | Loaded daily data', logger)
         ds_use.to_netcdf(path_out_lat, format="NETCDF4",
                          encoding={var: {"zlib": True, "complevel": complevel} for var in ds_use.data_vars})
         print_log(f'Lat {i + 1}/{ds.lat.size} | Saved', logger)
