@@ -68,44 +68,59 @@ def find_lcl_empirical2(temp_env, p_env, z_env, temp_start=None, p_start=None, t
 def load_ds_quant(exp_name: list = ['pre_industrial', 'co2_2x'], quant_type: str = 'REFHT_quant99',
                   data_dir: str = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/3_hour/hottest_quant',
                   var_keep: list = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm', 'CAPE', 'FREQZM'],
-                  small_ds: bool = False, compute_p_diff: bool = False):
+                  compute_p_diff: bool = False,
+                  lat_ind = None, lon_ind = None, sample_ind = None):
     co2_vals = [get_co2_multiplier(i) for i in exp_name]
     ds = [xr.open_dataset(os.path.join(data_dir, exp_name[i], quant_type, 'output.nc')) for i in range(len(exp_name))]
-    ds = xr.concat(ds, dim=xr.DataArray(co2_vals, dims="co2", coords={"exp_name": ("co2", exp_name)}))
-    if small_ds:
-        lat_min = 0
-        lat_max = 50
-        lon_min = 0
-        lon_max = 20
-        ds = ds.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max), sample=slice(0, 2))
-        print_log(f'Only using small subset | Lat {lat_min} to {lat_max} | Lon {lon_min} to {lon_max} | Sample 1 and 2',
-                  logger)
+    if len(exp_name) == 1:
+        ds = ds[0]
+    else:
+        ds = xr.concat(ds, dim=xr.DataArray(co2_vals, dims="co2", coords={"exp_name": ("co2", exp_name)}))
+    if lat_ind is not None:
+        ds = ds.isel(lat=lat_ind)
+    if lon_ind is not None:
+        ds = ds.isel(lon=lon_ind)
+    if sample_ind is not None:
+        ds = ds.isel(sample=sample_ind)
     ds = ds[var_keep].load()
-    ds['hyam'] = ds.hyam.isel(co2=0)
-    ds['hybm'] = ds.hybm.isel(co2=0)
-    p0 = float(ds.P0.isel(co2=0))
-    ds = ds.drop_vars('P0')
-    ds.attrs['P0'] = p0
+    if ('hyam' in var_keep) & (len(exp_name) != 1):
+        ds['hyam'] = ds.hyam.isel(co2=0)
+    if ('hybm' in var_keep) & (len(exp_name) != 1):
+        ds['hybm'] = ds.hybm.isel(co2=0)
+    if 'P0' in var_keep:
+        if len(exp_name) == 1:
+            p0 = float(ds.P0)
+        else:
+            p0 = float(ds.P0.isel(co2=0))
+        ds = ds.drop_vars('P0')
+        ds.attrs['P0'] = p0
 
     # Add variables to compute LCL
-    ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
+    if 'PS' in var_keep:
+        ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
     if compute_p_diff:
         ds['P_diff'] = dp_from_pressure(ds.P)
-    ds['TREFHT'] = ds.T.isel(lev=-1)
-    ds['QREFHT'] = ds.Q.isel(lev=-1)
-    ds['ZREFHT'] = ds.Z3.isel(lev=-1)
-    ds['PREFHT'] = ds.P.isel(lev=-1)
-    ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
-    ds = ds.drop_vars('Q')
+    if 'T' in var_keep:
+        ds['TREFHT'] = ds.T.isel(lev=-1)
+    if 'Q' in var_keep:
+        ds['QREFHT'] = ds.Q.isel(lev=-1)
+        ds = ds.drop_vars('Q')
+    if 'Z3' in var_keep:
+        ds['ZREFHT'] = ds.Z3.isel(lev=-1)
+    if 'PS' in var_keep:
+        ds['PREFHT'] = ds.P.isel(lev=-1)
+    if ('PS' in var_keep) & ('T' in var_keep) & ('Z3' in var_keep):
+        ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
     return ds
 
 
 small_ds = False                 # use a small subset of data for testing
 save_processed = True
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
 logger = logging.getLogger()  # for printing to console time info
+
+
 
 # Always load in sample data, so can easily import into jupyter notebook
 # File location Info
@@ -130,7 +145,16 @@ else:
 
 # If run script, compute the empirical LCL - takes a while so do one sample at a time
 if (__name__ == '__main__') and not all(load_processed):
-    ds = load_ds_quant(exp_name, quant_type, data_dir, var_keep, small_ds, True)
+    if small_ds:
+        lat_ind = slice(10, 30)
+        lon_ind = slice(0, 10)
+        sample_ind = slice(0, 3)
+        print_log(f'Only using small subset', logger)
+    else:
+        lat_ind = None
+        lon_ind = None
+        sample_ind = None
+    ds = load_ds_quant(exp_name, quant_type, data_dir, var_keep, True, lat_ind, lon_ind, sample_ind)
     print_log('Loaded in Data', logger)
     # Compute empirical estimate of LCL
     n_files = ds.co2.size * ds.sample.size      # One file for each co2 conc and sample due to speed

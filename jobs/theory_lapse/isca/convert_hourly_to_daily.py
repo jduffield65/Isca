@@ -47,9 +47,10 @@ if __name__ == "__main__":
         ds = ds.isel(lat=slice(0, 3), lon=slice(20, 22))[['temp', 'sphum', 'temp_2m']].isel(pfull=-1)
     ds_out = []
     print_log('Looping over each coordinate to get hottest hour for each day', logger)
+    n_digits = len(str(ds.lat.size - 1))
     for i in range(ds.lat.size):
         print_log(f'Lat {i + 1}/{ds.lat.size} | Start', logger)
-        path_out_lat = os.path.join(ds_out_path, f'lat{i}.nc')
+        path_out_lat = os.path.join(ds_out_path, f'lat{i:0{n_digits}d}.nc')
         if os.path.exists(path_out_lat):
             print_log(f'Lat {i+1}/{ds.lat.size} | File already exists', logger)
             continue

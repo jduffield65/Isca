@@ -18,7 +18,7 @@ n_sample = 600                      # How many data points for each quantile, x 
 quant_all = np.arange(1, 100, 3)    # Quantiles, x, to get data for.
 temp_surf_lcl_calc = 'median'       # Temperature to use to calculate the LCL. 'median' to compute from data.
 n_lev_above_integral = 3            # Used to compute error in lapse rate integral
-ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant.nc'
+ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant_dailymax.nc'
 
 if os.path.exists(ds_out_path):
     ds_quant = xr.load_dataset(ds_out_path)
@@ -69,8 +69,15 @@ else:
     with tqdm(total=n_kappa, position=0, leave=True) as pbar:
         for key in exp_dir:
             for j in range(n_kappa):
-                ds_use = isca_tools.load_dataset(exp_dir[key] + kappa_names[j]).sel(time=slice(use_time_start, np.inf))[
-                    var_keep]
+                if 'dailymax' in ds_out_path:
+                    exp_path = os.path.join(os.environ['GFDL_DATA'], exp_dir[key] + kappa_names[j]+'_dailymax')
+                    ds_use = xr.open_mfdataset(f"{exp_path}/lat*.nc", combine='nested',
+                                               concat_dim='lat', decode_times=False)[var_keep]
+                    # Convert time so matches that expected from daily average data
+                    ds_use['time'] = ds_use['time'] + use_time_start + 0.5
+                else:
+                    ds_use = isca_tools.load_dataset(exp_dir[key] + kappa_names[j]
+                                                     ).sel(time=slice(use_time_start, np.inf))[var_keep]
                 ds_use['sphum'] = ds_use.sphum.isel(pfull=-1)  # only keep surface SPHUM
 
                 ds_use = ds_use.sel(lat=slice(lat_min, lat_max))

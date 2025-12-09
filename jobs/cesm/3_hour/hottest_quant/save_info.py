@@ -65,6 +65,7 @@ def process_ds(ds: xr.Dataset, idx_quant: xr.DataArray, hyam: xr.DataArray, hybm
 
     # Optional: compute temp_ft_zonal_av for this latitude
     if temp_ft_plev is not None:
+        # TODO: at the moment, this does not work. No variable named T_zonal_av added to ds_out
         temp_ft_lat = interp_hybrid_to_pressure(ds.T, ds.PS, hyam, hybm, p0,
                                                 np.atleast_1d(temp_ft_plev),
                                                 lev_dim='lev')

@@ -126,7 +126,8 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
                     mod_parcel_method: Literal['add', 'multiply'] = 'add',
                     n_lev_above_upper2_integral: int = 0,
                     temp_surf_lcl_calc: float = 300,
-                    sanity_check: bool = False) -> Tuple[
+                    sanity_check: bool = False,
+                    p_range_calc: float = 2000) -> Tuple[
     np.ndarray, np.ndarray, np.ndarray]:
     """
     Applies `const_lapse_fitting` or `mod_parcel_lapse_fitting` to each layer.
@@ -160,6 +161,7 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
             If `n_lev_above_upper2_integral=0`, upper limit of integral will be `p_upper2`.
         temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
         sanity_check: If `True` will print a sanity check to ensure the calculation is correct.
+        p_range_calc: Only compute integral if `p_upper2 > p_upper - p_range_calc`. Units of Pa.
 
     Returns:
         lapse: Lapse rate info for each layer. Bulk lapse rate if `method_layer='const'` or lapse rate adjustment
@@ -168,7 +170,8 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
             Units are *K/km*.
     """
-    if (p_upper > p_lower) | (p_upper2 > p_upper):
+    if (p_upper > p_lower-p_range_calc) | (p_upper2 > p_upper-p_range_calc):
+        # LCL or Surface too close to FT level to compute
         return np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan])
     if method_layer1 == 'const':
         lapse1, lapse_integral1, lapse_integral_error1 = \
@@ -208,7 +211,7 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
                        mod_parcel_method: Literal['add', 'multiply'] = 'add',
                        n_lev_above_upper2_integral: int = 0,
                        temp_surf_lcl_calc: Optional[Union[float, xr.DataArray]] = 300,
-                       sanity_check: bool = False, lev_dim: str = 'lev',
+                       sanity_check: bool = False, p_range_calc: float = 2000, lev_dim: str = 'lev',
                        layer_dim: str = 'layer') -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
     # Different from lapse_integral.py in that it computes LCL approximately from RH.
     # Then also computes parcel temp, $T_p(p)$, by equating MSE(T_{p,s}, r_s, p_s) rather than MSE^*(T_{LCL}) to MSE^*(T_p(p)).
@@ -228,7 +231,7 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
         kwargs={'p_upper2': p_upper2, 'method_layer1': method_layer1,
                 'method_layer2': method_layer2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
                 'temp_surf_lcl_calc': temp_surf_lcl_calc, 'mod_parcel_method': mod_parcel_method,
-                'sanity_check': sanity_check}
+                'sanity_check': sanity_check, 'p_range_calc': p_range_calc}
     )
 
 
