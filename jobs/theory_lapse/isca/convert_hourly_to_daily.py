@@ -8,8 +8,7 @@ sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
 from isca_tools.utils.base import top_n_peaks_ind
-from isca_tools.utils.xarray import wrap_with_apply_ufunc
-
+from isca_tools.utils.xarray import wrap_with_apply_ufunc, convert_ds_dtypes
 
 # -- Specific info for running the script --
 do_test = False                         # use small dataset
@@ -66,6 +65,7 @@ if __name__ == "__main__":
         print_log(f'Lat {i + 1}/{ds.lat.size} | Found daily data', logger)
         # ds_use = ds_use.load()
         # print_log(f'Lat {i + 1}/{ds.lat.size} | Loaded daily data', logger)
+        ds_use = convert_ds_dtypes(ds_use)
         ds_use.to_netcdf(path_out_lat, format="NETCDF4",
                          encoding={var: {"zlib": True, "complevel": complevel} for var in ds_use.data_vars})
         print_log(f'Lat {i + 1}/{ds.lat.size} | Saved', logger)

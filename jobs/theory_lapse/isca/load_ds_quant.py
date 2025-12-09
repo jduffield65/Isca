@@ -10,7 +10,7 @@ from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.thesis.lapse_theory import get_var_at_plev
 from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr
-
+from isca_tools.utils.xarray import convert_ds_dtypes
 
 # -- Specific info for running the script --
 p_ft = 500 * 100                    # FT pressure level to use
@@ -18,10 +18,15 @@ n_sample = 600                      # How many data points for each quantile, x 
 quant_all = np.arange(1, 100, 3)    # Quantiles, x, to get data for.
 temp_surf_lcl_calc = 'median'       # Temperature to use to calculate the LCL. 'median' to compute from data.
 n_lev_above_integral = 3            # Used to compute error in lapse rate integral
+region = 'tropics'
+hemisphere = 'north'
+season = 'summer'
 ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant_dailymax.nc'
+# ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant.nc'
 
 if os.path.exists(ds_out_path):
     ds_quant = xr.load_dataset(ds_out_path)
+    print(f"Loaded {ds_out_path}")
 else:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                         stream=sys.stdout)
@@ -33,9 +38,6 @@ else:
     # kappa_names = ['k=1_5_2m']
     n_kappa = len(kappa_names)
 
-    region = 'tropics'
-    hemisphere = 'north'
-    season = 'summer'
     lat_min = 0
     lat_max = 20
 
@@ -237,6 +239,7 @@ else:
     ds_quant.attrs["hemisphere"] = hemisphere
     ds_quant.attrs["season"] = season
     ds_quant.attrs["exp_dir"] = str(exp_dir)
+    ds_quant = convert_ds_dtypes(ds_quant)
     if not os.path.exists(ds_out_path):
         ds_quant.to_netcdf(ds_out_path)
         print_log('Saved ds_quant to {}'.format(ds_out_path), logger)
