@@ -83,7 +83,7 @@ def create_per_job_nml(input_file_path: str, files_per_job: int = 1, years_per_j
             input_info['script_info']['year_files'] = ind
         else:
             input_info['script_info']['ind_files'] = ind
-        out_file_names.append(input_file_path.replace('.nml', f'{ind[0]:{n_digit}d}.nml'))
+        out_file_names.append(input_file_path.replace('.nml', f'{ind[0]:0{n_digit}d}.nml'))
         if os.path.exists(out_file_names[-1]):
             if exist_ok is None:
                 print(f'{ind}: Output nml file already exists. Leaving unchanged')
