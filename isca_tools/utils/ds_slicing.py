@@ -13,7 +13,7 @@ def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, i
     Examples:
         `ds_summer = annual_time_slice(ds, [6, 7, 8])`</br>
             This return a dataset containing data corresponding to
-            June, July and August in each year i.e. only northern hemisphere summer.
+            June, July, and August in each year i.e. only northern hemisphere summer.
 
         `ds_day = annual_time_slice(ds, include_days = [36])`</br>
             This will return a dataset containing data corresponding to the 36th day of the year for each year
@@ -80,7 +80,7 @@ def annual_mean(ds: Dataset, n_year_days: int = 360, first_day: int = 1) -> Data
 def anom_from_annual_mean(ds: Dataset, combine_lon: bool = False, n_year_days: int = 360,
                           first_day: int = 1) -> Dataset:
     """
-    For each lat, lon and pressure; this computes the annual mean of each variable. It then subtracts it
+    For each lat, lon, and pressure; this computes the annual mean of each variable. It then subtracts it
     from the initial dataset, to give the anomaly relative to the annual mean value.
 
     Args:
@@ -270,3 +270,111 @@ def get_time_sample_indices(times_sample: xr.DataArray, times_all: xr.DataArray)
         name="time_index"
     )
 
+
+def fold_coarsen(ds: xr.Dataset, k_lat: int, k_lon: int, coarsen_dim: str = 'sample') -> xr.Dataset:
+    """
+    Coarsen the latitude and longitude dimensions by grouping fine-grid cells
+    into blocks and folding the sub-grid structure into the sample dimension.
+
+    This transformation preserves the total number of data points by expanding
+    the `coarsen_dim` dimension while reducing the spatial resolution. Variables that
+    contain the dimensions ``("lat", "lon", coarsen_dim)`` are reshaped; variables
+    that do not include all three of these dimensions are returned unchanged.
+    Any additional dimensions (such as ``co2``) are left untouched and preserved
+    in their original order.
+
+    Latitude and longitude coordinates for the coarsened grid are computed as
+    the mean of the original coordinates within each spatial block.
+
+    Args:
+        ds: Input dataset containing ``lat``, ``lon``, and
+            ``coarsen_dim`` dimensions.
+        k_lat: Coarsening factor along the latitude dimension. Must evenly
+            divide the length of ``lat``.
+        k_lon: Coarsening factor along the longitude dimension. Must evenly
+            divide the length of ``lon``.
+        coarsen_dim: Name of dimension to add extra data along.
+
+    Returns:
+        xr.Dataset: Dataset with coarsened ``lat`` and ``lon`` dimensions and an
+            expanded ``coarsen_dim`` dimension. Variables lacking the full set of
+            ``("lat", "lon", coarsen_dim)`` dimensions are passed through unchanged.
+
+    Raises:
+        ValueError: If ``lat`` or ``lon`` lengths are not divisible by their
+            respective coarsening factors.
+    """
+    L = ds.sizes["lat"]
+    M = ds.sizes["lon"]
+    S = ds.sizes[coarsen_dim]
+
+    if L % k_lat != 0 or M % k_lon != 0:
+        raise ValueError("lat/lon sizes must be divisible by k_lat/k_lon")
+
+    # ----- new coordinates -----
+    lat_vals = ds["lat"].values
+    lon_vals = ds["lon"].values
+    new_lat = lat_vals.reshape(L // k_lat, k_lat).mean(axis=1)
+    new_lon = lon_vals.reshape(M // k_lon, k_lon).mean(axis=1)
+    new_sample = np.arange(S * k_lat * k_lon)
+
+    out = {}
+
+    for name, da in ds.data_vars.items():
+        dims = da.dims
+
+        # If variable does NOT have lat/lon/coarsen_dim -> leave unchanged
+        if not set(("lat", "lon", coarsen_dim)).issubset(dims):
+            out[name] = da.copy()
+            continue
+
+        # Identify extra dims (e.g. 'co2')
+        extra_dims = [d for d in dims if d not in ("lat", "lon", coarsen_dim)]
+
+        # New order: keep extra dims first, then lat/lon/sample
+        new_order = extra_dims + ["lat", "lon", coarsen_dim]
+        da_aligned = da.transpose(*new_order)
+
+        # Shape needed for reshape
+        extra_shape = [da.sizes[d] for d in extra_dims]
+
+        # Reshape:
+        #   (extra..., lat//k_lat, k_lat, lon//k_lon, k_lon, sample)
+        arr = da_aligned.values.reshape(
+            *extra_shape,
+            L // k_lat, k_lat,
+            M // k_lon, k_lon,
+            S
+        )
+
+        # Move k_lat,k_lon next to sample
+        arr = arr.transpose(
+            *range(len(extra_shape)),          # extra dims unchanged
+            len(extra_shape) + 0,              # coarse lat
+            len(extra_shape) + 2,              # coarse lon
+            len(extra_shape) + 1,              # k_lat
+            len(extra_shape) + 3,              # k_lon
+            len(extra_shape) + 4               # sample
+        )
+
+        # Fold (k_lat, k_lon, sample) → sample
+        arr = arr.reshape(
+            *extra_shape,
+            L // k_lat,
+            M // k_lon,
+            S * k_lat * k_lon
+        )
+
+        # Coordinates for output
+        coords = {d: da.coords[d] for d in extra_dims}  # pass through extra dims
+        coords["lat"] = new_lat
+        coords["lon"] = new_lon
+        coords[coarsen_dim] = new_sample
+
+        out[name] = xr.DataArray(
+            arr,
+            dims=extra_dims + ["lat", "lon", coarsen_dim],
+            coords=coords,
+        )
+
+    return xr.Dataset(out)

@@ -137,6 +137,9 @@ def get_temp_mod_parcel(rh_surf: float,
     Returns:
         temp: Environmental temperature in Kelvin at the pressure level `p_surf` or `p_ft` not provided.
     """
+    if rh_surf < 0:
+        print("rh_surf must be greater than or equal to 0.")
+        return np.nan
     if (temp_ft is None) == (temp_surf is None):
         raise ValueError("Exactly one of temp_ft or temp_surf must be None.")
 
