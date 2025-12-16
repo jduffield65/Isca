@@ -12,10 +12,13 @@ from isca_tools.utils.base import print_log
 from jobs.theory_lapse.scripts.lcl import get_co2_multiplier
 
 surf_use = 'ocean'
+land_frac_thresh = 0.1
 n_sample = None
 quant_range = 0.5
 quant_all = np.arange(1, 100)
 ds_out_path = f'/Users/joshduffield/Desktop/ds_cesm_tropics_quant_{surf_use}.nc'
+if surf_use == 'land':
+    ds_out_path = ds_out_path.replace('_land', f'_land_{land_frac_thresh:.1f}'.replace('.', '_'))
 
 if os.path.exists(ds_out_path):
     ds_quant = xr.load_dataset(ds_out_path)
@@ -80,7 +83,6 @@ if __name__ == '__main__':
     invariant_data_path = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc'
     land_frac = xr.open_dataset(invariant_data_path).LANDFRAC
     land_frac = land_frac.reindex_like(ds, method="nearest", tolerance=0.01)
-    land_frac_thresh = 0.1
     lsm = (land_frac > land_frac_thresh)
     surf_mask = {'land': land_frac > land_frac_thresh, 'ocean': land_frac == 0}
 
