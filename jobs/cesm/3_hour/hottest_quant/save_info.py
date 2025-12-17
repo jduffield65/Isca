@@ -129,6 +129,7 @@ def main_one_file(script_info: dict, ind_file: int, out_name_func: Callable, log
     idx_quant = get_time_sample_indices(quant_times, ds.time)
 
     n_lat = ds.lat.size
+    print(script_info['temp_ft_plev'])
     # Prepare list to store results for each latitude
     if script_info['loop_over_lat']:
         lat_results = []
@@ -144,14 +145,18 @@ def main_one_file(script_info: dict, ind_file: int, out_name_func: Callable, log
         ds_out = process_ds(ds, idx_quant, hyam, hybm, p0, script_info['load_all_at_start'],
                             script_info['temp_ft_plev'],
                             f'Lat {ds.lat[0]:.1f} to {ds.lat[-1]:.1f}', logger)
-
+    print(ds_out.T_zonal_av)
     ds_out['gw'] = gw
     ds_out['hyam'] = hyam
     ds_out['hybm'] = hybm
     ds_out['P0'] = p0
+    print(-1, ds_out.T_zonal_av)
     ds_out['time'] = quant_times            # replace time with times of the samples
+    print(0, ds_out.T_zonal_av)
     ds_out = ds_out.drop_dims("time")       # drop the dimension of time
+    print(1, ds_out.T_zonal_av)
     ds_out = ds_out.reset_coords("time")    # convert time from coordinate to variable
+    print(2, ds_out.T_zonal_av)
     logger.info(f"Created ds_out | Memory used {get_memory_usage() / 1000:.1f}GB")
     ds_out.to_netcdf(out_file, format="NETCDF4",
                      encoding={var: {"zlib": True, "complevel": script_info['complevel']} for var in ds_out.data_vars})
