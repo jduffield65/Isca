@@ -8,6 +8,7 @@ from tqdm import tqdm
 import xarray as xr
 import logging
 import sys
+sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
 from isca_tools.utils.moist_physics import sphum_sat
@@ -45,15 +46,15 @@ if __name__ == '__main__':
     p_ft = 500 * 100                    # FT pressure level to use
     n_sample = None                     # How many data points for each quantile, x to use. None to get all.
     quant_all = np.arange(1, 100, 1)    # Quantiles, x, to get data for.
-    quant_all = np.array([1, 50, 99])    # Small test run
+    # quant_all = np.array([1, 50, 99])    # Small test run
     temp_surf_lcl_calc = 300            # Temperature to use to calculate the LCL. 'median' to compute from data.
     n_lev_above_integral = 3            # Used to compute error in lapse rate integral
-    surf = 'land'
+    surf = sys.argv[1]          # 'land' or 'aquaplanet'
     region = 'tropics'
-    hemisphere = 'north'
+    hemisphere = sys.argv[2]    # 'north' or 'south'
     season = 'summer'
-    dailymax = False                    # Take daily max data
-    kappa_names = 'k=1'
+    dailymax = True                    # Take daily max data
+    kappa_names = sys.argv[3]                 # 'k=1' or 'k=1_5'
     # ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant_dailymax.nc'
     ds_out_path = get_ds_out_path(kappa_names, surf, region, hemisphere, dailymax)
 
@@ -61,6 +62,7 @@ if __name__ == '__main__':
         ds_quant = xr.load_dataset(ds_out_path)
         print(f"Loaded {ds_out_path}")
     else:
+        print(f"Creating {ds_out_path}")
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                             stream=sys.stdout)
         logger = logging.getLogger()  # for printing to console time info
