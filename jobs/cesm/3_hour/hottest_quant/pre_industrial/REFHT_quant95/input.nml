@@ -25,9 +25,9 @@
     quant_time_name = 'time_ind.nc'            ! Name of file containing the times of quantiles
     var = 'T', 'TS', 'TREFHT', 'Q', 'QREFHT', 'Z3', 'PS', 'PRECC', 'PRECL','LHFLX', 'SHFLX', 'SOLIN', 'FSNT', 'FSNS', 'FSDS', 'FSNTC', 'FSNSC', 'FSDSC', 'FLNT', 'FLUT', 'FLNS', 'FLDS', 'FLNTC', 'FLUTC', 'FLNSC', 'CAPE', 'FREQZM'    ! Get these variables
     temp_ft_plev = 30000, 35000, 40000, 45000, 50000        ! Pressure in Pa to compute daily, zonal average of T at. Leave blank to not compute
-    ind_files =                ! Select indices of files to load
-    lat_ind =  0, 1                ! leave None to consider all latitudes
-    lon_ind =  0, 1                ! leave None to consider all longitudes
+    ind_files =                 ! Select indices of files to load
+    lat_ind =                   ! leave None to consider all latitudes
+    lon_ind =                   ! leave None to consider all longitudes
     lat_min =                   ! leave None to consider all latitudes
     lat_max =
     lon_min =                   ! leave None to consider all longitudes

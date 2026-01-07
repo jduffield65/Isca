@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 # File location Info
 from jobs.theory_lapse.scripts.lcl import load_ds_quant, data_dir, exp_name, var_keep
 small_ds = False
-quant_type = 'REFHT_quant50'
+quant_type = 'REFHT_quant95'
 processed_dir = [os.path.join(data_dir, exp_name[i], quant_type, 'lapse_fitting') for i in range(len(exp_name))]
 processed_file_name = 'ds_lapse_simple.nc'  # combined file from all samples
 var_keep = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm', 'CAPE', 'FREQZM']#, 'T_zonal_av']
