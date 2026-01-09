@@ -11,7 +11,7 @@ import sys
 sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
-from isca_tools.utils.moist_physics import sphum_sat
+from isca_tools.utils.moist_physics import sphum_sat, moist_static_energy
 from isca_tools.thesis.lapse_theory import get_var_at_plev
 from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr
@@ -40,6 +40,53 @@ def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land']='aquapl
         ds_out_path = os.path.join(ds_out_path, 'dailymax')
     ds_out_path = os.path.join(ds_out_path, f"{kappa_name}.nc")
     return ds_out_path
+
+def amend_sample_dim(ds_list, n_sample_max_range = 2):
+    # Hack so all ds_list values have same number of samples, should only differ by one or two (less than n_sample_max_range)
+    n_ds = len(ds_list)
+    n_sample = [ds_list[i].sample.size for i in range(n_ds)]
+    if np.max(n_sample) - np.min(n_sample) > n_sample_max_range:
+        raise ValueError(f"n_sample={n_sample} has too wide a range of values")
+    n_sample = np.min(n_sample)
+    ds_list = [ds_list[i].isel(sample=slice(0, n_sample)) for i in range(n_ds)]
+    return ds_list
+
+def get_P(ds):
+    return ds.PS * ds.hybm
+
+try:
+    surf = ['aquaplanet', 'land']
+    kappa_names = ['k=1', 'k=1_5']
+    hemisphere = ['south', 'north']
+    n_exp = len(kappa_names)
+    ds = {}
+    for key in surf:
+        ds[key] = [0, 0]        # initialize as empty list
+        for i in range(n_exp):
+            # Load both hemispheres and combine into single ds
+            ds[key][i] = [xr.open_dataset(get_ds_out_path(kappa_names[i], surf=key, hemisphere=hemisphere[j])).isel(surf=0)
+                          for j in range(len(hemisphere))]
+            ds[key][i] = amend_sample_dim(ds[key][i])
+            ds[key][i] = xr.concat(ds[key][i], dim='lat')
+
+        ds[key] = amend_sample_dim(ds[key])
+        # print('Selecting subsection of quant')
+        # ds[key] = [ds[key][i].sel(quant=[1, 50, 99]) for i in range(n_exp)]
+        ds[key] = xr.concat(ds[key], dim="tau_lw")
+        ds[key]['hybm'] = ds[key].hybm.isel(quant=0, tau_lw=0, lat=0, sample=0)
+        ds[key]['rh_REFHT'] = ds[key]['QREFHT'] / sphum_sat(ds[key].TREFHT, ds[key].PREFHT)
+        ds[key]['ZREFHT'] = ds[key].Z3.isel(lev=-1)
+        ds[key]['mse_REFHT'] = moist_static_energy(ds[key].TREFHT, ds[key].QREFHT, ds[key].ZREFHT)
+        ds[key]['Z_ft_env'] = get_var_at_plev(ds[key].Z3, get_P(ds[key]), ds[key].p_ft)
+        ds[key]['mse_ft_sat_env'] = moist_static_energy(ds[key].T_ft_env, sphum_sat(ds[key].T_ft_env, ds[key].p_ft), ds[key].Z_ft_env)
+        ds[key]['epsilon'] = ds[key]['mse_REFHT'] - ds[key]['mse_ft_sat_env']
+        for key2 in ds[key]:
+            if 'mod_parcel' in key2:
+                ds[key] = ds[key].rename_vars({key2: key2.replace('mod_parcel', 'modParc')})
+except Exception as e:
+    print(f"No ds loaded because of the following Exception:\n{e}")
+    ds = None
+
 
 if __name__ == '__main__':
     # -- Specific info for running the script --
