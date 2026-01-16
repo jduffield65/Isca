@@ -11,7 +11,8 @@ def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np
                     pressure_surf: float, pressure_ft: float,
                     temp_ft: Optional[Union[float, np.ndarray]] = None,
                     epsilon: Optional[Union[float, np.ndarray]] = None,
-                    z_approx: Optional[Union[float, np.ndarray]] = None
+                    z_approx: Optional[Union[float, np.ndarray]] = None,
+                    parcel_def_include_z_approx: bool = True,
                     ) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
     """
     Calculates an approximate value of CAPE using a single pressure level in the free troposphere, $p_{FT}$:
@@ -74,6 +75,10 @@ def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np
             If not provided, will be computed using `temp_ft` and `epsilon`
             (see *Computation of $T_{FT,\epsilon=0}$ and $T_{FT}$* box above).</br>
             Units: *kJ/kg*.</br>
+        parcel_def_include_z_approx:
+            If `True`, will compute, parcel temperature will be computed including the $A_z$ error i.e.
+            $T_{FT,parc} = T_{FT}(\epsilon=0, A_z)$
+            If `False`, will neglect the $z$ approximation i.e. $T_{FT,parc} = T_{FT}(\epsilon=0, A_z=0)$.
 
     Returns:
         cape: $CAPE = R^{\dagger} (T_{FT,\epsilon=0} - T_{FT})$ in units of *kJ/kg*
@@ -86,8 +91,11 @@ def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np
     if z_approx is None:
         if (temp_ft is None) or (epsilon is None):
             raise ValueError("If approx_z not provided, must provide both temp_ft and epsilon")
-        z_approx = moist_static_energy(temp_surf, sphum_surf, height=0, c_p_const=c_p - R_mod) - epsilon \
-                   - moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod)
+        if parcel_def_include_z_approx:
+            z_approx = moist_static_energy(temp_surf, sphum_surf, height=0, c_p_const=c_p - R_mod) - epsilon \
+                       - moist_static_energy(temp_ft, sphum_sat(temp_ft, pressure_ft), height=0, c_p_const=c_p+R_mod)
+        else:
+            z_approx = 0
     elif temp_ft is None:
         if (z_approx is None) or (epsilon is None):
             raise ValueError("If temp_ft not provided, must provide both epsilon and approx_z")
@@ -103,6 +111,8 @@ def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np
         if not np.isclose(temp_ft, temp_ft_calc):
             raise ValueError(f"temp_ft={temp_ft}K provided does not match temp_ft_calc={temp_ft_calc}K "
                              f"computed using epsilon and approx_z.")
+    if not parcel_def_include_z_approx:
+        z_approx = z_approx * 0
     if np.isnan(temp_surf).any():
         if temp_surf.size == 1:
             temp_ft_parcel = np.nan     # if single number, set to nan

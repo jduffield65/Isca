@@ -8,6 +8,7 @@ from tqdm import tqdm
 import xarray as xr
 import logging
 import sys
+
 sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
@@ -17,9 +18,10 @@ from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr
 from isca_tools.utils.xarray import convert_ds_dtypes
 
-def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land']='aquaplanet',
-                    region: Literal['tropics', 'not_tropics']='tropics',
-                    hemisphere: Literal['north', 'south']='north', dailymax: bool=False):
+
+def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land'] = 'aquaplanet',
+                    region: Literal['tropics', 'not_tropics'] = 'tropics',
+                    hemisphere: Literal['north', 'south'] = 'north', dailymax: bool = False):
     """
     Returns path name in ./ds_processed directory
 
@@ -41,7 +43,8 @@ def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land']='aquapl
     ds_out_path = os.path.join(ds_out_path, f"{kappa_name}.nc")
     return ds_out_path
 
-def amend_sample_dim(ds_list, n_sample_max_range = 2):
+
+def amend_sample_dim(ds_list, n_sample_max_range=2):
     # Hack so all ds_list values have same number of samples, should only differ by one or two (less than n_sample_max_range)
     n_ds = len(ds_list)
     n_sample = [ds_list[i].sample.size for i in range(n_ds)]
@@ -51,20 +54,33 @@ def amend_sample_dim(ds_list, n_sample_max_range = 2):
     ds_list = [ds_list[i].isel(sample=slice(0, n_sample)) for i in range(n_ds)]
     return ds_list
 
+
 def get_P(ds):
     return ds.PS * ds.hybm
 
-try:
-    surf = ['aquaplanet', 'land']
-    kappa_names = ['k=1', 'k=1_5']
-    hemisphere = ['south', 'north']
+def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere=['south', 'north'],
+           dailymax=False):
+    """
+    Function to load in datasets from ds_processed folder in this directory and combine them
+
+    Args:
+        surf:
+        kappa_names:
+        hemisphere:
+        dailymax: If `True`, will load in ds conditioned on hour of max surface temperature for each day.
+            If `False`, will use daily average.
+
+    Returns:
+
+    """
     n_exp = len(kappa_names)
     ds = {}
     for key in surf:
-        ds[key] = [0, 0]        # initialize as empty list
+        ds[key] = [0, 0]  # initialize as empty list
         for i in range(n_exp):
             # Load both hemispheres and combine into single ds
-            ds[key][i] = [xr.open_dataset(get_ds_out_path(kappa_names[i], surf=key, hemisphere=hemisphere[j])).isel(surf=0)
+            ds[key][i] = [xr.open_dataset(get_ds_out_path(kappa_names[i], surf=key, hemisphere=hemisphere[j],
+                                                          dailymax=dailymax)).isel(surf=0)
                           for j in range(len(hemisphere))]
             ds[key][i] = amend_sample_dim(ds[key][i])
             ds[key][i] = xr.concat(ds[key][i], dim='lat')
@@ -78,30 +94,35 @@ try:
         ds[key]['ZREFHT'] = ds[key].Z3.isel(lev=-1)
         ds[key]['mse_REFHT'] = moist_static_energy(ds[key].TREFHT, ds[key].QREFHT, ds[key].ZREFHT)
         ds[key]['Z_ft_env'] = get_var_at_plev(ds[key].Z3, get_P(ds[key]), ds[key].p_ft)
-        ds[key]['mse_ft_sat_env'] = moist_static_energy(ds[key].T_ft_env, sphum_sat(ds[key].T_ft_env, ds[key].p_ft), ds[key].Z_ft_env)
+        ds[key]['mse_ft_sat_env'] = moist_static_energy(ds[key].T_ft_env, sphum_sat(ds[key].T_ft_env, ds[key].p_ft),
+                                                        ds[key].Z_ft_env)
         ds[key]['epsilon'] = ds[key]['mse_REFHT'] - ds[key]['mse_ft_sat_env']
         for key2 in ds[key]:
             if 'mod_parcel' in key2:
                 ds[key] = ds[key].rename_vars({key2: key2.replace('mod_parcel', 'modParc')})
+    return ds
+
+
+try:
+    ds = get_ds()
 except Exception as e:
     print(f"No ds loaded because of the following Exception:\n{e}")
     ds = None
 
-
 if __name__ == '__main__':
     # -- Specific info for running the script --
-    p_ft = 500 * 100                    # FT pressure level to use
-    n_sample = None                     # How many data points for each quantile, x to use. None to get all.
-    quant_all = np.arange(1, 100, 1)    # Quantiles, x, to get data for.
+    p_ft = 500 * 100  # FT pressure level to use
+    n_sample = None  # How many data points for each quantile, x to use. None to get all.
+    quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
     # quant_all = np.array([1, 50, 99])    # Small test run
-    temp_surf_lcl_calc = 300            # Temperature to use to calculate the LCL. 'median' to compute from data.
-    n_lev_above_integral = 3            # Used to compute error in lapse rate integral
-    surf = sys.argv[1]          # 'land' or 'aquaplanet'
+    temp_surf_lcl_calc = 300  # Temperature to use to calculate the LCL. 'median' to compute from data.
+    n_lev_above_integral = 3  # Used to compute error in lapse rate integral
+    surf = sys.argv[1]  # 'land' or 'aquaplanet'
     region = 'tropics'
-    hemisphere = sys.argv[2]    # 'north' or 'south'
+    hemisphere = sys.argv[2]  # 'north' or 'south'
     season = 'summer'
-    dailymax = True                    # Take daily max data
-    kappa_names = sys.argv[3]                 # 'k=1' or 'k=1_5'
+    dailymax = True  # Take daily max data
+    kappa_names = sys.argv[3]  # 'k=1' or 'k=1_5'
     # ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant_dailymax.nc'
     ds_out_path = get_ds_out_path(kappa_names, surf, region, hemisphere, dailymax)
 
@@ -115,8 +136,8 @@ if __name__ == '__main__':
         logger = logging.getLogger()  # for printing to console time info
         #  -- Info for loading in data --
         exp_dir = {'land': 'tau_sweep/land/meridional_band/depth=1/bucket_evap/'} if surf == 'land' else \
-            {'aquaplanet': 'tau_sweep/aquaplanet/depth=1/'}       # add a surface dimension
-        kappa_names = [kappa_names]                 # make a list so add dimension
+            {'aquaplanet': 'tau_sweep/aquaplanet/depth=1/'}  # add a surface dimension
+        kappa_names = [kappa_names]  # make a list so add dimension
         n_kappa = len(kappa_names)
 
         lat_min = {'tropics': {'north': 0, 'south': -20},
@@ -151,7 +172,7 @@ if __name__ == '__main__':
             for key in exp_dir:
                 for j in range(n_kappa):
                     if dailymax:
-                        exp_path = os.path.join(os.environ['GFDL_DATA'], exp_dir[key] + kappa_names[j]+'_dailymax')
+                        exp_path = os.path.join(os.environ['GFDL_DATA'], exp_dir[key] + kappa_names[j] + '_dailymax')
                         ds_use = xr.open_mfdataset(f"{exp_path}/lat*.nc", combine='nested',
                                                    concat_dim='lat', decode_times=False)[var_keep]
                         # Convert time so matches that expected from daily average data
@@ -211,9 +232,11 @@ if __name__ == '__main__':
         def get_P(ds):
             return ds.PS * ds.hybm
 
+
         ds['rh_REFHT'] = ds.QREFHT / sphum_sat(ds.TREFHT, ds.PREFHT)
         ds['T_ft_env'] = get_var_at_plev(ds.T, get_P(ds), p_ft)
         ds['T_ft_env_zonal_av'] = ds['T_ft_env'].mean(dim='lon')
+
 
         ## -- Get Data Conditioned on Quantile of TREFHT
         def get_ds_quant_single_coord(ds, quant=90, range_below=0.5, range_above=0.5):
@@ -226,7 +249,8 @@ if __name__ == '__main__':
 
 
         def get_ds_quant(ds, quant=90, range_below=0.5, range_above=0.5, n_keep=None):
-            quant_mask = get_quant_ind(ds.TREFHT, quant, range_below, range_above, av_dim=['lon', 'time'], return_mask=True)
+            quant_mask = get_quant_ind(ds.TREFHT, quant, range_below, range_above, av_dim=['lon', 'time'],
+                                       return_mask=True)
             # n_keep is so can concat ds of different quantiles. A given quant range will give slightly different numbers of samples at each location.
             # Through providing n_keep, you can ensure the number is always the same.
             n_keep_max = int(quant_mask.sum(dim=['lon', 'time']).min())
@@ -249,6 +273,7 @@ if __name__ == '__main__':
                 ds_out.append(ds_use_j)
             ds_out = xr.concat(ds_out, dim=ds.tau_lw)
             return ds_out
+
 
         print_log('Computing data conditioned on each quantile', logger)
         ds_quant = []

@@ -3,8 +3,6 @@ from typing import Optional, Tuple, Union, Literal
 import itertools
 from .lapse_integral import get_temp_const_lapse
 from .adiabat_theory import get_theory_prefactor_terms
-from .adiabat_theory2 import get_scale_factor_theory as get_scale_factor_theory_sCAPE
-from .adiabat_theory2 import get_sensitivity_factors as get_sensitivity_factors_sCAPE
 from ..convection.base import lcl_sigma_bolton_simple, dry_profile_temp
 from ..utils.constants import c_p, L_v, R, g, lapse_dry
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
@@ -485,17 +483,18 @@ def get_scale_factor_theory_numerical(temp_surf_ref: np.ndarray, temp_surf_quant
 
 def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, rh_ref: float,
                                        rh_quant: np.ndarray, temp_ft_quant: np.ndarray,
-                                       lapse_D_quant: np.ndarray,
-                                       lapse_M_quant: np.ndarray,
                                        p_ft: float,
                                        p_surf_ref: float, p_surf_quant: Optional[np.ndarray] = None,
+                                       lapse_D_quant: Optional[np.ndarray] = None,
+                                       lapse_M_quant: Optional[np.ndarray] = None,
+                                       sCAPE_quant: Optional[np.ndarray] = None,
                                        temp_surf_lcl_calc: float = 300,
                                        guess_lapse: float = lapse_dry,
                                        valid_range: float = 100,
                                        lapse_coords: Literal['z', 'lnp'] = 'z'
                                        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     """
-    **Recommended over `get_scale_factor_theory_numerical`**
+    **Recommended over `get_scale_factor_theory_numerical`. Also allows for old `sCAPE` framework.**
 
     Calculates the theoretical near-surface temperature change for percentile $x$, $\delta \hat{T}_s(x)$, relative
     to the reference temperature change, $\delta \\tilde{T}_s$. The theoretical scale factor is given by the linear
@@ -503,19 +502,36 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
     variation in that parameter with warming, $\delta$. Then we also includes a non linear
     contribution from all combinations of two mechanisms.
 
+    Can give a theoretical scale factor for either the modParcel framework involving `lapse_D` and `lapse_M`
+    or simple CAPE framework involving `sCAPE`.
+
+    Numerical estimate found from equating two equations for modified MSE,
+    $h^{\dagger} = f_1(T_{FT}, p_s, sCAPE) = f_2(T_s, r_s, p_s)$
+    So if you know all variables but $T_s$, can invert to compute $T_s$.
+    Compute for each climate and take the difference to compute $\delta T_s$. To isolate effect of each mechanism,
+    keep all variables at the reference value, and set that one variable to the actual value.
+
     ??? note "List of mechanisms - keys in `info_dict`"
         The list of mechanisms considered for differential warming, acting independently are:
 
         * `temp_ft_change`: Change in free tropospheric temperature
         * `rh_change`: Change in surface relative humidity
         * `p_surf_change`: Change in surface pressure
-        * `lapse_D_change`: Change in boundary layer modified lapse rate parameter, $\eta_D$
-        * `lapse_M_change`: Change in aloft modified lapse rate parameter, $\eta_M$
         * `temp_surf_anom`: Surface temperature anomaly in current climate
         * `rh_anom`: Surface relative humidity anomaly in current climate
         * `p_surf_anom`: Surface pressure anomaly in current climate
+
+        If provide `lapse_D_quant` and `lapse_M_quant`, will also include:
+
+        * `lapse_D_change`: Change in boundary layer modified lapse rate parameter, $\eta_D$
+        * `lapse_M_change`: Change in aloft modified lapse rate parameter, $\eta_M$
         * `lapse_D_anom`: $\eta_D$ anomaly in current climate
         * `lapse_M_anom`: $\eta_M$ anomaly in current climate
+
+        If provide `sCAPE_quant`, will also include:
+
+        * `sCAPE_change`: Change in simple CAPE proxy, sCAPE
+        * `sCAPE_anom`: sCAPE anomaly in current climate
 
         In `info_dict`, there is a key for each of these, as well as `nl_{key1}_{key2}` for the non linear conbinations
         of two mechanisms.
@@ -547,6 +563,8 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
             Note that `quant_use` is not provided as not needed by this function, but is likely to be
             `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
             of a quantity.
+            Only used to get `nl_error_av_change`, to get error due to averaging i.e. why actual `temp_surf_quant`
+            differs from that computed from all other quant variables.
         rh_ref: `float [n_exp]` $\\tilde{r}_s$</br>
             Reference near surface relative humidity for cold simulaion. `r_ref_change` is set to zero.
             Units: dimensionless (from 0 to 1).
@@ -556,16 +574,6 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
         temp_ft_quant: `float [n_exp, n_quant]` $T_{FT}[x]$</br>
             `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
              corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
-        lapse_D_quant: `float [n_exp, n_quant]` $\eta_D[x]$</br>
-            The quantity $\eta_D$ such that the lapse rate between $p_s$ and LCL is
-            $\Gamma_D + \eta_D$ with $\Gamma_D$ being the dry adiabatic lapse rate.</br>,
-            `[i, j]` is averaged over all days with near-surface temperature
-            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *K/m*.
-        lapse_M_quant: `float [n_exp, n_quant]` $\eta_M[x]$</br>
-            The quantity $\eta_M$ such that the lapse rate above the LCL is $\Gamma_M(p) + \eta_M$ with
-            $\Gamma_M(p)$ being the moist adiabatic lapse rate at pressure $p$.</br>,
-            `[i, j]` is averaged over all days with near-surface temperature
-            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *K/m*.
         p_ft:
             Pressure at free troposphere level, $p_{FT}$, in *Pa*.
         p_surf_ref:
@@ -575,8 +583,25 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
             `[i, j]` is surface pressure averaged over all days with near-surface temperature
             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *Pa*.</br>
             If not supplied, will set to `p_surf_ref` for all quantiles.
+        lapse_D_quant: `float [n_exp, n_quant]` $\eta_D[x]$</br>
+            The quantity $\eta_D$ such that the lapse rate between $p_s$ and LCL is
+            $\Gamma_D + \eta_D$ with $\Gamma_D$ being the dry adiabatic lapse rate.</br>,
+            `[i, j]` is averaged over all days with near-surface temperature
+            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *K/m*.
+            If don't provide, will use sCAPE version of scale factor theory.
+        lapse_M_quant: `float [n_exp, n_quant]` $\eta_M[x]$</br>
+            The quantity $\eta_M$ such that the lapse rate above the LCL is $\Gamma_M(p) + \eta_M$ with
+            $\Gamma_M(p)$ being the moist adiabatic lapse rate at pressure $p$.</br>,
+            `[i, j]` is averaged over all days with near-surface temperature
+            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *K/m*.
+            If don't provide, will use sCAPE version of scale factor theory.
+        sCAPE_quant: `float [n_exp, n_quant]` $sCAPE[x]$</br>
+            $sCAPE = R^{\dagger} (T_{FT,parc} - T_{FT})$ in units of *J/kg*
+            Proxy for CAPE, to account for deviation of parcel and environmental temperature at `p_ft`.
+            If don't provide, will use modParc version of scale factor theory using `lapse_D_quant` and `lapse_M_quant`.
         temp_surf_lcl_calc:
             Surface temperature to use when computing $\sigma_{LCL}$. If `None`, uses `temp_surf`.
+            Makes no difference if give `sCAPE_quant`
         guess_lapse:
             Initial guess for parcel temperature will be found assuming this bulk lapse rate
             from `temp_surf` or `temp_ft`. Units: *K/m*
@@ -586,6 +611,7 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
             If `lnp`, expect in log pressure coordinates, units of *K*. This is obtained from the z coordinate
             version $\eta_z$ through: $\eta_{D\ln p} = RT_s\eta_{Dz}/g$ and
             $\eta_{M\ln p} = RT_{FT}\eta_{Mz}/g$.
+            Makes no difference if give `sCAPE_quant`.
 
     Returns:
         scale_factor: `float [n_quant]`</br>
@@ -603,6 +629,10 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
         info_cont: Dictionary containing a contribution from each mechanism. This gives
             the contribution from each physical mechanism to the overall scale factor.</br>
     """
+    if (sCAPE_quant is None) == (lapse_D_quant is None and lapse_M_quant is None):
+        # Deal with the case where both sCAPE and lapse provided, or neither.
+        raise ValueError('Must provide either `sCAPE_quant` or `lapse_M_quant` and `lapse_D_quant` only')
+
     if p_surf_quant is None:
         p_surf_quant = np.full_like(temp_surf_quant, p_surf_ref[:, np.newaxis])
 
@@ -613,15 +643,38 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
     lapse_M_ref_change = 0
     p_surf_ref_change = 0
     rh_ref_change = 0
+    if sCAPE_quant is not None:
+        # ref conditions in sCAPE mode, is all values are zero i.e. reference is parcel
+        sCAPE_ref = 0
+        lapse_D_quant = 0  # lapse parameters always zero in sCAPE mode
+        lapse_M_quant = 0
+    else:
+        sCAPE_ref = None
+    sCAPE_ref_change = 0
 
     def get_temp(rh=rh_ref, p_surf=p_surf_ref,
                  lapse_D=lapse_D_ref, lapse_M=lapse_M_ref,
-                 temp_surf=None, temp_ft=None):
+                 sCAPE=sCAPE_ref, temp_surf=None, temp_ft=None):
         # Has useful default values as ref in cold climate. So to find effect of a mechanism, just
         # change that variable.
         # Still gives option to compute surf or FT temp
-        return get_temp_mod_parcel(rh, p_surf, p_ft, lapse_D, lapse_M, temp_surf, temp_ft,
-                                   temp_surf_lcl_calc, guess_lapse, valid_range, lapse_coords)
+        if sCAPE is not None:
+            lapse_D = 0
+            lapse_M = 0
+            R_mod = R / 2 * np.log(p_surf / p_ft)
+            temp_ft_dev = sCAPE / R_mod  # Value of T_ft_parc - T_ft_env given formula for sCAPE
+            if temp_surf is None:
+                # When finding surface temperature, use parcel temperature at FT, then follow parcel profile to surface
+                # with lapse_D = 0; lapse_M=0.
+                temp_ft = temp_ft + temp_ft_dev
+
+        temp_sol = get_temp_mod_parcel(rh, p_surf, p_ft, lapse_D, lapse_M, temp_surf, temp_ft,
+                                       temp_surf_lcl_calc, guess_lapse, valid_range, lapse_coords)
+        if (sCAPE is not None) and (temp_surf is not None):
+            # In this case, will have computed the parcel temperature at the FT
+            # Get environmental temperature from parcel by subtracting (T_ft_parc - T_ft_env)
+            temp_sol = temp_sol - temp_ft_dev
+        return temp_sol
 
     get_temp = np.vectorize(get_temp)  # may need optimizing in future
     # Compute temp_ft_ref using base climate reference rh and lapse_mod
@@ -632,33 +685,41 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
                         p_surf=p_surf_ref, p_surf_change=p_surf_ref_change,
                         lapse_D=lapse_D_ref, lapse_D_change=lapse_D_ref_change,
                         lapse_M=lapse_M_ref, lapse_M_change=lapse_M_ref_change,
+                        sCAPE=sCAPE_ref, sCAPE_change=sCAPE_ref_change,
                         temp_ft_change=temp_ft_ref[1] - temp_ft_ref[0], temp_surf=temp_surf_ref[0]):
         # Default variables are such that if alter one variable, will give the temp change cont due to that change
         # and only that change
         # Given conditions in base climate, compute temperature at p_ft from that
-        temp_ft0 = get_temp(rh, p_surf, lapse_D, lapse_M, temp_surf)
+        temp_ft0 = get_temp(rh, p_surf, lapse_D, lapse_M, sCAPE, temp_surf)
         # Given this ft temperature, and imposed change at p_ft, compute change at surface
         temp_surf_change_theory = get_temp(rh + rh_change, p_surf + p_surf_change,
                                            lapse_D + lapse_D_change, lapse_M + lapse_M_change,
+                                           None if sCAPE is None else sCAPE + sCAPE_change,
                                            temp_ft=temp_ft0 + temp_ft_change) - temp_surf
         return temp_surf_change_theory
 
     # Compute the expected surface temperature given the variables and our mod_parcel framework.
     # Will likely differ from temp_surf_quant if averaging done.
     temp_surf_quant_approx = get_temp(rh_quant, p_surf_quant, lapse_D_quant, lapse_M_quant,
-                                      temp_ft=temp_ft_quant)
-
+                                      sCAPE_quant, temp_ft=temp_ft_quant)
 
     # Record quantity responsible for each mechanism
     # Use temp_surf_quant_approx not temp_surf_quant because we are computing the temperature change
     # in temp_surf_quant_approx, with deviation due to averaging accounted for later by error_av_change term
-    var = {'temp_ft_change': temp_ft_quant[1] - temp_ft_quant[0], 'rh_change': rh_quant[1] - rh_quant[0],
-           'p_surf_change': p_surf_quant[1] - p_surf_quant[0],
-           'lapse_D_change': lapse_D_quant[1] - lapse_D_quant[0],
-           'lapse_M_change': lapse_M_quant[1] - lapse_M_quant[0],
-           'temp_surf_anom': temp_surf_quant_approx[0], 'rh_anom': rh_quant[0],
-           'p_surf_anom': p_surf_quant[0], 'lapse_D_anom': lapse_D_quant[0],
-           'lapse_M_anom': lapse_M_quant[0]}
+    var = {'temp_ft_change': temp_ft_quant[1] - temp_ft_quant[0], 'temp_surf_anom': temp_surf_quant_approx[0],
+           'rh_change': rh_quant[1] - rh_quant[0], 'rh_anom': rh_quant[0],
+           'p_surf_change': p_surf_quant[1] - p_surf_quant[0], 'p_surf_anom': p_surf_quant[0]}
+
+    if sCAPE_quant is None:
+        # For modParc mode, include mechanisms from lapse rates
+        var['lapse_D_change'] = lapse_D_quant[1] - lapse_D_quant[0]
+        var['lapse_D_anom'] = lapse_D_quant[0]
+        var['lapse_M_change'] = lapse_M_quant[1] - lapse_M_quant[0]
+        var['lapse_M_anom'] = lapse_M_quant[0]
+    else:
+        # In old mode, include mechanism from sCAPE
+        var['sCAPE_change'] = sCAPE_quant[1] - sCAPE_quant[0]
+        var['sCAPE_anom'] = sCAPE_quant[0]
 
     info_cont = {}
     # Get linear mechanisms where only one mechanism is active
@@ -687,42 +748,111 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
         # Make it so it gives scale factor contribution, will be 1 if no contribution
         info_cont[key] /= (temp_surf_ref[1] - temp_surf_ref[0])
 
-    final_answer = np.asarray(sum([info_cont[key] - 1 for key in info_cont])) + 1   # with error term, should be exact
+    final_answer = np.asarray(sum([info_cont[key] - 1 for key in info_cont])) + 1  # with error term, should be exact
     final_answer_nl = np.asarray(sum([info_cont[key] - 1 for key in info_cont if
-                                          (('residual' not in key) and ('error' not in key))])) + 1
+                                      (('residual' not in key) and ('error' not in key))])) + 1
     final_answer_linear = np.asarray(sum([info_cont[key] - 1 for key in info_cont if 'nl' not in key])) + 1
     return final_answer, final_answer_nl, final_answer_linear, info_cont
 
 
-def get_sensitivity_factors(temp_surf_ref: Union[np.ndarray, float], r_ref: Union[np.ndarray, float],
+def get_sensitivity_factors(temp_surf: float, rh_surf: float,
                             pressure_surf: float, pressure_ft: float, temp_surf_lcl_calc: float = 300) -> dict:
-    gamma = get_sensitivity_factors_sCAPE(temp_surf_ref, r_ref, pressure_surf, pressure_ft)
+    """
 
-    sigma_lcl = lcl_sigma_bolton_simple(r_ref, temp_surf_lcl_calc)
-    exponent = np.log(sigma_lcl) / np.log(r_ref)
-    gamma['lapse_M_change'] = gamma['temp_ft_change'] * np.log(sigma_lcl * pressure_surf / pressure_ft)
+    Args:
+        temp_surf:
+        rh_surf:
+        pressure_surf:
+        pressure_ft:
+        temp_surf_lcl_calc:
+
+    Returns:
+
+    """
+    sphum = rh_surf * sphum_sat(temp_surf, pressure_surf)
+    # Compute FT temp according to parcel profile i.e. lapse_D and lapse_M = 0 - so does not matter if z or lnp.
+    temp_ft = get_temp_mod_parcel(rh_surf, pressure_surf, pressure_ft,
+                                  temp_surf=temp_surf, temp_surf_lcl_calc=temp_surf_lcl_calc)
+    _, _, _, beta_ft1, beta_ft2, _, _ = get_theory_prefactor_terms(temp_ft, pressure_surf, pressure_ft)
+    _, _, _, beta_s1, beta_s2, _, mu = get_theory_prefactor_terms(temp_surf, pressure_surf, pressure_ft, sphum)
+    sigma_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc)
+
+    gamma = {}
+    gamma['temp_ft_change'] = beta_ft1 / beta_s1
+    gamma['rh_change'] = L_v * sphum / (beta_s1 * temp_surf)
+    gamma['p_surf_change'] = R / (2 * beta_s1) * (1 + temp_ft / temp_surf) + L_v * sphum / (beta_s1 * temp_surf)
+    gamma['sCAPE_change'] = gamma['temp_ft_change'] * 1         # *1 so is not a copy
     gamma['lapse_D_change'] = -np.log(sigma_lcl)
-    gamma['lapse_D_anom'] = gamma['temp_anom']
+    gamma['lapse_M_change'] = gamma['temp_ft_change'] * np.log(sigma_lcl * pressure_surf / pressure_ft)
 
-    gamma['lapse_M_change_r_change_nl'] = gamma['temp_ft_change'] * exponent
-    gamma['lapse_M_anom_r_change_nl'] = gamma['temp_ft_change'] * exponent
-    gamma['lapse_D_change_r_change_nl'] = exponent
-    gamma['lapse_D_anom_r_change_nl'] = exponent
-    gamma['lapse_D_anom_r_anom_nl'] = gamma['temp_anom'] * exponent
-
+    gamma['temp_surf_anom'] = beta_ft2 / beta_ft1 * beta_s1 / beta_ft1 * temp_surf / temp_ft - beta_s2 / beta_s1
+    gamma['rh_anom'] = mu - beta_ft2 / beta_ft1 * L_v * sphum / (beta_ft1 * temp_ft)
+    gamma['p_surf_anom'] = R / 2 * (beta_ft2 / beta_ft1 * (temp_surf + temp_ft) / (beta_ft1 * temp_ft) -
+                                    1 / beta_s1 - 1 / beta_ft1) + L_v * sphum * beta_ft2 / beta_ft1 ** 2 / temp_ft - mu
+    gamma['lapse_D_anom'] = gamma['temp_surf_anom'] * gamma['lapse_D_change']
     return gamma
 
 
-def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, r_ref: np.ndarray,
-                            r_quant: np.ndarray, temp_ft_quant: np.ndarray,
-                            lapse_mod_D_quant: np.ndarray,
-                            lapse_mod_M_quant: np.ndarray,
-                            p_ft_ref: float,
+def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarray, rh_ref: float,
+                            rh_quant: np.ndarray, temp_ft_quant: np.ndarray,
+                            p_ft: float,
                             p_surf_ref: float, p_surf_quant: Optional[np.ndarray] = None,
-                            temp_surf_lcl_calc: float = 300,
-                            guess_lapse: float = lapse_dry,
-                            valid_range: float = 100):
-    # Compute scaling factor for a perfect parcel
-    sf_parcel, gamma, info_var, info_cont = \
-        get_scale_factor_theory_sCAPE(temp_surf_ref, temp_surf_quant, r_ref, r_quant, temp_ft_quant,
-                                      np.zeros_like(temp_ft_quant), p_surf_ref, p_ft_ref)
+                            lapse_D_quant: Optional[np.ndarray] = None,
+                            lapse_M_quant: Optional[np.ndarray] = None,
+                            sCAPE_quant: Optional[np.ndarray] = None,
+                            temp_surf_lcl_calc: float = 300) -> Tuple[np.ndarray, dict, dict, dict]:
+    """
+
+    Args:
+        temp_surf_ref:
+        temp_surf_quant:
+        rh_ref:
+        rh_quant:
+        temp_ft_quant:
+        p_ft:
+        p_surf_ref:
+        p_surf_quant:
+        lapse_D_quant:
+        lapse_M_quant:
+        sCAPE_quant:
+        temp_surf_lcl_calc:
+
+    Returns:
+
+    """
+    if (sCAPE_quant is None) == (lapse_D_quant is None and lapse_M_quant is None):
+        # Deal with the case where both sCAPE and lapse provided, or neither.
+        raise ValueError('Must provide either `sCAPE_quant` or `lapse_M_quant` and `lapse_D_quant` only')
+
+    if p_surf_quant is None:
+        p_surf_quant = np.full_like(temp_surf_quant, p_surf_ref[:, np.newaxis])
+
+    gamma = get_sensitivity_factors(temp_surf_ref[0], rh_ref, p_surf_ref, p_ft, temp_surf_lcl_calc)
+    R_mod_ref = R/2 * np.log(p_surf_ref/p_ft)
+    temp_surf_ref_change = temp_surf_ref[1] - temp_surf_ref[0]
+
+    info_var = {'temp_ft_change': np.diff(temp_ft_quant, axis=0).squeeze() / temp_surf_ref_change,
+                'rh_change': np.diff(rh_quant, axis=0).squeeze() / rh_ref * temp_surf_ref[0] / temp_surf_ref_change,
+                'p_surf_change': np.diff(p_surf_quant, axis=0).squeeze() / p_surf_ref * temp_surf_ref[0] / temp_surf_ref_change,
+                'temp_surf_anom': (temp_surf_quant[0] - temp_surf_ref[0]) / temp_surf_ref[0],
+                'rh_anom': (rh_quant[0] - rh_ref) / rh_ref,
+                'p_surf_anom': (p_surf_quant[0] - p_surf_ref) / p_surf_ref}
+
+    # Add lapse or sCAPE depending on method using
+    if sCAPE_quant is None:
+        info_var['lapse_D_change'] = np.diff(lapse_D_quant, axis=0).squeeze() / temp_surf_ref_change
+        info_var['lapse_M_change'] = np.diff(lapse_M_quant, axis=0).squeeze() / temp_surf_ref_change
+        info_var['lapse_D_anom'] = lapse_D_quant[0] / temp_surf_ref[0]
+    else:
+        info_var['sCAPE_change'] = np.diff(sCAPE_quant, axis=0).squeeze() / R_mod_ref / temp_surf_ref_change
+    coef_sign = {'temp_ft_change': 1, 'rh_change': -1, 'p_surf_change': 1, 'sCAPE_change': 1, 'lapse_D_change': 1,
+                 'lapse_M_change': 1, 'temp_surf_anom': 1, 'rh_anom': -1, 'p_surf_anom': -1, 'lapse_D_anom': -1}
+
+    # Get contribution from each term - will be 1 if no contribution to match numerical version
+    info_cont = {}
+    for key in info_var:
+        info_cont[key] = coef_sign[key] * gamma[key] * info_var[key]
+        if key != 'temp_ft_change':
+            info_cont[key] += 1
+    final_answer = np.asarray(sum([info_cont[key]-1 for key in info_cont])) + 1
+    return final_answer, gamma, info_var, info_cont
