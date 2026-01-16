@@ -228,11 +228,6 @@ if __name__ == '__main__':
             temp_surf_lcl_calc = float(np.ceil(ds.TREFHT.median()))
 
 
-        # Compute T_ft and rh required for scale factor decomposition
-        def get_P(ds):
-            return ds.PS * ds.hybm
-
-
         ds['rh_REFHT'] = ds.QREFHT / sphum_sat(ds.TREFHT, ds.PREFHT)
         ds['T_ft_env'] = get_var_at_plev(ds.T, get_P(ds), p_ft)
         ds['T_ft_env_zonal_av'] = ds['T_ft_env'].mean(dim='lon')
