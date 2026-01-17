@@ -1,7 +1,7 @@
 ## Script to save variables conditioned on times of hottest % of days
 # One value for each `sample` in the hottest % of days. Only 1 time for each day corresponding to hottest time of day
 # Loop over raw input files, so only load one at a time to save time
-# One output file for each raw input - each file is sam size but mainly nans, only contains `sample` for which
+# One output file for each raw input - each file is same size but mainly nans, only contains `sample` for which
 # that raw file contains, but when concatenate, get full dataset
 from geocat.comp import interp_hybrid_to_pressure
 from isca_tools import cesm

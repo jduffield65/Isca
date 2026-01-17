@@ -111,18 +111,25 @@ except Exception as e:
 
 if __name__ == '__main__':
     # -- Specific info for running the script --
-    p_ft = 500 * 100  # FT pressure level to use
+    p_ft = [500 * 100, 700*100]  # FT pressure level to use
     n_sample = None  # How many data points for each quantile, x to use. None to get all.
     quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
     # quant_all = np.array([1, 50, 99])    # Small test run
     temp_surf_lcl_calc = 300  # Temperature to use to calculate the LCL. 'median' to compute from data.
     n_lev_above_integral = 3  # Used to compute error in lapse rate integral
-    surf = sys.argv[1]  # 'land' or 'aquaplanet'
+    try:
+        # ideally get these from terminal
+        surf = sys.argv[1]  # 'land' or 'aquaplanet'
+        hemisphere = sys.argv[2]  # 'north' or 'south'
+        kappa_names = sys.argv[3]  # 'k=1' or 'k=1_5'
+    except IndexError:
+        # Default values of don't call from terminal - for testing
+        surf = 'aquaplanet'
+        hemisphere = 'north'
+        kappa_names = 'k=1'
     region = 'tropics'
-    hemisphere = sys.argv[2]  # 'north' or 'south'
     season = 'summer'
-    dailymax = True  # Take daily max data
-    kappa_names = sys.argv[3]  # 'k=1' or 'k=1_5'
+    dailymax = False  # Take daily max data
     # ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant_dailymax.nc'
     ds_out_path = get_ds_out_path(kappa_names, surf, region, hemisphere, dailymax)
 
@@ -166,7 +173,6 @@ if __name__ == '__main__':
         print_log('Loading data', logger)
         ds = {key: [] for key in exp_dir}
         albedo = {key: [] for key in exp_dir}
-        tau_sw = {key: [] for key in exp_dir}
         tau_lw = {key: [] for key in exp_dir}
         with tqdm(total=n_kappa, position=0, leave=True) as pbar:
             for key in exp_dir:
@@ -198,8 +204,6 @@ if __name__ == '__main__':
                     ds[key] += [ds_use.load()]
 
                     namelist = isca_tools.load_namelist(exp_dir[key] + kappa_names[j])  # Need this for albedo_value
-                    albedo[key] += [namelist['mixed_layer_nml']['albedo_value']]
-                    tau_sw[key] += [namelist['two_stream_gray_rad_nml']['atm_abs']]
                     tau_lw[key] += [namelist['two_stream_gray_rad_nml']['odp']]
                     pbar.update(1)
                 ds[key] = xr.concat(ds[key], dim=xr.DataArray(tau_lw[key], dims="tau_lw", name='tau_lw'))
@@ -229,7 +233,9 @@ if __name__ == '__main__':
 
 
         ds['rh_REFHT'] = ds.QREFHT / sphum_sat(ds.TREFHT, ds.PREFHT)
-        ds['T_ft_env'] = get_var_at_plev(ds.T, get_P(ds), p_ft)
+        p_ft_xr = xr.DataArray(p_ft, dims=["p_ft"], name="p_ft")
+        var = [get_var_at_plev(ds.T, get_P(ds), p_ft[i]) for i in range(len(p_ft))]
+        ds['T_ft_env'] = xr.concat(var,p_ft_xr)
         ds['T_ft_env_zonal_av'] = ds['T_ft_env'].mean(dim='lon')
 
 
@@ -297,39 +303,40 @@ if __name__ == '__main__':
             keys = ["const", "mod_parcel"]
 
             quants = ds["quant"].values
-            out_list = []
+            out_list_p = []         # contains one dataarray for each p_ft
 
-            with tqdm(total=len(quants), position=0, leave=True) as pbar:
-                for q in quants:
-                    small = {}
+            with tqdm(total=len(quants)*len(p_ft), position=0, leave=True) as pbar:
+                for p_ft_use in p_ft:
+                    out_list_q = []             # contains one dataarray for each quant
+                    for q in quants:
+                        small = {}
 
-                    for key in keys:
-                        var = fitting_2_layer_xr(
-                            ds.T.sel(quant=q),
-                            get_P(ds).sel(quant=q),
-                            ds.TREFHT.sel(quant=q),
-                            ds.PREFHT.sel(quant=q),
-                            ds.rh_REFHT.sel(quant=q),
-                            ds.T_ft_env.sel(quant=q),
-                            p_ft,
-                            n_lev_above_upper2_integral=ds.n_lev_above_integral,
-                            method_layer2=key,
-                            temp_surf_lcl_calc=temp_surf_lcl_calc,
-                        )
+                        for key in keys:
+                            var = fitting_2_layer_xr(
+                                ds.T.sel(quant=q),
+                                get_P(ds).sel(quant=q),
+                                ds.TREFHT.sel(quant=q),
+                                ds.PREFHT.sel(quant=q),
+                                ds.rh_REFHT.sel(quant=q),
+                                ds.T_ft_env.sel(quant=q, p_ft=p_ft_use),
+                                p_ft_use,
+                                n_lev_above_upper2_integral=ds.n_lev_above_integral,
+                                method_layer2=key,
+                                temp_surf_lcl_calc=temp_surf_lcl_calc,
+                            )
 
-                        for k, name in enumerate(var_names):
-                            # Build variable name such as "const1_lapse"
-                            vname = f"{key}1_{name}"
-                            small[vname] = var[k].expand_dims(quant=[q])
+                            for k, name in enumerate(var_names):
+                                # Build variable name such as "const1_lapse"
+                                vname = f"{key}1_{name}"
+                                small[vname] = var[k].expand_dims(quant=[q])
 
-                    # One small dataset per q
-                    out_list.append(xr.Dataset(small))
+                        # One small dataset per q
+                        out_list_q.append(xr.Dataset(small))
 
-                    pbar.update(1)
-
-            # Concatenate all per-quant datasets
-            new_vars = xr.concat(out_list, dim="quant")
-
+                        pbar.update(1)
+                    # Concatenate all per-quant datasets
+                    out_list_p.append(xr.concat(out_list_q, dim="quant"))
+            new_vars = xr.concat(out_list_p, dim=p_ft_xr)       # concatenate p_ft values
             # Merge into original ds
             return xr.merge([ds, new_vars])
 
@@ -338,7 +345,6 @@ if __name__ == '__main__':
         ds_quant = get_lapse_fitting_info(ds_quant)
         # Add metadata to save
         ds_quant.attrs['temp_surf_lcl_calc'] = temp_surf_lcl_calc
-        ds_quant.attrs["p_ft"] = p_ft
         ds_quant.attrs["region"] = region
         ds_quant.attrs["hemisphere"] = hemisphere
         ds_quant.attrs["season"] = season
