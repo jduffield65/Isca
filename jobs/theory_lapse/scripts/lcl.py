@@ -8,7 +8,7 @@ import sys
 from isca_tools import cesm
 from isca_tools.convection import potential_temp, dry_profile_temp, lcl_metpy
 from isca_tools.thesis.lapse_theory import get_var_at_plev, get_ds_in_pressure_range
-from isca_tools.thesis.profile_fitting import get_mse_env, get_lnb_lev_ind, get_mse_prof_rms
+from isca_tools.thesis.profile_fitting import get_mse_env, get_tropopause_lev_ind, get_mse_prof_rms
 from isca_tools.utils.constants import g
 from isca_tools.utils.base import weighted_RMS, dp_from_pressure, print_log
 from isca_tools.utils.xarray import convert_ds_dtypes
@@ -110,7 +110,7 @@ def load_ds_quant(exp_name: list = ['pre_industrial', 'co2_2x'], quant_type: str
     if 'PS' in var_keep:
         ds['PREFHT'] = ds.P.isel(lev=-1)
     if ('PS' in var_keep) & ('T' in var_keep) & ('Z3' in var_keep):
-        ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
+        ds['lnb_ind'] = get_tropopause_lev_ind(ds.T, ds.Z3, ds.P)
     return ds
 
 

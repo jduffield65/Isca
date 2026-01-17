@@ -51,55 +51,55 @@ def get_mse_env(temp_env: xr.DataArray, p_env: xr.DataArray, z_env: xr.DataArray
         raise ValueError('prof_type must be either full or above_lcl or below_lcl')
 
 
-def get_lnb_lev_ind(temp_env: xr.DataArray, z_env: xr.DataArray, p_env: xr.DataArray, p_max: float = 400 * 100,
-                    lapse_thresh: float = 5, lapse_change_thresh: float = 2, n_iter: int = 5,
-                    lev_dim: str = 'lev') -> xr.DataArray:
+def get_tropopause_lev_ind(temp_env: xr.DataArray, z_env: xr.DataArray, p_env: xr.DataArray, p_max: float = 400 * 100,
+                           lapse_thresh: float = 5, lapse_change_thresh: float = 2, n_iter: int = 5,
+                           lev_dim: str = 'lev') -> xr.DataArray:
     """
-    Finds the index of level of neutral buoyancy in dimension `lev_dim` that satisfies the following conditions
-    (basically so no stratospheric influence between LNB and surface):
+    Finds the TROP index of model level in dimension `lev_dim` that satisfies the following conditions
+    (basically so no stratospheric influence between TRPAUSE and surface):
 
-    * LNB must be a pressure lower than `p_max`.
-    * LNB is level above which is the first layer with negative lapse rate.
+    * TRPAUSE must be a pressure lower than `p_max`.
+    * TRPAUSE is level above which is the first layer with negative lapse rate.
     * If lapse rate in level immediately below this deviates from the lapse rate in the level below that
-    or two below that by more than `lapse_change_thresh`, then LNB is moved to a lower level by 1.
+    or two below that by more than `lapse_change_thresh`, then TRPAUSE is moved to a lower level by 1.
     This process is repeated `n_iter` times.
-    * Lapse rate in level immediately below LNB must be less than `lapse_thresh`.
+    * Lapse rate in level immediately below TRPAUSE must be less than `lapse_thresh`.
 
     Args:
         temp_env: Environmental temperature profile in Kelvin.
         z_env: Environment geopotential height profile in m.
         p_env: Environment pressure profile in Pa
             (assumed different for each location i.e. same dimensions as `temp_env` and `z_env`).
-        p_max: Pressure of LNB cannot exceed this value (i.e. further from surface than this).
-        lapse_thresh: Lapse rate in level immediately below LNB must be less than `lapse_thresh`.
-        lapse_change_thresh: If lapse rate in level immediately below LNB deviates from the lapse rate
+        p_max: Pressure of TRPAUSE cannot exceed this value (i.e. further from surface than this).
+        lapse_thresh: Lapse rate in level immediately below TRPAUSE must be less than `lapse_thresh`.
+        lapse_change_thresh: If lapse rate in level immediately below TRPAUSE deviates from the lapse rate
             in the level below that or two below that by more than this,
-            then LNB is moved to a lower level by 1.
+            then TRPAUSE is moved to a lower level by 1.
         n_iter: Number of iterations to run `lapse_change_thresh` process.
         lev_dim: Name of dimension for vertical model level.
 
     Returns:
-        lnb_ind: Index of level of neutral buoyancy in dimension `lev_dim` for each location.
+        trpause_ind: Index of level of neutral buoyancy in dimension `lev_dim` for each location.
     """
     lapse = -temp_env.diff(dim=lev_dim, label='lower') / z_env.diff(dim=lev_dim, label='lower') * 1000
     lapse = lapse.reindex_like(temp_env)  # make same shape
     lapse = lapse.fillna(lapse_dry * 1000)  # ensure final value satisfies lapse criteria
     lapse = lapse.where(p_env < p_max)
     mask = lapse < 0
-    lnb_ind = (mask.where(mask, other=np.nan) * np.arange(lapse.lev.size)).max(dim=lev_dim).astype(int)
+    trpause_ind = (mask.where(mask, other=np.nan) * np.arange(lapse.lev.size)).max(dim=lev_dim).astype(int)
     # lnb_ind = np.where(lapse < 0)[0][-1]
     # If lapse rate has very big variation, push LNB closer to surface
     for j in range(n_iter):
-        is_large_lapse_diff = lapse.isel(**{lev_dim: lnb_ind + 2}) - lapse.isel(
-            **{lev_dim: lnb_ind + 1}) > lapse_change_thresh
-        is_large_lapse_diff = is_large_lapse_diff & (lapse.isel(**{lev_dim: lnb_ind + 1}) < lapse_thresh)
-        is_large_lapse_diff2 = lapse.isel(**{lev_dim: lnb_ind + 3}) - lapse.isel(
-            **{lev_dim: lnb_ind + 1}) > lapse_change_thresh
-        is_large_lapse_diff2 = is_large_lapse_diff2 & (lapse.isel(**{lev_dim: lnb_ind + 1}) < lapse_thresh)
+        is_large_lapse_diff = lapse.isel(**{lev_dim: trpause_ind + 2}) - lapse.isel(
+            **{lev_dim: trpause_ind + 1}) > lapse_change_thresh
+        is_large_lapse_diff = is_large_lapse_diff & (lapse.isel(**{lev_dim: trpause_ind + 1}) < lapse_thresh)
+        is_large_lapse_diff2 = lapse.isel(**{lev_dim: trpause_ind + 3}) - lapse.isel(
+            **{lev_dim: trpause_ind + 1}) > lapse_change_thresh
+        is_large_lapse_diff2 = is_large_lapse_diff2 & (lapse.isel(**{lev_dim: trpause_ind + 1}) < lapse_thresh)
         is_large_lapse_diff = is_large_lapse_diff | is_large_lapse_diff2
-        lnb_ind = lnb_ind + is_large_lapse_diff.astype(int)
-    lnb_ind = lnb_ind + 1  # make it up to and including this level
-    return lnb_ind
+        trpause_ind = trpause_ind + is_large_lapse_diff.astype(int)
+    trpause_ind = trpause_ind + 1  # make it up to and including this level
+    return trpause_ind
 
 
 def get_pnorm(p: Union[xr.DataArray, np.ndarray, float], p_low: Union[xr.DataArray, np.ndarray, float],

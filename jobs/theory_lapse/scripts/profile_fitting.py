@@ -5,7 +5,7 @@ import numpy as np
 from isca_tools import cesm
 from isca_tools.convection.base import lcl_metpy
 from isca_tools.thesis.lapse_theory import get_var_at_plev
-from isca_tools.thesis.profile_fitting import get_lnb_lev_ind, get_mse_env, interp_var_to_pnorm
+from isca_tools.thesis.profile_fitting import get_tropopause_lev_ind, get_mse_env, interp_var_to_pnorm
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat
 from isca_tools.utils.xarray import flatten_to_numpy, unflatten_from_numpy
 from isca_tools.utils.decomposition import pca_on_xarray, scaled_k_means
@@ -58,7 +58,7 @@ else:
     ds['T_at_lcl'] = get_var_at_plev(ds.T, ds.P, ds.p_lcl)
     ds['Z_at_lcl'] = get_var_at_plev(ds.Z3, ds.P, ds.p_lcl)
     ds['mse_sat_at_lcl'] = moist_static_energy(ds['T_at_lcl'], sphum_sat(ds['T_at_lcl'], ds['p_lcl']), ds['Z_at_lcl'])
-    ds['lnb_ind'] = get_lnb_lev_ind(ds.T, ds.Z3, ds.P)
+    ds['lnb_ind'] = get_tropopause_lev_ind(ds.T, ds.Z3, ds.P)
     print_log(f'Computed LCL', logger)
 
     # Set FT info

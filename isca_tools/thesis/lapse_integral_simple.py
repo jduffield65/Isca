@@ -263,3 +263,54 @@ def get_temp_2_layer_approx(p_lev, temp_env_surf, p_surf, rh_surf, lapse_layer1,
     else:
         raise ValueError(f'method_layer2 = {method_layer2} not recognized.')
     return temp_lev
+
+
+def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lapse_mod_D: float=0,
+                p_surf: Optional[float]=None,
+                temp_surf:Optional[float]=None,
+                temp_surf_lcl_calc=300)-> int:
+    """
+    Returns a proxy for the LNB (level of neutral buoyancy): the index closest to top of atmosphere where
+    `T_parcel - T_env` is positive.
+
+    Args:
+        temp_env_lev: `float [n_lev]`</br>
+            Environmental temperature on model levels. Units: Kelvin.
+        p_lev: `float [n_lev]`</br>
+            Pressure on model levels. Units: Pa.
+        rh_surf: Relative humidity at `p_surf`, used to calculate LCL.
+        lapse_mod_D: The parameter, such that boundary layer lapse rate equals `lapse_dry + lapse_mod_D`.
+            Units: K/m.</br>
+            If zero more classical definition of $T_{parc}$ used i.e. parcel rising from environmental surface temperature.
+            If provide modification to give environmental lapse rate, a $T_{parc-L}$ version used with
+            parcel rising from environmental LCL temperature.
+        p_surf: Surface pressure used to calculate LCL. Units: Pa.
+            If not provided, will set to model level closest to the surface.
+        temp_surf: Temperature at `p_surf`. Units: K.
+            If not provided, will set to model level closest to the surface.
+        temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
+
+    Returns:
+        Index of model level closest to the top of the atmosphere for which parcel temperature is warmer than environmental
+        temperature. I.e. index of the buoyant layer furthest from the surface.
+        If no buoyant layer, it will return the index of surface.
+    """
+    surf_ind = np.argmax(p_lev)
+    if p_surf is None:
+        p_surf = p_lev[surf_ind]
+        if temp_surf is not None:
+            raise ValueError('If provide p_surf, must also provide temp_surf.')
+        temp_surf = temp_env_lev[surf_ind]
+    elif temp_surf is not None:
+        raise ValueError('If do not provide p_surf, must also not provide temp_surf.')
+    temp_parcel = get_temp_2_layer_approx(p_lev, temp_surf, p_surf, rh_surf, lapse_dry+lapse_mod_D, lapse_layer2=0,
+                                          temp_lower_lcl_calc=temp_surf_lcl_calc, method_layer1='const', method_layer2='mod_parcel')
+    p_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc) * p_surf
+    mask = (temp_parcel - temp_env_lev > 0) & (p_lev < p_lcl)           # must be further from surface than lcl level
+    if mask.any():
+        idx_in_mask = np.argmin(np.abs(p_lev[mask]))
+        lnb_idx = np.where(mask)[0][idx_in_mask]
+    else:
+        # If there is no levels where parcel temperature more than environmental, set LNB to surface i.e. meaning no buoyant levels
+        lnb_idx = surf_ind
+    return lnb_idx

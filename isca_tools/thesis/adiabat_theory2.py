@@ -114,7 +114,7 @@ def get_cape_approx(temp_surf: Union[float, np.ndarray], r_surf: Union[float, np
     if not parcel_def_include_z_approx:
         z_approx = z_approx * 0
     if np.isnan(temp_surf).any():
-        if temp_surf.size == 1:
+        if np.atleast_1d(temp_surf).size == 1:
             temp_ft_parcel = np.nan     # if single number, set to nan
         else:
             # If nan values, only compute temp_ft_parcel for non-nan values, otherwise does weird things

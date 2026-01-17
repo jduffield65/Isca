@@ -182,6 +182,9 @@ def wrap_with_apply_ufunc(
     **ufunc_kwargs: Any,
 ) -> Callable:
     """Wrap a function for use with xarray.apply_ufunc.
+    Usage:
+    `func_xr = wrap_with_apply_ufunc(func_numpy, input_core_dims=[[], []])` # only 2 args, rest are kwarg
+    `var_xr = func_xr(arg1, arg2, kwarg1=5, kwarg2=3)` # where kwarg are key word arguments of the function
 
     Args:
         func: The function to wrap.
