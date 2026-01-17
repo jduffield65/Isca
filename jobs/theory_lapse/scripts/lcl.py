@@ -6,6 +6,7 @@ import re
 import logging
 import sys
 from isca_tools import cesm
+from isca_tools.cesm.load import load_z2m
 from isca_tools.convection import potential_temp, dry_profile_temp, lcl_metpy
 from isca_tools.thesis.lapse_theory import get_var_at_plev, get_ds_in_pressure_range
 from isca_tools.thesis.profile_fitting import get_mse_env, get_tropopause_lev_ind, get_mse_prof_rms
@@ -13,6 +14,7 @@ from isca_tools.utils.constants import g
 from isca_tools.utils.base import weighted_RMS, dp_from_pressure, print_log
 from isca_tools.utils.xarray import convert_ds_dtypes
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat
+from typing import Optional
 
 def get_co2_multiplier(name):
     match = re.match(r'co2_([\d_]+)x', name)
@@ -69,7 +71,10 @@ def load_ds_quant(exp_name: list = ['pre_industrial', 'co2_2x'], quant_type: str
                   data_dir: str = '/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/3_hour/hottest_quant',
                   var_keep: list = ['T', 'Q', 'Z3', 'PS', 'P0', 'hyam', 'hybm', 'CAPE', 'FREQZM'],
                   compute_p_diff: bool = False,
-                  lat_ind = None, lon_ind = None, sample_ind = None):
+                  lat_ind = None, lon_ind = None, sample_ind = None,
+                  lev_REFHT: Optional[int]=-1):
+    # Will also add REFHT of variables T, Q, Z3 depending on lev_REFHT
+    # lev_REFHT is model level used for REFHT. If it is None, will use Actual 2m CESM REFHT
     co2_vals = [get_co2_multiplier(i) for i in exp_name]
     ds = [xr.open_dataset(os.path.join(data_dir, exp_name[i], quant_type, 'output.nc')) for i in range(len(exp_name))]
     if len(exp_name) == 1:
@@ -95,22 +100,33 @@ def load_ds_quant(exp_name: list = ['pre_industrial', 'co2_2x'], quant_type: str
         ds = ds.drop_vars('P0')
         ds.attrs['P0'] = p0
 
-    # Add variables to compute LCL
+    # Add variables to compute LCL - use lowest model level
     if 'PS' in var_keep:
         ds['P'] = cesm.get_pressure(ds.PS, ds.P0, ds.hyam, ds.hybm)
     if compute_p_diff:
         ds['P_diff'] = dp_from_pressure(ds.P)
-    if 'T' in var_keep:
-        ds['TREFHT'] = ds.T.isel(lev=-1)
-    if 'Q' in var_keep:
-        ds['QREFHT'] = ds.Q.isel(lev=-1)
-        ds = ds.drop_vars('Q')
-    if 'Z3' in var_keep:
-        ds['ZREFHT'] = ds.Z3.isel(lev=-1)
-    if 'PS' in var_keep:
-        ds['PREFHT'] = ds.P.isel(lev=-1)
+    if lev_REFHT is not None:
+        if 'T' in var_keep:
+            ds['TREFHT'] = ds.T.isel(lev=lev_REFHT)
+        if 'Q' in var_keep:
+            ds['QREFHT'] = ds.Q.isel(lev=lev_REFHT)
+            ds = ds.drop_vars('Q')
+        if 'Z3' in var_keep:
+            ds['ZREFHT'] = ds.Z3.isel(lev=lev_REFHT)
+        if 'PS' in var_keep:
+            ds['PREFHT'] = ds.P.isel(lev=lev_REFHT)
+    else:
+        # Use 2m as REFHT
+        if 'PS' in var_keep:
+            ds['PREFHT'] = ds.PS
+        if 'TREFHT' not in var_keep:
+            raise ValueError('No TREFHT as lev_REFHT=None and TREFHT not in var_keep')
+        if 'QREFHT' not in var_keep:
+            raise ValueError('No QREFHT as lev_REFHT=None and QREFHT not in var_keep')
+        ds['ZREFHT'] = load_z2m(var_reindex_like=ds['PREFHT'])      # set to 2m topography
+
     if ('PS' in var_keep) & ('T' in var_keep) & ('Z3' in var_keep):
-        ds['lnb_ind'] = get_tropopause_lev_ind(ds.T, ds.Z3, ds.P)
+        ds['trop_ind'] = get_tropopause_lev_ind(ds.T, ds.Z3, ds.P)
     return ds
 
 
@@ -175,7 +191,7 @@ if (__name__ == '__main__') and not all(load_processed):
 
             # Compute RMS error of MSE profile with LCL at each of the model levels
             ds_use = ds.isel(co2=i, sample=j)
-            use_lev = ds_use.P >= ds_use.P.isel(lev=ds_use.lnb_ind) - small
+            use_lev = ds_use.P >= ds_use.P.isel(lev=ds_use.trop_ind) - small
             error_rms = get_mse_prof_rms(ds_use.T.where(use_lev), ds_use.P.where(use_lev), ds_use.Z3.where(use_lev), ds_use.P_diff.where(use_lev))
             lcl_lev_ind = error_rms.argmin(dim='lev')
             print_log(f'File {i*ds.sample.size+j+1}/{n_files} | Computed best model level', logger)

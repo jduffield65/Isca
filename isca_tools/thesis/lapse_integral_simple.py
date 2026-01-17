@@ -220,22 +220,27 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
         temp_surf_lcl_calc = temp_env_lower
     p_upper = lcl_sigma_bolton_simple(rh_lower, temp_surf_lcl_calc) * p_lower
     temp_env_upper = get_var_at_plev(temp_env_lev, p_lev, p_upper, lev_dim=lev_dim)
-    return xr.apply_ufunc(
-        fitting_2_layer,
-        temp_env_lev, p_lev,  # (lat, lon, lev)
-        temp_env_lower, p_lower, rh_lower, temp_env_upper, p_upper, temp_env_upper2,  # (lat, lon)
-        input_core_dims=[[lev_dim], [lev_dim], [], [], [], [], [], []],
-        # only 'temp_env_lev' and 'lev' varies along 'lev_dim'.
-        output_core_dims=[[layer_dim], [layer_dim], [layer_dim]],
-        vectorize=True,
-        kwargs={'p_upper2': p_upper2, 'method_layer1': method_layer1,
+
+    func_kwargs={'method_layer1': method_layer1,
                 'method_layer2': method_layer2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
                 'temp_surf_lcl_calc': temp_surf_lcl_calc, 'mod_parcel_method': mod_parcel_method,
                 'sanity_check': sanity_check, 'p_range_calc': p_range_calc}
+    input_core_dims = [[lev_dim], [lev_dim], [], [], [], [], [], [], []]    # only 'temp_env_lev' and 'lev' varies along 'lev_dim'.
+    output_core_dims = [[layer_dim], [layer_dim], [layer_dim]]
+
+    return xr.apply_ufunc(
+        fitting_2_layer,
+        temp_env_lev, p_lev,  # (lat, lon, lev)
+        temp_env_lower, p_lower, rh_lower, temp_env_upper, p_upper, temp_env_upper2, p_upper2,  # (lat, lon)
+        input_core_dims=input_core_dims,
+        output_core_dims=output_core_dims,
+        vectorize=True,
+        kwargs=func_kwargs
     )
 
 
-def get_temp_2_layer_approx(p_lev, temp_env_surf, p_surf, rh_surf, lapse_layer1, lapse_layer2,
+def get_temp_2_layer_approx(p_lev: np.ndarray, temp_env_surf: float, p_surf: float, rh_surf: float,
+                            lapse_layer1: float, lapse_layer2: float,
                             method_layer1: Literal['const'] = 'const',
                             method_layer2: Literal['const', 'mod_parcel'] = 'const',
                             mod_parcel_method: Literal['add', 'multiply'] = 'add',
@@ -270,8 +275,8 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
                 temp_surf:Optional[float]=None,
                 temp_surf_lcl_calc=300)-> int:
     """
-    Returns a proxy for the LNB (level of neutral buoyancy): the index closest to top of atmosphere where
-    `T_parcel - T_env` is positive.
+    Returns a proxy for the LNB (level of neutral buoyancy): the index closest to space where
+    `T_parcel - T_env` is positive i.e. buoyant.
 
     Args:
         temp_env_lev: `float [n_lev]`</br>
@@ -296,6 +301,8 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
         If no buoyant layer, it will return the index of surface.
     """
     surf_ind = np.argmax(p_lev)
+    if surf_ind == 0:
+        raise ValueError('Must have pressure ascending in p_lev')
     if p_surf is None:
         p_surf = p_lev[surf_ind]
         if temp_surf is not None:
@@ -303,14 +310,16 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
         temp_surf = temp_env_lev[surf_ind]
     elif temp_surf is not None:
         raise ValueError('If do not provide p_surf, must also not provide temp_surf.')
-    temp_parcel = get_temp_2_layer_approx(p_lev, temp_surf, p_surf, rh_surf, lapse_dry+lapse_mod_D, lapse_layer2=0,
-                                          temp_lower_lcl_calc=temp_surf_lcl_calc, method_layer1='const', method_layer2='mod_parcel')
     p_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc) * p_surf
-    mask = (temp_parcel - temp_env_lev > 0) & (p_lev < p_lcl)           # must be further from surface than lcl level
-    if mask.any():
-        idx_in_mask = np.argmin(np.abs(p_lev[mask]))
-        lnb_idx = np.where(mask)[0][idx_in_mask]
-    else:
-        # If there is no levels where parcel temperature more than environmental, set LNB to surface i.e. meaning no buoyant levels
-        lnb_idx = surf_ind
-    return lnb_idx
+    # Only Consider pressure values above LCL
+    mask_ind = np.where(p_lev<p_lcl)[0]
+    temp_env_lev = temp_env_lev[p_lev<p_lcl]
+    p_lev = p_lev[p_lev<p_lcl]
+    lnb_ind = surf_ind    # default value of lnb_ind if always buoyant i.e. in space
+    for i in range(temp_env_lev.size):
+        temp_parcel = get_temp_mod_parcel(rh_surf, p_surf, p_lev[i], lapse_mod_D,
+                                          0, temp_surf, lapse_coords='z')
+        if temp_parcel > temp_env_lev[i]:
+            lnb_ind = mask_ind[i]
+            break
+    return lnb_ind
