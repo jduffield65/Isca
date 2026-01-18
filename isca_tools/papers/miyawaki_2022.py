@@ -139,13 +139,19 @@ def get_lapse_dev(temp: xr.DataArray, pressure: xr.DataArray, pressure_surf: xr.
     Gets the lapse rate deviation from moist adiabat parameters given in the paper.
 
     Args:
-        temp:
-        pressure:
-        pressure_surf:
-        lev_dim:
+        temp: `float [n_lev]`.</br>
+            Temperature on model levels
+        pressure: `float [n_lev]`.</br>
+            Pressure at model levels
+        pressure_surf: `float`.</br>
+            Surface pressure, used to compute $\sigma$ coordinate.
+        lev_dim: Name of model level dimension, over which to vertically average
 
     Returns:
-
+        Aloft lapse rate deviation: $\langle(\Gamma_m - \Gamma)/\Gamma_m\\rangle_{0.7-0.3}$</br>
+            Computed between $\sigma=0.3$ and $\sigma=0.7$. Given as a %.
+        Boundary layer lapse rate deviation: $\langle(\Gamma_m - \Gamma)/\Gamma_m \\rangle_{1.0-0.9}$</br>
+            Computed between $\sigma=0.9$ and $\sigma=1.0$. Given as a %.
     """
     grad_xr = wrap_with_apply_ufunc(np.gradient, input_core_dims=[[lev_dim], [lev_dim]], output_core_dims=[[lev_dim]])
     lapse_env = grad_xr(temp, pressure)

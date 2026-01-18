@@ -123,7 +123,6 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
         # ds[key] = [ds[key][i].sel(quant=[1, 50, 99]) for i in range(n_exp)]
         ds[key] = xr.concat(ds[key], dim="tau_lw")
         ds[key]['hybm'] = ds[key].hybm.isel(quant=0, tau_lw=0, lat=0, sample=0)
-        ds[key]['rh_REFHT'] = ds[key]['QREFHT'] / sphum_sat(ds[key].TREFHT, ds[key].PREFHT)
         ds[key]['ZREFHT'] = ds[key].Z3.isel(lev=-1)
         ds[key]['mse_REFHT'] = moist_static_energy(ds[key].TREFHT, ds[key].QREFHT, ds[key].ZREFHT)
         ds[key]['Z_ft_env'] = get_var_at_plev(ds[key].Z3, get_P(ds[key]), ds[key].p_ft)

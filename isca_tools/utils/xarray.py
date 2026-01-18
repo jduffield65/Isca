@@ -222,3 +222,37 @@ def wrap_with_apply_ufunc(
         )
 
     return wrapped
+
+
+def isel_float(var: xr.DataArray, ind_float: xr.DataArray, dim='lev') -> xr.DataArray:
+    """
+    Performs `da.isel(dim=ind)` but for a float index where interpolation is required.
+
+    Args:
+        var: Variable to find value of at index `ind_float` along dimension `dim`.
+        ind_float: Fractional index to find value of `var` along dimension `dim`.
+        dim: Dimension in which to perform `isel`.
+
+    Returns:
+        Value of `var` at index `ind_float` along dimension `dim`.
+    """
+    # Returns lzb pressure in Pa from the kzlbs model index - requires interpolation to non integer index
+    # map fractional index k -> physical lev coordinate
+    ind_integer = xr.DataArray(
+        np.arange(var[dim].size),
+        dims=(dim,),
+        coords={dim: var[dim]},
+    )
+
+    lev_k = xr.apply_ufunc(
+        np.interp,
+        ind_float,  # x: fractional index
+        ind_integer,  # xp: integer indices 0..n_lev-1
+        var[dim],  # fp: lev values
+        input_core_dims=[[], [dim], [dim]],
+        output_core_dims=[[]],
+        vectorize=True,
+    )
+
+    # now do the "fractional isel" via interp along lev
+    return var.interp(lev=lev_k)
