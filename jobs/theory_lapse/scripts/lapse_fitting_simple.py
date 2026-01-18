@@ -30,7 +30,7 @@ from jobs.theory_lapse.scripts.lcl import load_ds_quant, data_dir, var_keep
 
 var_initial_load = [item for item in var_keep if
                     item not in ['Z3', 'CAPE', 'FREQZM']]  # get rid of variables don't need
-test_mode = True            # for testing on a small dataset
+test_mode = False            # for testing on a small dataset
 try:
     # ideally get quant_type from terminal
     quant_type = sys.argv[1]  # e.g. 'REFHT_quant50'
@@ -145,14 +145,20 @@ if __name__ == '__main__':
             lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
             lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
             lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)  # where parcel_type=surf, set to 0
-            ds_use['lnb_ind'] = get_lnb_ind_xr(ds_use.T, ds_use.P, ds_use.rh_REFHT, lapse_mod_D,
-                                               temp_surf=None, p_surf=None, temp_surf_lcl_calc=temp_surf_lcl_calc)
-            print_log(
-                f'File {i * n_lat + j + 1}/{n_files} | Computed LNB | Memory used {get_memory_usage() / 1000:.1f}GB',
-                logger)
+            # ds_use['lnb_ind'] = get_lnb_ind_xr(ds_use.T, ds_use.P, ds_use.rh_REFHT, lapse_mod_D,
+            #                                    temp_surf=None, p_surf=None, temp_surf_lcl_calc=temp_surf_lcl_calc)
+            lnb = []  # loop so can output data progress more often
+            for q in range(lapse_mod_D.parcel_type.size):
+                lnb.append(get_lnb_ind_xr(ds_use.T, ds_use.P, ds_use.rh_REFHT,
+                                          lapse_mod_D.isel(parcel_type=q),
+                                          temp_surf=None, p_surf=None, temp_surf_lcl_calc=temp_surf_lcl_calc))
+                print_log(
+                    f'File {i * n_lat + j + 1}/{n_files} | Computed LNB {q+1}/2 | Memory used {get_memory_usage() / 1000:.1f}GB',
+                    logger)
+            ds_use['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
 
             ds_use['lapse_miy2022_M'], ds_use['lapse_miy2022_D'] = \
-                get_lapse_dev(ds_use.T, get_pressure(ds_use.PS, ds_use.P0, ds_use.hyam, ds_use.hybm), ds_use.PS)
+                get_lapse_dev(ds_use.T, ds_use.P, ds_use.PS)
             print_log(
                 f'File {i * n_lat + j + 1}/{n_files} | Computed Miyawaki 2022 params | Memory used {get_memory_usage() / 1000:.1f}GB',
                 logger)
@@ -171,6 +177,10 @@ if __name__ == '__main__':
             # Combine all sample files into a single file for each experiment
             ds_lapse = xr.concat([xr.load_dataset(path_use[j]) for j in range(n_lat)], dim=lat_vals)
             # Need to make hyam and hybm a single latitude
+            ds_lapse['hyam'] = ds_lapse['hyam'].isel(lat=0, drop=True)
+            ds_lapse['hybm'] = ds_lapse['hybm'].isel(lat=0, drop=True)
+            # Reorder
+            ds_lapse = ds_lapse.transpose('lat', 'lon', 'sample', 'p_ft', 'layer', 'parcel_type', 'lev')
             ds_lapse.to_netcdf(os.path.join(processed_dir[i], processed_file_name), format="NETCDF4",
                                encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lapse.data_vars})
             print_log(f'{exp_name[i]} | Combined samples into one {processed_file_name} File', logger)

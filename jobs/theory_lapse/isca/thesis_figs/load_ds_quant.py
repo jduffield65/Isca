@@ -365,8 +365,15 @@ if __name__ == '__main__':
         lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
         lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
         lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)   # where parcel_type=surf, set to 0
-        ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
-                                             lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
+        # ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
+        #                                      lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
+        lnb = []  # loop so can output data progress more often
+        for i in range(lapse_mod_D.parcel_type.size):
+            lnb.append(get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
+                                      lapse_mod_D.isel(parcel_type=i),
+                                      temp_surf_lcl_calc=temp_surf_lcl_calc))
+            print_log(f'Computed LNB {i+1}/2', logger)
+        ds_quant['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
 
         print_log('Computing Miyawaki 2022 params', logger)
         ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
