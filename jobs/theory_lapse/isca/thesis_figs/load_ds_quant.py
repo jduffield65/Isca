@@ -23,6 +23,7 @@ from isca_tools.utils.constants import lapse_dry
 
 # -- Specific info for running the script --
 test_mode = False               # for testing on small dataset
+comp_level = 4                  # compression level for saving
 p_ft = [500 * 100, 700 * 100]  # FT pressure level to use
 n_sample = None  # How many data points for each quantile, x to use. None to get all.
 quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
@@ -135,11 +136,11 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
     return ds
 
 
-try:
-    ds = get_ds()
-except Exception as e:
-    print(f"No ds loaded because of the following Exception:\n{e}")
-    ds = None
+# try:
+#     ds = get_ds()
+# except Exception as e:
+#     print(f"No ds loaded because of the following Exception:\n{e}")
+#     ds = None
 
 if __name__ == '__main__':
     ds_out_path = get_ds_out_path(kappa_names, surf, region, hemisphere, dailymax)
@@ -354,11 +355,19 @@ if __name__ == '__main__':
 
         print_log('Obtaining lapse rate fitting data', logger)
         ds_quant = get_lapse_fitting_info(ds_quant)
+
         print_log('Computing LNB', logger)
         # boundary layer lapse rate is same for all methods and p_ft so just select one
         lapse_mod_D = ds_quant.mod_parcel1_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
+        # 2 different estimates of LNB depending on where parcel rising from
+        # New dimension parcel type, surf means parcel rising from surface so lapse_mod_D=0
+        # lcl means parcel rising from lcl means take actual value of lapse_mod_D
+        lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
+        lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
+        lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)   # where parcel_type=surf, set to 0
         ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
                                              lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
+
         print_log('Computing Miyawaki 2022 params', logger)
         ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
         # Add metadata to save
@@ -371,5 +380,6 @@ if __name__ == '__main__':
         ds_quant.attrs["lev_REFHT"] = lev_REFHT
         ds_quant = convert_ds_dtypes(ds_quant)
         if not os.path.exists(ds_out_path):
-            ds_quant.to_netcdf(ds_out_path)
+            ds_quant.to_netcdf(ds_out_path, format="NETCDF4",
+                               encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_quant.data_vars})
             print_log('Saved ds_quant to {}'.format(ds_out_path), logger)

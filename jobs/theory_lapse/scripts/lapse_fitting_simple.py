@@ -13,7 +13,8 @@ from isca_tools.utils import get_memory_usage
 from isca_tools.utils.base import print_log
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.xarray import print_ds_var_list, convert_ds_dtypes, wrap_with_apply_ufunc
-from isca_tools import cesm
+from isca_tools.cesm import get_pressure
+from isca_tools.papers.miyawaki_2022 import get_lapse_dev
 from isca_tools.utils.constants import lapse_dry
 from isca_tools.convection.base import lcl_metpy
 from isca_tools.thesis.lapse_theory import get_var_at_plev
@@ -29,7 +30,7 @@ from jobs.theory_lapse.scripts.lcl import load_ds_quant, data_dir, var_keep
 
 var_initial_load = [item for item in var_keep if
                     item not in ['Z3', 'CAPE', 'FREQZM']]  # get rid of variables don't need
-small_ds = False            # for testing on a small dataset
+test_mode = True            # for testing on a small dataset
 try:
     # ideally get quant_type from terminal
     quant_type = sys.argv[1]  # e.g. 'REFHT_quant50'
@@ -57,7 +58,7 @@ lev_REFHT = -1  # Model level used to compute rh_REFHT, and subsequent lapse fit
 
 
 def get_ds_quant_lat(co2_ind, lat_ind):
-    if small_ds:
+    if test_mode:
         lon_ind = [0, 1, 2]
         sample_ind = [0, 1]
     else:
@@ -134,14 +135,28 @@ if __name__ == '__main__':
                 print_log(
                     f'File {i * n_lat + j + 1}/{n_files} | {key}1 Lapse Fitting Complete | Memory used {get_memory_usage() / 1000:.1f}GB',
                     logger)
+
             # boundary layer lapse rate is same for all methods and p_ft so just select one
+            # 2 different estimates of LNB depending on where parcel rising from
+            # New dimension parcel type, surf means parcel rising from surface so lapse_mod_D=0
+            # lcl means parcel rising from lcl means take actual value of lapse_mod_D
             lapse_mod_D = ds_use.mod_parcel1_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
             lapse_mod_D = lapse_mod_D.fillna(0)  # if nan set to exactly dry adiabat for lnb computation
+            lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
+            lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
+            lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)  # where parcel_type=surf, set to 0
             ds_use['lnb_ind'] = get_lnb_ind_xr(ds_use.T, ds_use.P, ds_use.rh_REFHT, lapse_mod_D,
                                                temp_surf=None, p_surf=None, temp_surf_lcl_calc=temp_surf_lcl_calc)
             print_log(
-                f'File {i * n_lat + j + 1}/{n_files} | Computed LNB| Memory used {get_memory_usage() / 1000:.1f}GB',
+                f'File {i * n_lat + j + 1}/{n_files} | Computed LNB | Memory used {get_memory_usage() / 1000:.1f}GB',
                 logger)
+
+            ds_use['lapse_miy2022_M'], ds_use['lapse_miy2022_D'] = \
+                get_lapse_dev(ds_use.T, get_pressure(ds_use.PS, ds_use.P0, ds_use.hyam, ds_use.hybm), ds_use.PS)
+            print_log(
+                f'File {i * n_lat + j + 1}/{n_files} | Computed Miyawaki 2022 params | Memory used {get_memory_usage() / 1000:.1f}GB',
+                logger)
+
             # Save data
             ds_use['layer'] = xr.DataArray(['below lcl', 'above lcl'], name='layer', dims='layer')
             ds_use = ds_use.drop_vars(['T', 'P'])  # drop lat-lon-lev vars as have that data anyway
@@ -155,6 +170,7 @@ if __name__ == '__main__':
         if not os.path.exists(os.path.join(processed_dir[i], processed_file_name)):
             # Combine all sample files into a single file for each experiment
             ds_lapse = xr.concat([xr.load_dataset(path_use[j]) for j in range(n_lat)], dim=lat_vals)
+            # Need to make hyam and hybm a single latitude
             ds_lapse.to_netcdf(os.path.join(processed_dir[i], processed_file_name), format="NETCDF4",
                                encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lapse.data_vars})
             print_log(f'{exp_name[i]} | Combined samples into one {processed_file_name} File', logger)
