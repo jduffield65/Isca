@@ -15,16 +15,8 @@ from isca_tools.utils.base import weighted_RMS, dp_from_pressure, print_log
 from isca_tools.utils.xarray import convert_ds_dtypes
 from isca_tools.utils.moist_physics import moist_static_energy, sphum_sat
 from typing import Optional
+from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import get_co2_multiplier
 
-def get_co2_multiplier(name):
-    match = re.match(r'co2_([\d_]+)x', name)
-    if match:
-        # Replace underscore with decimal point and convert to float
-        return float(match.group(1).replace('_', '.'))
-    elif name == 'pre_industrial':
-        return 1  # for pre_industrial or other defaults
-    else:
-        raise ValueError(f'Not valid name = {name}')
 
 def find_lcl_empirical2(temp_env, p_env, z_env, temp_start=None, p_start=None, temp_pot_thresh=2,
                         temp_pot_thresh_lapse=0.5, lapse_thresh=8.5):

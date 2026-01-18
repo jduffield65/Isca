@@ -1,3 +1,4 @@
+# !! BETTER VERSION OF THIS CAN BE FOUND IN thesis_figs/scripts/load_ds_tropics !!
 # Takes lapse fitting info dataset for hottest 50% of days at each coordinate i.e. summer.
 # Then does quantile analysis of this over dimensions of `sample` and `time`.
 import xarray as xr

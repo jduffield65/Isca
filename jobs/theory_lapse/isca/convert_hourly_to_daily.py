@@ -1,3 +1,4 @@
+# Convert 3 hourly to daily average data, by keeping n_day hottest times that are more than 12 hours apart
 import numpy as np
 import os
 from tqdm import tqdm

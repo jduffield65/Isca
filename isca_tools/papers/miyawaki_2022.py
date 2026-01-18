@@ -3,8 +3,11 @@ import numpy as np
 import xarray as xr
 from ..utils.constants import g
 from ..utils.moist_physics import moist_static_energy
+from ..convection.base import lapse_moist
 from scipy import integrate
 from scipy.interpolate import UnivariateSpline
+from ..utils.xarray import wrap_with_apply_ufunc
+
 
 
 def get_dmse_dt(temp: xr.DataArray, sphum: xr.DataArray, height: xr.DataArray, p_levels: xr.DataArray,
@@ -129,3 +132,35 @@ def get_r1(R_a: xr.DataArray, dmse_dt: xr.DataArray, dvmse_dy: xr.DataArray,
     elif spline_smoothing_factor < 0:
         raise ValueError(f'spline_smoothing_factor = {spline_smoothing_factor}, which is negative. It must be >=0.')
     return r1
+
+def get_lapse_dev(temp: xr.DataArray, pressure: xr.DataArray, pressure_surf: xr.DataArray,
+                  lev_dim='lev') -> Tuple[xr.DataArray, xr.DataArray]:
+    """
+    Gets the lapse rate deviation from moist adiabat parameters given in the paper.
+
+    Args:
+        temp:
+        pressure:
+        pressure_surf:
+        lev_dim:
+
+    Returns:
+
+    """
+    grad_xr = wrap_with_apply_ufunc(np.gradient, input_core_dims=[[lev_dim], [lev_dim]], output_core_dims=[[lev_dim]])
+    lapse_env = grad_xr(temp, pressure)
+    lapse_moist_xr = wrap_with_apply_ufunc(lapse_moist)
+    lapse_adiabat = lapse_moist_xr(temp, pressure, pressure_coords=True)
+
+    # Do mass weighted vertical average
+    dp = np.abs(pressure.differentiate(lev_dim))  # Pa
+    weights = (dp / g)  # mass weights (kg/m²)
+
+    sigma = pressure / pressure_surf
+    use_sigma = {'aloft': np.logical_and(sigma>=0.3, sigma<=0.7),
+                 'boundary_layer': np.logical_and(sigma>=0.9, sigma<=1)}
+    lapse_dev = {}
+    for key in use_sigma:
+        lapse_dev[key] = ((lapse_adiabat - lapse_env)*weights).where(use_sigma[key]).sum(dim=lev_dim) / \
+                         (lapse_adiabat*weights).where(use_sigma[key]).sum(dim=lev_dim) * 100
+    return tuple(lapse_dev[key] for key in lapse_dev)

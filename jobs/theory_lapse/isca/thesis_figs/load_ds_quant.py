@@ -9,14 +9,46 @@ import xarray as xr
 import logging
 import sys
 
+
 sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
 from isca_tools.utils.moist_physics import sphum_sat, moist_static_energy
 from isca_tools.thesis.lapse_theory import get_var_at_plev
 from isca_tools.papers.byrne_2021 import get_quant_ind
-from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr
-from isca_tools.utils.xarray import convert_ds_dtypes
+from isca_tools.papers.miyawaki_2022 import get_lapse_dev
+from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr, get_lnb_ind
+from isca_tools.utils.xarray import convert_ds_dtypes, wrap_with_apply_ufunc
+from isca_tools.utils.constants import lapse_dry
+
+# -- Specific info for running the script --
+test_mode = False               # for testing on small dataset
+p_ft = [500 * 100, 700 * 100]  # FT pressure level to use
+n_sample = None  # How many data points for each quantile, x to use. None to get all.
+quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
+# quant_all = np.array([1, 50, 99])    # Small test run
+temp_surf_lcl_calc = 300  # Temperature to use to calculate the LCL. 'median' to compute from data.
+n_lev_above_integral = 3  # Used to compute error in lapse rate integral
+lev_REFHT = -1  # Model level to use for computing RH and lapse fitting
+
+region = 'tropics'
+season = 'summer'
+dailymax = False  # Take daily max data
+try:
+    # ideally get these from terminal
+    surf = sys.argv[1]  # 'land' or 'aquaplanet'
+    hemisphere = sys.argv[2]  # 'north' or 'south'
+    kappa_names = sys.argv[3]  # 'k=1' or 'k=1_5'
+except IndexError:
+    # Default values of don't call from terminal - for testing
+    surf = 'aquaplanet'
+    hemisphere = 'north'
+    kappa_names = 'k=1'
+if test_mode:
+    n_sample = 10
+    quant_all = np.arange(30, 32)
+
+get_lnb_ind_xr = wrap_with_apply_ufunc(get_lnb_ind, input_core_dims=[['lev'], ['lev'], [], []])
 
 
 def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land'] = 'aquaplanet',
@@ -61,7 +93,8 @@ def get_P(ds):
 def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere=['south', 'north'],
            dailymax=False):
     """
-    Function to load in datasets from ds_processed folder in this directory and combine them
+    Function to load in datasets from `ds_out_path` in this directory and combine them.
+    I.e. quick function to load datasets this script creates, once finished.
 
     Args:
         surf:
@@ -110,27 +143,6 @@ except Exception as e:
     ds = None
 
 if __name__ == '__main__':
-    # -- Specific info for running the script --
-    p_ft = [500 * 100, 700*100]  # FT pressure level to use
-    n_sample = None  # How many data points for each quantile, x to use. None to get all.
-    quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
-    # quant_all = np.array([1, 50, 99])    # Small test run
-    temp_surf_lcl_calc = 300  # Temperature to use to calculate the LCL. 'median' to compute from data.
-    n_lev_above_integral = 3  # Used to compute error in lapse rate integral
-    try:
-        # ideally get these from terminal
-        surf = sys.argv[1]  # 'land' or 'aquaplanet'
-        hemisphere = sys.argv[2]  # 'north' or 'south'
-        kappa_names = sys.argv[3]  # 'k=1' or 'k=1_5'
-    except IndexError:
-        # Default values of don't call from terminal - for testing
-        surf = 'aquaplanet'
-        hemisphere = 'north'
-        kappa_names = 'k=1'
-    region = 'tropics'
-    season = 'summer'
-    dailymax = False  # Take daily max data
-    # ds_out_path = '/Users/joshduffield/Desktop/ds_isca_quant_dailymax.nc'
     ds_out_path = get_ds_out_path(kappa_names, surf, region, hemisphere, dailymax)
 
     if os.path.exists(ds_out_path):
@@ -186,7 +198,7 @@ if __name__ == '__main__':
                     else:
                         ds_use = isca_tools.load_dataset(exp_dir[key] + kappa_names[j]
                                                          ).sel(time=slice(use_time_start, np.inf))[var_keep]
-                    ds_use['sphum'] = ds_use.sphum.isel(pfull=-1)  # only keep surface SPHUM
+                    ds_use['sphum'] = ds_use.sphum.isel(pfull=lev_REFHT)  # only keep surface SPHUM
 
                     ds_use = ds_use.sel(lat=slice(lat_min, lat_max))
 
@@ -226,8 +238,8 @@ if __name__ == '__main__':
         ds['hybm'] = ds.lev * 0 + hybm  # convert to xarray
 
         # choose lowest model level as REFHT
-        ds['TREFHT'] = ds.T.isel(lev=-1)
-        ds['PREFHT'] = ds.PS * ds.hybm.isel(lev=-1)
+        ds['TREFHT'] = ds.T.isel(lev=lev_REFHT)
+        ds['PREFHT'] = ds.PS * ds.hybm.isel(lev=lev_REFHT)
         if temp_surf_lcl_calc == 'median':
             temp_surf_lcl_calc = float(np.ceil(ds.TREFHT.median()))
 
@@ -343,6 +355,13 @@ if __name__ == '__main__':
 
         print_log('Obtaining lapse rate fitting data', logger)
         ds_quant = get_lapse_fitting_info(ds_quant)
+        print_log('Computing LNB', logger)
+        # boundary layer lapse rate is same for all methods and p_ft so just select one
+        lapse_mod_D = ds_quant.mod_parcel1_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
+        ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
+                                             lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
+        print_log('Computing Miyawaki 2022 params', logger)
+        ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
         # Add metadata to save
         ds_quant.attrs['temp_surf_lcl_calc'] = temp_surf_lcl_calc
         ds_quant.attrs["region"] = region
@@ -350,6 +369,7 @@ if __name__ == '__main__':
         ds_quant.attrs["season"] = season
         ds_quant.attrs["exp_dir"] = str(exp_dir)
         ds_quant.attrs["dailymax"] = str(dailymax)
+        ds_quant.attrs["lev_REFHT"] = lev_REFHT
         ds_quant = convert_ds_dtypes(ds_quant)
         if not os.path.exists(ds_out_path):
             ds_quant.to_netcdf(ds_out_path)

@@ -13,6 +13,7 @@ import time
 import logging
 import re
 import warnings
+from .constants import g
 
 
 def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
@@ -29,6 +30,32 @@ def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
     weights = np.cos(np.deg2rad(var.lat))
     weights.name = "weights"
     return var.weighted(weights)
+
+def mass_weighted_vertical_integral(var: xr.DataArray, pressure: xr.DataArray,
+                                    lev_dim: str = 'lev', norm: bool=True) -> xr.DataArray:
+    """
+    Performs the mass-weighted vertical integral $\int \chi dp/g$ of a given variable $\chi$
+
+    E.g. Neelin and Held 1987 equation 2.5.
+
+    Args:
+        var: `float [n_lev]`
+            Variable to integrate along `lev_dim` dimension.
+        pressure: `float [n_lev]`
+            Pressure at each model level
+        lev_dim: Name of model level dimension along which to integrate.
+        norm: If `True`, will normalize by mass of column i.e. becomes a mass weighted vertical average,
+            with the same units as `var`.
+
+    Returns:
+        Value of integral
+    """
+    dp = np.abs(pressure.differentiate(lev_dim))  # Pa
+    weights = (dp / g)  # mass weights (kg/m²)
+    var_int = (var * weights).sum('lev')  # var_units * kg/m²
+    if norm:
+        var_int = var_int / weights.sum(lev_dim)
+    return var_int
 
 
 def print_log(text: str, logger: Optional[logging.Logger] = None) -> None:
