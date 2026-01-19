@@ -155,7 +155,7 @@ if __name__ == '__main__':
                 print_log(
                     f'File {i * n_lat + j + 1}/{n_files} | Computed LNB {q+1}/2 | Memory used {get_memory_usage() / 1000:.1f}GB',
                     logger)
-            ds_use['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
+            ds_use['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type).astype(int)
 
             ds_use['lapse_miy2022_M'], ds_use['lapse_miy2022_D'] = \
                 get_lapse_dev(ds_use.T, ds_use.P, ds_use.PS)
