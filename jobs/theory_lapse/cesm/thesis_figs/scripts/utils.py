@@ -32,7 +32,7 @@ out_dir = f'{jobs_dir}/theory_lapse/cesm/thesis_figs/ds_processed'
 # Data saved in path_lapse_data
 vars_lapse_data = ['PS', 'hyam', 'hybm', 'TREFHT', 'QREFHT', 'PREFHT', 'rh_REFHT', 'T_ft_env', 'const1_lapse',
                    'const1_integral', 'const1_error', 'mod_parcel1_lapse', 'mod_parcel1_integral',
-                   'mod_parcel1_error', 'lnb_ind']
+                   'mod_parcel1_error', 'lnb_ind', 'lapse_miy2022_M', 'lapse_miy2022_D']
 attrs_lapse_data = ['P0', 'temp_surf_lcl_calc', 'n_lev_above_integral', 'lev_REFHT']
 
 # `gw` parameter from dataset

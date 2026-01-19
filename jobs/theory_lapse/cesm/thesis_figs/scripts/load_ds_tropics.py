@@ -73,7 +73,7 @@ def get_ds_quant(ds: xr.Dataset, quant: int, range_below: float=quant_range, ran
         ds_out.append(ds_use_k)
     ds_out = xr.concat(ds_out, dim=ds.co2)
     # Drop coordinates lon and sample
-    ds_out = ds_out.drop_vars([v for v in ds_out.coords if av_dim_out in ds_out[v].dims])
+    ds_out = ds_out.drop_vars([v for v in ds_out.coords if v not in ds_out[v].dims])
     return ds_out
 
 
@@ -92,8 +92,8 @@ if __name__ == '__main__':
     ds = xr.concat(ds, dim=xr.DataArray([utils.get_co2_multiplier(utils.exp_names[i])
                                          for i in range(len(ds))], dims="co2", name='co2'))
 
-    hyam = ds['hyam'].isel(co2=0, lat=0, drop=True)  # these variables are the same for all CO2 and lat so just keep one
-    hybm = ds['hybm'].isel(co2=0, lat=0, drop=True)
+    hyam = ds['hyam'].isel(co2=0, drop=True)  # these variables are the same for all CO2 and lat so just keep one
+    hybm = ds['hybm'].isel(co2=0, drop=True)
     ds['LANDFRAC'] = ds.LANDFRAC.isel(co2=0, drop=True)  # same for all co2 so keep one
     print_log('Finished loading data', logger)
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     ds_quant['hyam'] = hyam
     ds_quant['hybm'] = hybm
 
-    ds_quant['lnb_ind'] = ds_quant['lnb_ind'].astype(int)       # for some reason no longer int at this stage
+    ds_quant['lnb_ind'] = ds_quant['lnb_ind'].fillna(-1).astype(int)       # Set nan values to negative so can save as int
     ds_quant = convert_ds_dtypes(ds_quant)                      # make sure lower memory
 
     if not os.path.exists(ds_out_path(surf)):

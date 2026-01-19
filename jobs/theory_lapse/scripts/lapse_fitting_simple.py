@@ -35,7 +35,10 @@ try:
     # ideally get quant_type from terminal
     quant_type = sys.argv[1]  # e.g. 'REFHT_quant50'
     exp_name = sys.argv[2]    # 'pre_industrial' or 'co2_2x'
-    lat_ind_start = int(sys.argv[3])
+    try:
+        lat_ind_start = int(sys.argv[3])
+    except IndexError:
+        lat_ind_start = 1       # starts at 1
     try:
         lat_ind_end = int(sys.argv[4])
     except IndexError:
@@ -43,13 +46,13 @@ try:
 except IndexError:
     # Default values of don't call from terminal - for testing
     exp_name = ['pre_industrial', 'co2_2x']
-    quant_type = 'REFHT_quant50'
-    lat_ind_start = 0
+    quant_type = 'REFHT_quant95'
+    lat_ind_start = 1
     lat_ind_end = None
 exp_name = np.atleast_1d(exp_name)
 processed_dir = [os.path.join(data_dir, exp_name[i], quant_type, 'lapse_fitting') for i in range(len(exp_name))]
 processed_file_name = 'ds_lapse_simple.nc'  # combined file from all samples
-p_ft = [400 * 100, 500 * 100, 700 * 100]  # Free tropospheric levels - for each one, will obtain lapse fitting info
+p_ft = [400 * 100, 500 * 100]  # Free tropospheric levels - for each one, will obtain lapse fitting info
 p_ft = np.atleast_1d(p_ft)
 comp_level = 4
 n_lev_above_integral = 3
@@ -95,10 +98,10 @@ if __name__ == '__main__':
                              sample_ind=0, lon_ind=0).lat
     n_lat = lat_vals.size
     if lat_ind_end is None:
-        lat_ind_end = n_lat-1
+        lat_ind_end = n_lat
     n_files = len(exp_name) * n_lat  # One file for each co2 conc and sample due to speed
     print_log(f'Empirical lapse fitting for {n_files} Files | Start | Lat start ind = {lat_ind_start} | '
-              f'Lat end ind = {lat_ind_end} | Max possible lat ind = {n_lat-1}', logger)
+              f'Lat end ind = {lat_ind_end} | Max possible lat ind = {n_lat}', logger)
 
     var_names = ['lapse', 'integral', 'error']
     n_digit = len(str(n_lat))
@@ -109,7 +112,7 @@ if __name__ == '__main__':
             continue
         path_use = [os.path.join(processed_dir[i], f'lat{j:0{n_digit}d}.nc') for j in range(n_lat)]
         for j in range(n_lat):
-            if (j < lat_ind_start) or (j > lat_ind_end):
+            if (j+1 < lat_ind_start) or (j+1 > lat_ind_end):
                 # Don't get data for these latitudes as outside range selected
                 print_log(f'File {i * n_lat + j + 1}/{n_files} | '
                           f'Skipped - outside lat ind range of {lat_ind_start}-{lat_ind_end} | '
