@@ -758,16 +758,49 @@ def get_scale_factor_theory_numerical2(temp_surf_ref: np.ndarray, temp_surf_quan
 def get_sensitivity_factors(temp_surf: float, rh_surf: float,
                             pressure_surf: float, pressure_ft: float, temp_surf_lcl_calc: float = 300) -> dict:
     """
+    Calculates the dimensionless sensitivity $\gamma$ parameters such that the theoretical scaling factor is given by:
+
+    $$
+    \\begin{align}
+    \\frac{\delta T_s(x)}{\delta\\tilde{T}_s} \\approx
+    &\gamma_{\delta T_{FT}} \\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
+    + \gamma_{\Delta T_s}\\frac{\Delta T_s(x)}{\\tilde{T}_s}
+    - \gamma_{\delta r} \\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}
+    - \gamma_{\Delta r} \\frac{\Delta r_s[x]}{\\tilde{r}_s} + \\\\
+    &\gamma_{\delta p} \\frac{\\tilde{T}_s}{\\tilde{p}_s}\\frac{\delta p_s[x]}{\delta \\tilde{T}_s}
+    - \gamma_{\Delta p} \\frac{\Delta p_s[x]}{\\tilde{p}_s} +
+    \gamma_{\delta \eta_M}\\frac{\delta \eta_M[x]}{\delta \overline{T}_s} +
+    \gamma_{\delta \eta_D}\\frac{\delta \eta_D[x]}{\delta \overline{T}_s} -
+    \gamma_{\Delta \eta_D}\\frac{\eta_D[x]}{\overline{T}_s}
+    \\end{align}
+    $$
+
+    These $\gamma$ parameters quantify the significance of different physical mechanisms in causing a change
+    in the near-surface temperature distribution.
 
     Args:
-        temp_surf:
-        rh_surf:
-        pressure_surf:
-        pressure_ft:
-        temp_surf_lcl_calc:
+        temp_surf: Temperature at `pressure_surf`.
+        rh_surf: Relative humidity at `pressure_surf`.
+        pressure_surf: Pressure at which to compute the sensitivity factors.
+        pressure_ft: Pressure at free troposphere level, $p_{FT}$, in *Pa*.
+        temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
 
     Returns:
+        gamma: Dictionary containing sensitivity parameters. All are a single dimensionless `float`. The keys
+            refer to the possible physical mechanisms responsible which can contribute to differential surface warming:
 
+            * `temp_ft_change`: Change in free tropospheric temperature
+            * `rh_change`: Change in surface relative humidity
+            * `p_surf_change`: Change in surface pressure
+            * `temp_surf_anom`: Surface temperature anomaly in current climate
+            * `rh_anom`: Surface relative humidity anomaly in current climate
+            * `p_surf_anom`: Surface pressure anomaly in current climate
+            * `lapse_D_change`: Change in boundary layer modified lapse rate parameter, $\eta_D$
+            * `lapse_M_change`: Change in aloft modified lapse rate parameter, $\eta_M$
+            * `lapse_D_anom`: $\eta_D$ anomaly in current climate
+
+            The sensitivity factor for the `sCAPE_change` mechanism is also returned, although this is
+            for a previous framing with `sCAPE` replacing `lapse_D` and `lapse_M`.
     """
     sphum = rh_surf * sphum_sat(temp_surf, pressure_surf)
     # Compute FT temp according to parcel profile i.e. lapse_D and lapse_M = 0 - so does not matter if z or lnp.
@@ -802,23 +835,120 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
                             sCAPE_quant: Optional[np.ndarray] = None,
                             temp_surf_lcl_calc: float = 300) -> Tuple[np.ndarray, dict, dict, dict]:
     """
+    Calculates the theoretical scaling factor given by:
+
+    $$
+    \\begin{align}
+    \\frac{\delta T_s(x)}{\delta\\tilde{T}_s} \\approx
+    &\gamma_{\delta T_{FT}} \\frac{\delta T_{FT}[x]}{\delta \\tilde{T}_s}
+    + \gamma_{\Delta T_s}\\frac{\Delta T_s(x)}{\\tilde{T}_s}
+    - \gamma_{\delta r} \\frac{\\tilde{T}_s}{\\tilde{r}_s} \\frac{\delta r_s[x]}{\delta \\tilde{T}_s}
+    - \gamma_{\Delta r} \\frac{\Delta r_s[x]}{\\tilde{r}_s} + \\\\
+    &\gamma_{\delta p} \\frac{\\tilde{T}_s}{\\tilde{p}_s}\\frac{\delta p_s[x]}{\delta \\tilde{T}_s}
+    - \gamma_{\Delta p} \\frac{\Delta p_s[x]}{\\tilde{p}_s} +
+    \gamma_{\delta \eta_M}\\frac{\delta \eta_M[x]}{\delta \overline{T}_s} +
+    \gamma_{\delta \eta_D}\\frac{\delta \eta_D[x]}{\delta \overline{T}_s} -
+    \gamma_{\Delta \eta_D}\\frac{\eta_D[x]}{\overline{T}_s}
+    \\end{align}
+    $$
+
+    ??? note "List of mechanisms - keys in `info_dict`"
+        The list of mechanisms considered for differential warming, acting independently are:
+
+        * `temp_ft_change`: Change in free tropospheric temperature
+        * `rh_change`: Change in surface relative humidity
+        * `p_surf_change`: Change in surface pressure
+        * `temp_surf_anom`: Surface temperature anomaly in current climate
+        * `rh_anom`: Surface relative humidity anomaly in current climate
+        * `p_surf_anom`: Surface pressure anomaly in current climate
+
+        If provide `lapse_D_quant` and `lapse_M_quant`, will also include:
+
+        * `lapse_D_change`: Change in boundary layer modified lapse rate parameter, $\eta_D$
+        * `lapse_M_change`: Change in aloft modified lapse rate parameter, $\eta_M$
+        * `lapse_D_anom`: $\eta_D$ anomaly in current climate
+
+        If provide `sCAPE_quant`, will also include:
+
+        * `sCAPE_change`: Change in simple CAPE proxy, sCAPE
+
+    ??? note "Reference Quantities"
+        The reference quantities are constrained to obey the following,
+        where $\overline{\chi}$ is the mean value of $\chi$ across all days:
+
+        * $\\tilde{T}_s = \overline{T_s}; \delta \\tilde{T}_s = \delta \overline{T_s}$
+        * $\\tilde{r}_s = \overline{r_s}; \delta \\tilde{r}_s = 0$
+        * $\\tilde{p}_s = \overline{p_s}; \delta \\tilde{p}_s = 0$
+        * $\\tilde{\eta_D} = 0; \delta \\tilde{\eta_D} = 0$
+        * $\\tilde{\eta_M} = 0; \delta \\tilde{\eta_M} = 0$
+
+        Given the choice of these five reference variables and their changes with warming, the reference free
+        troposphere temperature, $\\tilde{T}_{FT}$, can be computed according to the definition of $\\tilde{h}^{\dagger}$:
+
+        $\\tilde{h}^{\dagger} = (c_p - R^{\dagger})\\tilde{T}_{sP} + L_v \\tilde{q}_s =
+            (c_p + R^{\dagger}) \\tilde{T}_{FT} + L_v q^*(\\tilde{T}_{FTP}, p_{FT})$
 
     Args:
-        temp_surf_ref:
-        temp_surf_quant:
-        rh_ref:
-        rh_quant:
-        temp_ft_quant:
+        temp_surf_ref: `float [n_exp]` $\\tilde{T}_s$</br>
+            Reference near surface temperature of each simulation, corresponding to a different
+            optical depth, $\kappa$. Units: *K*. We assume `n_exp=2`.
+        temp_surf_quant: `float [n_exp, n_quant]` $T_s(x)$ </br>
+            `temp_surf_quant[i, j]` is the percentile `quant_use[j]` of near surface temperature of
+            experiment `i`. Units: *K*.</br>
+            Note that `quant_use` is not provided as not needed by this function, but is likely to be
+            `np.arange(1, 100)` - leave out `x=0` as doesn't really make sense to consider $0^{th}$ percentile
+            of a quantity.
+            Only used to get `nl_error_av_change`, to get error due to averaging i.e. why actual `temp_surf_quant`
+            differs from that computed from all other quant variables.
+        rh_ref: `float [n_exp]` $\\tilde{r}_s$</br>
+            Reference near surface relative humidity for cold simulaion. `r_ref_change` is set to zero.
+            Units: dimensionless (from 0 to 1).
+        rh_quant: `float [n_exp, n_quant]` $r_s[x]$</br>
+            `rh_quant[i, j]` is near-surface relative humidity, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: dimensionless.
+        temp_ft_quant: `float [n_exp, n_quant]` $T_{FT}[x]$</br>
+            `temp_ft_quant[i, j]` is temperature at `pressure_ft`, averaged over all days with near-surface temperature
+             corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *kg/kg*.
         p_ft:
+            Pressure at free troposphere level, $p_{FT}$, in *Pa*.
         p_surf_ref:
-        p_surf_quant:
-        lapse_D_quant:
-        lapse_M_quant:
-        sCAPE_quant:
+            Pressure at near-surface for reference day in colder simulation, $p_s$, in *Pa*.
+            `p_surf_ref_change` set to zero.
+        p_surf_quant: `float [n_exp, n_quant]` $p_s[x]$</br>
+            `[i, j]` is surface pressure averaged over all days with near-surface temperature
+            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *Pa*.</br>
+            If not supplied, will set to `p_surf_ref` for all quantiles.
+        lapse_D_quant: `float [n_exp, n_quant]` $\eta_D[x]$</br>
+            The quantity $\eta_D$ such that the lapse rate between $p_s$ and LCL is
+            $\Gamma_D + \eta_D$ with $\Gamma_D$ being the dry adiabatic lapse rate.</br>,
+            `[i, j]` is averaged over all days with near-surface temperature
+            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *K/m*.
+            If don't provide, will use sCAPE version of scale factor theory.
+        lapse_M_quant: `float [n_exp, n_quant]` $\eta_M[x]$</br>
+            The quantity $\eta_M$ such that the lapse rate above the LCL is $\Gamma_M(p) + \eta_M$ with
+            $\Gamma_M(p)$ being the moist adiabatic lapse rate at pressure $p$.</br>,
+            `[i, j]` is averaged over all days with near-surface temperature
+            corresponding to the quantile `quant_use[j]`, for experiment `i`. Units: *K/m*.
+            If don't provide, will use sCAPE version of scale factor theory.
+        sCAPE_quant: `float [n_exp, n_quant]` $sCAPE[x]$</br>
+            $sCAPE = R^{\dagger} (T_{FT,parc} - T_{FT})$ in units of *J/kg*
+            Proxy for CAPE, to account for deviation of parcel and environmental temperature at `p_ft`.
+            If don't provide, will use modParc version of scale factor theory using `lapse_D_quant` and `lapse_M_quant`.
         temp_surf_lcl_calc:
+            Surface temperature to use when computing $\sigma_{LCL}$. If `None`, uses `temp_surf`.
+            Makes no difference if give `sCAPE_quant`
 
     Returns:
-
+        scale_factor: `float [n_quant]`</br>
+            This is the sum of all contributions in `info_cont` apart from those with
+            It provides a simple theoretical estimate as a sum of changing each variable independently.
+        gamma: The sensitivity $\gamma$ factors output by `get_sensitivity_factors`.
+        info_var: For each mechanism, with dimensionless sensitivity factor in `gamma`,
+            this gives the variable that mutliplies $\gamma$ to give `info_cont`.
+            For each mechanism, this is a `float [n_quant]` numpy array.
+        info_cont: Dictionary containing a contribution from each mechanism. This gives
+            the contribution from each physical mechanism to the overall scale factor.</br>
+            For each mechanism, this is a `float [n_quant]` numpy array.
     """
     if (sCAPE_quant is None) == (lapse_D_quant is None and lapse_M_quant is None):
         # Deal with the case where both sCAPE and lapse provided, or neither.
