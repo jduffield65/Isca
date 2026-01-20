@@ -1,9 +1,15 @@
 # Basic functions for loading processed JASMIN data that has been processed and saved locally
 # These data sets are all averaged over a given quantile
 import re
+
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from typing import Union, Literal, Optional, List
+import cartopy.crs as ccrs
+from cartopy.mpl.contour import GeoContourSet
+from cartopy.util import add_cyclic_point
+from matplotlib.contour import QuadContourSet
 
 from isca_tools.cesm.load import load_z2m
 from isca_tools.convection.base import lcl_sigma_bolton_simple
@@ -25,9 +31,9 @@ vars_invariant = ['LANDFRAC', 'ZREFHT']
 jobs_dir = '/Users/joshduffield/Documents/StAndrews/Isca/jobs'
 data_dir = f'{jobs_dir}/cesm/3_hour/hottest_quant'
 path_all_data = lambda x, q: f"{data_dir}/{x}/REFHT_quant{q}/output.nc"  # Contains all data transferred from JASMIN
-path_lapse_data = lambda \
-    x, q: f"{data_dir}/{x}/REFHT_quant{q}/lapse_fitting/ds_lapse_simple.nc"  # Processed data to create lapse fitting info
-out_dir = f'{jobs_dir}/theory_lapse/cesm/thesis_figs/ds_processed'
+# Processed data to create lapse fitting info
+path_lapse_data = lambda x, q: f"{data_dir}/{x}/REFHT_quant{q}/lapse_fitting/ds_lapse_simple.nc"
+out_dir = f'{jobs_dir}/theory_lapse/cesm/thesis_figs/ds_processed'      # Where files directly for thesis figs saved
 
 # Data saved in path_lapse_data
 vars_lapse_data = ['PS', 'hyam', 'hybm', 'TREFHT', 'QREFHT', 'PREFHT', 'rh_REFHT', 'T_ft_env', 'const1_lapse',
@@ -41,7 +47,7 @@ lat_weights = xr.load_dataset('/Users/joshduffield/Documents/StAndrews/Isca/jobs
 
 # Used for masking
 mask_error_thresh = 0.25
-mask_aloft_p_size_thresh = 100*100      # pressure in Pa
+mask_aloft_p_size_thresh = 100 * 100  # pressure in Pa
 
 
 def get_co2_multiplier(name: Literal['pre_industrial', 'co2_2x']) -> float:
@@ -64,10 +70,10 @@ def get_co2_multiplier(name: Literal['pre_industrial', 'co2_2x']) -> float:
 
 
 def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95, 99],
-            var_keep: Optional[List]=vars_lapse_data,
-            load_lapse_attrs: bool=True,
-            load_invariant: bool=True,
-            lev_REFHT_actual: bool = False, reindex_var='PS')->xr.Dataset:
+            var_keep: Optional[List] = vars_lapse_data,
+            load_lapse_attrs: bool = True,
+            load_invariant: bool = True,
+            lev_REFHT_actual: bool = False, reindex_var='PS') -> xr.Dataset:
     """
     Loading in processed JASMIN data for a particular experiment and quantile from `data_dir`
 
@@ -84,7 +90,8 @@ def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95
     Returns:
         Dataset with desired variables
     """
-    var_keep_no_attrs = [var for var in var_keep if var not in attrs_lapse_data]    # so don't try and load attrs as variables
+    var_keep_no_attrs = [var for var in var_keep if
+                         var not in attrs_lapse_data]  # so don't try and load attrs as variables
     var_lapse_load = [var for var in var_keep_no_attrs if var in vars_lapse_data]
     if lev_REFHT_actual:
         # Remove REFHT variables
@@ -95,7 +102,7 @@ def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95
             for var in attrs_lapse_data:
                 del ds.attrs[var]
     var_invariant_load = [var for var in var_keep_no_attrs if var in vars_invariant]
-    var_all_data_load = [var for var in var_keep_no_attrs if var not in (var_lapse_load+var_invariant_load)]
+    var_all_data_load = [var for var in var_keep_no_attrs if var not in (var_lapse_load + var_invariant_load)]
     if len(var_all_data_load) > 0:
         vars_all_data = f90nml.read(path_all_data(exp_name, quant).replace('output.nc', 'input.nml')
                                     )['script_info']['var']
@@ -117,6 +124,66 @@ def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95
         if lev_REFHT_actual:
             ds['ZREFHT'] = load_z2m(invariant_data_path, ds[reindex_var])
     return ds
+
+
+def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float = 180, lat_min: float = 30,
+                             lat_max: float = 80,
+                             grid_lon: Union[List, np.ndarray] = np.arange(-180, 180.01, 60),
+                             grid_lat: Union[List, np.ndarray] = np.asarray([40, 65]),
+                             coastline_color: str = 'k', gridline_color: str = 'k',
+                             draw_gridline_labels: bool = True) -> plt.Axes:
+    """
+    Function from Zhang Boos 2023 paper used to initialize axis to make nice looking spatial plots.
+    Run `initialize_ax_projection(ax)` before doing any plotting.
+
+    Args:
+        ax: Axes to initialize
+        lon_min: Lowest longitude to show
+        lon_max: Highest longitude to show
+        lat_min: Lowest latitude to show
+        lat_max: Highest latitude to show
+        grid_lon: Position of grid vertical lines
+        grid_lat: Position of horizontal lines
+        coastline_color: Coastline color
+        gridline_color: Gridline color
+
+    Returns:
+        Modified axes
+    """
+    ax.coastlines(color=coastline_color, linewidth=1)
+    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    gl = ax.gridlines(ccrs.PlateCarree(), xlocs=grid_lon, ylocs=grid_lat, linestyle=':',
+                      color=gridline_color, alpha=1, draw_labels=draw_gridline_labels)
+    gl.right_labels = 0
+    gl.top_labels = 0
+    return ax
+
+
+def plot_contour_projection(ax: plt.Axes, var: xr.DataArray, levels: Optional[Union[np.ndarray, List]] = None,
+                            n_levels: int = 10, mask: Optional[xr.DataArray] = None,
+                            cmap: str = 'viridis') -> Union[GeoContourSet, QuadContourSet]:
+    """
+    Function from Zhang Boos 2023 paper to perform a contour plot in axes initialized with
+    `initialize_ax_projection`.
+
+    Args:
+        ax: Axes to perform contour plot on
+        var: Variable to plot, must contain `lat` and `lon` coordinates.
+        levels: `float [n_levels]`
+            Contours of `var` to use
+        n_levels: If don't provide `levels, will use this many-contour
+        mask: Can provide mask to exclude parts of `var` from the plot. Must match dimensions of `var` if given.
+        cmap: Colourmap to use.
+
+    Returns:
+        The set of contour lines
+    """
+    data, lon = add_cyclic_point(var * (1 if mask is None else mask), coord=var.lon.values, axis=1)
+    if levels is None:
+        levels = np.linspace(var.min(), var.max(), n_levels)
+    im = ax.contourf(lon, var.lat.values, data, transform=ccrs.PlateCarree(),
+                     levels=levels, extend='both', cmap=cmap)
+    return im
 
 
 def get_ds_quant_single_coord(ds: xr.Dataset, quant: int, range_below: float = 0.5, range_above: float = 0.5,
@@ -148,8 +215,9 @@ def get_ds_quant_single_coord(ds: xr.Dataset, quant: int, range_below: float = 0
     ds_use = ds_use.where(~np.isnan(ds_use[var]), drop=True)  # not sure this is necessary, but had it before
     return ds_use
 
+
 def pad_with_nans(ds: Union[xr.Dataset, xr.DataArray], n_dim_size: int,
-                  dim: str='sample') -> Union[xr.Dataset, xr.DataArray]:
+                  dim: str = 'sample') -> Union[xr.Dataset, xr.DataArray]:
     """
     Extend dataset along dimension `dim`, padding with nans
 
@@ -166,8 +234,9 @@ def pad_with_nans(ds: Union[xr.Dataset, xr.DataArray], n_dim_size: int,
         ds = ds.pad(**{dim: (0, pad_size), 'mode': 'constant'})
     return ds
 
-def get_valid_mask(ds: xr.Dataset, error_thresh: float=mask_error_thresh,
-                   aloft_p_size_thresh: Optional[float]=mask_aloft_p_size_thresh)-> xr.DataArray:
+
+def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
+                   aloft_p_size_thresh: Optional[float] = mask_aloft_p_size_thresh) -> xr.DataArray:
     """
     Returns mask which is True for convective days - have lower modParc error than const error.
     Also, optionally have to have LCL further than `aloft_p_size_thresh` from `p_FT`.
@@ -190,8 +259,9 @@ def get_valid_mask(ds: xr.Dataset, error_thresh: float=mask_error_thresh,
         mask_fit = mask_fit & (p_lcl - ds.p_ft > aloft_p_size_thresh)
     return mask_fit
 
+
 def convert_ds_of_dicts(ds_of_dicts: xr.Dataset, quant_dim_vals: Union[xr.DataArray, np.ndarray],
-                        quant_dim_name: str= 'quant') -> dict:
+                        quant_dim_name: str = 'quant') -> dict:
     """
     Takes in a dataset where each for every dimension other than quant_dim, the item is a dictionary of variables.
     This converts that to a dictionary of DataArrays i.e. a data array for each variable.
@@ -212,7 +282,8 @@ def convert_ds_of_dicts(ds_of_dicts: xr.Dataset, quant_dim_vals: Union[xr.DataAr
     """
     dict_ds = {}
     # Get all dimension names except 'quant'
-    other_dims = [d for d in ds_of_dicts.dims if d != quant_dim_name]     # All non-quant dimensions in out_cont (e.g. dim_1, ..., dim_n)
+    other_dims = [d for d in ds_of_dicts.dims if
+                  d != quant_dim_name]  # All non-quant dimensions in out_cont (e.g. dim_1, ..., dim_n)
     other_shape = tuple(ds_of_dicts.sizes[d] for d in other_dims)
 
     # Determine all dict keys from the first element of all other dims
@@ -236,16 +307,17 @@ def convert_ds_of_dicts(ds_of_dicts: xr.Dataset, quant_dim_vals: Union[xr.DataAr
         coords[quant_dim_name] = quant_dim_vals
 
         da = xr.DataArray(
-            data,                              # (dim_1, ..., dim_n, quant)
+            data,  # (dim_1, ..., dim_n, quant)
             dims=(*other_dims, quant_dim_name),
             coords=coords,
         )
         dict_ds[key] = da
     return dict_ds
 
+
 def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: float, temp_surf_lcl_calc: float,
-                              sCAPE_form: bool=False, co2_dim: str='co2', quant_dim: str='quant',
-                              numerical: bool=False, lapse_coords: Literal['z', 'lnp']='lnp') -> xr.Dataset:
+                              sCAPE_form: bool = False, co2_dim: str = 'co2', quant_dim: str = 'quant',
+                              numerical: bool = False, lapse_coords: Literal['z', 'lnp'] = 'lnp') -> xr.Dataset:
     """
     Apply get_scale_factor_theory_numerical to an xarray.Dataset.
     Works in sCAPE or modParc form, depending on sCAPE_form parameter
@@ -267,17 +339,17 @@ def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: fl
         Dataset with scaling factor, theoretical estimate and contribution from each mechanism.
     """
     input_core_dims = [
-            [co2_dim],  # temp_surf_ref
-            [co2_dim, quant_dim],
-            [],  # rh_ref
-            [co2_dim, quant_dim],
-            [co2_dim, quant_dim],
-            [],  # p_ft_ref
-            [],  # p_surf_ref
-            [co2_dim, quant_dim],
-            [co2_dim, quant_dim] if not sCAPE_form else [],
-            [co2_dim, quant_dim] if not sCAPE_form else [],
-            [co2_dim, quant_dim] if sCAPE_form else []]
+        [co2_dim],  # temp_surf_ref
+        [co2_dim, quant_dim],
+        [],  # rh_ref
+        [co2_dim, quant_dim],
+        [co2_dim, quant_dim],
+        [],  # p_ft_ref
+        [],  # p_surf_ref
+        [co2_dim, quant_dim],
+        [co2_dim, quant_dim] if not sCAPE_form else [],
+        [co2_dim, quant_dim] if not sCAPE_form else [],
+        [co2_dim, quant_dim] if sCAPE_form else []]
 
     func_kwargs = {'temp_surf_lcl_calc': temp_surf_lcl_calc}
     if numerical:
@@ -325,5 +397,5 @@ def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: fl
     # Drop coordinates with no dim
     ds_out = ds_out.drop_vars([v for v in ds_out.coords if v not in ds_out[v].dims])
     other_dims = [d for d in ds_out.dims if d != quant_dim]
-    ds_out = ds_out.transpose(*other_dims, quant_dim)       # make quant the last dimension
+    ds_out = ds_out.transpose(*other_dims, quant_dim)  # make quant the last dimension
     return ds_out
