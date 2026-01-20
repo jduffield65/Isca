@@ -19,6 +19,7 @@ import f90nml
 
 exp_names = ['pre_industrial', 'co2_2x']
 percentile_label = 'Temperature Percentile, $x$'
+sf_label = "Scaling Factor, $\delta T_s(x)/\delta \overline{T}_s$ [KK$^{-1}$]"
 
 # Where topography and land frac data stored - copied from JASMIN to local
 invariant_data_path = ('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'
@@ -68,6 +69,7 @@ def get_co2_multiplier(name: Literal['pre_industrial', 'co2_2x']) -> float:
         return 1  # for pre_industrial or other defaults
     else:
         raise ValueError(f'Not valid name = {name}')
+co2_labels = [f"${get_co2_multiplier(name):.0f} \\times CO_2$" for name in exp_names]
 
 
 def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95, 99],
