@@ -5,7 +5,7 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from typing import Union, Literal, Optional, List
+from typing import Union, Literal, Optional, List, Tuple
 import cartopy.crs as ccrs
 from cartopy.mpl.contour import GeoContourSet
 from cartopy.util import add_cyclic_point
@@ -18,6 +18,7 @@ from isca_tools.thesis.mod_parcel_theory import get_scale_factor_theory, get_sca
 import f90nml
 
 exp_names = ['pre_industrial', 'co2_2x']
+percentile_label = 'Temperature Percentile, $x$'
 
 # Where topography and land frac data stored - copied from JASMIN to local
 invariant_data_path = ('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'
@@ -43,7 +44,7 @@ attrs_lapse_data = ['P0', 'temp_surf_lcl_calc', 'n_lev_above_integral', 'lev_REF
 
 # `gw` parameter from dataset
 lat_weights = xr.load_dataset('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'
-                              'e.e20.E1850TEST.f09_g17.3hour_gw.nc')
+                              'e.e20.E1850TEST.f09_g17.3hour_gw.nc').gw
 
 # Used for masking
 mask_error_thresh = 0.25
@@ -131,7 +132,10 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
                              grid_lon: Union[List, np.ndarray] = np.arange(-180, 180.01, 60),
                              grid_lat: Union[List, np.ndarray] = np.asarray([40, 65]),
                              coastline_color: str = 'k', gridline_color: str = 'k',
-                             draw_gridline_labels: bool = True) -> plt.Axes:
+                             gridline_lw: float = 1,
+                             draw_gridline_labels: bool = True,
+                             auto_aspect: bool = False,
+                             return_gl: bool = False) -> Union[plt.Axes, Tuple[plt.Axes, plt.Axes]]:
     """
     Function from Zhang Boos 2023 paper used to initialize axis to make nice looking spatial plots.
     Run `initialize_ax_projection(ax)` before doing any plotting.
@@ -146,17 +150,26 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
         grid_lat: Position of horizontal lines
         coastline_color: Coastline color
         gridline_color: Gridline color
+        gridline_lw: Gridline width
+        auto_aspect: Automatic aspect ratio, can help keep subplots looking more square
+        return_gl: Whether to return gridline object for later editing
 
     Returns:
-        Modified axes
+        ax: Modified axes
+
     """
-    ax.coastlines(color=coastline_color, linewidth=1)
+    if auto_aspect:
+        ax.set_aspect('auto')
+    ax.coastlines(color=coastline_color, linewidth=gridline_lw)
     ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
     gl = ax.gridlines(ccrs.PlateCarree(), xlocs=grid_lon, ylocs=grid_lat, linestyle=':',
                       color=gridline_color, alpha=1, draw_labels=draw_gridline_labels)
     gl.right_labels = 0
     gl.top_labels = 0
-    return ax
+    if return_gl:
+        return ax, gl
+    else:
+        return ax
 
 
 def plot_contour_projection(ax: plt.Axes, var: xr.DataArray, levels: Optional[Union[np.ndarray, List]] = None,
