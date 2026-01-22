@@ -112,7 +112,7 @@ def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95
     var_all_data_load = [var for var in var_keep_no_attrs if var not in (var_lapse_load + var_invariant_load)]
     if len(var_all_data_load) > 0:
         vars_all_data = f90nml.read(path_all_data(exp_name, quant).replace('output.nc', 'input.nml')
-                                    )['script_info']['var']
+                                    )['script_info']['var'] + ['time']
         var_missing = []
         for var in var_all_data_load:
             if var not in vars_all_data:
@@ -405,8 +405,8 @@ def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: fl
     )
 
     # Expand the dictionary output entries into proper DataArrays
-    dict_ds = {'scale_factor': ds_quant['TREFHT'].diff(dim=co2_dim).squeeze()
-                               / ds_ref['TREFHT'].diff(dim=co2_dim).squeeze(),
+    dict_ds = {'scale_factor': ds_quant['TREFHT'].diff(dim=co2_dim).isel(co2=0, drop=True)
+                               / ds_ref['TREFHT'].diff(dim=co2_dim).isel(co2=0, drop=True),
                **convert_ds_of_dicts(out_cont, ds_quant[quant_dim], quant_dim)}
     if numerical:
         ds_out = xr.Dataset({"scale_factor_sum_all_terms": out1, "scale_factor_nl": out2,
