@@ -20,6 +20,10 @@ import f90nml
 exp_names = ['pre_industrial', 'co2_2x']
 percentile_label = 'Temperature Percentile, $x$'
 sf_label = "Scaling Factor, $\delta T_s(x)/\delta \overline{T}_s$ [KK$^{-1}$]"
+labels_cont = {'temp_ft_change': 'FT change', 'rh_change': 'RH change', 'sCAPE_change': 'CAPE change',
+               'temp_surf_anom': 'Hot-get-hotter', 'rh_anom': 'Drier-get-hotter', 'lapse_D_change': '$\eta_D$ change',
+               'lapse_M_change': '$\eta_M$ change', 'lapse_D_anom': '$\eta_D$ climatological',
+               'p_surf_change': '$p_s$ change', 'p_surf_anom': 'Higher-get-hotter'}
 
 # Where topography and land frac data stored - copied from JASMIN to local
 invariant_data_path = ('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'

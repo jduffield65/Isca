@@ -3,6 +3,7 @@ import numpy as np
 import xarray as xr
 from xarray import Dataset, DataArray
 from .base import area_weighting
+import warnings
 
 
 def annual_time_slice(ds: Dataset, include_months: Optional[List[int]] = None, include_days: Optional[List[int]] = None,
@@ -325,6 +326,7 @@ def fold_coarsen(ds: xr.Dataset, k_lat: int, k_lon: int, coarsen_dim: str = 'sam
 
         # If variable does NOT have lat/lon/coarsen_dim -> leave unchanged
         if not set(("lat", "lon", coarsen_dim)).issubset(dims):
+            warnings.warn(f"Cannot coarsen variable {name} as only has dimensions:\n{dims}")
             out[name] = da.copy()
             continue
 
