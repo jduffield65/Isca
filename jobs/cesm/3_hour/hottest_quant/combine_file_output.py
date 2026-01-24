@@ -7,21 +7,19 @@ import fnmatch
 import re
 import logging
 import sys
+
 # Set up logging configuration to output to console and don't output milliseconds, and stdout so saved to out file
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
 
 
-if __name__ == "__main__":
-    try:
-        exp_name = sys.argv[1]
-    except IndexError:
-        exp_name = 'pre_industrial'
+def main(exp_name):
     complevel = 4
     print(os.getcwd())
     logger = logging.getLogger()
-    output_dir = f'/Users/joshduffield/Desktop/{exp_name}/'
-    output_dir = os.path.join(output_dir, 'T_Q_PS_all_lat')
+    logger.info('Start')
+    output_dir = f'/home/users/jamd1/Isca/jobs/cesm/3_hour/hottest_quant/{exp_name}/REFHT_quant50/T_Q_PS_all_lat/'
+    # output_dir = f'/Users/joshduffield/Desktop/{exp_name}/T_Q_PS_all_lat'
     out_files_all = os.listdir(output_dir)
     # only keep files of correct format
     out_files_all = [file for file in out_files_all if
@@ -44,3 +42,10 @@ if __name__ == "__main__":
     ds[0].to_netcdf(out_file, format="NETCDF4",
                     encoding={var: {"zlib": True, "complevel": complevel} for var in ds[0].data_vars})
     logger.info(f"Saved file to {out_file}")
+
+if __name__ == '__main__':
+    try:
+        exp_name = sys.argv[1]
+    except IndexError:
+        exp_name = 'pre_industrial'
+    main(exp_name)

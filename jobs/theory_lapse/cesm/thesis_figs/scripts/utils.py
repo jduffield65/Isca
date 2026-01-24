@@ -10,6 +10,8 @@ import cartopy.crs as ccrs
 from cartopy.mpl.contour import GeoContourSet
 from cartopy.util import add_cyclic_point
 from matplotlib.contour import QuadContourSet
+from matplotlib.image import AxesImage
+
 
 from isca_tools.cesm.load import load_z2m
 from isca_tools.convection.base import lcl_sigma_bolton_simple
@@ -138,10 +140,11 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
                              grid_lon: Union[List, np.ndarray] = np.arange(-180, 180.01, 60),
                              grid_lat: Union[List, np.ndarray] = np.asarray([40, 65]),
                              coastline_color: str = 'k', gridline_color: str = 'k',
-                             gridline_lw: float = 1,
+                             coastline_lw: float = 1,
                              draw_gridline_labels: bool = True,
                              auto_aspect: bool = False,
-                             return_gl: bool = False) -> Union[plt.Axes, Tuple[plt.Axes, plt.Axes]]:
+                             return_gl: bool = False,
+                             resolution: str = 'auto') -> Union[plt.Axes, Tuple[plt.Axes, plt.Axes]]:
     """
     Function from Zhang Boos 2023 paper used to initialize axis to make nice looking spatial plots.
     Run `initialize_ax_projection(ax)` before doing any plotting.
@@ -156,9 +159,10 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
         grid_lat: Position of horizontal lines
         coastline_color: Coastline color
         gridline_color: Gridline color
-        gridline_lw: Gridline width
+        coastline_lw: Coastline width
         auto_aspect: Automatic aspect ratio, can help keep subplots looking more square
         return_gl: Whether to return gridline object for later editing
+        resolution: Resolution of coastline
 
     Returns:
         ax: Modified axes
@@ -166,7 +170,7 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
     """
     if auto_aspect:
         ax.set_aspect('auto')
-    ax.coastlines(color=coastline_color, linewidth=gridline_lw)
+    ax.coastlines(color=coastline_color, linewidth=coastline_lw, resolution=resolution)
     ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
     gl = ax.gridlines(ccrs.PlateCarree(), xlocs=grid_lon, ylocs=grid_lat, linestyle=':',
                       color=gridline_color, alpha=1, draw_labels=draw_gridline_labels)
@@ -178,30 +182,72 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
         return ax
 
 
-def plot_contour_projection(ax: plt.Axes, var: xr.DataArray, levels: Optional[Union[np.ndarray, List]] = None,
-                            n_levels: int = 10, mask: Optional[xr.DataArray] = None,
-                            cmap: str = 'viridis') -> Union[GeoContourSet, QuadContourSet]:
+def plot_contour_projection(
+    ax: plt.Axes,
+    var: xr.DataArray,
+    levels: Optional[Union[np.ndarray, List]] = None,
+    n_levels: int = 10,
+    mask: Optional[xr.DataArray] = None,
+    cmap: str = "viridis",
+    imshow: bool = False,
+    imshow_kwargs: Optional[dict] = None,
+) -> Union[GeoContourSet, QuadContourSet, AxesImage]:
     """
+    Contourf (default) or imshow plot in axes initialized with a Cartopy projection.
+
     Function from Zhang Boos 2023 paper to perform a contour plot in axes initialized with
     `initialize_ax_projection`.
 
     Args:
-        ax: Axes to perform contour plot on
-        var: Variable to plot, must contain `lat` and `lon` coordinates.
-        levels: `float [n_levels]`
-            Contours of `var` to use
-        n_levels: If don't provide `levels, will use this many-contour
-        mask: Can provide mask to exclude parts of `var` from the plot. Must match dimensions of `var` if given.
-        cmap: Colourmap to use.
+        ax: Axes to plot on (typically a cartopy.mpl.geoaxes.GeoAxes).
+        var: DataArray to plot; must have 1D 'lat' and 'lon' coordinates.
+        levels: Contours for contourf (ignored for imshow).
+        n_levels: If levels is None, use this many contour levels.
+        mask: Optional mask (same shape as var) to exclude parts of var.
+        cmap: Colormap.
+        imshow: If True, use ax.imshow; else ax.contourf.
+        imshow_kwargs: Extra kwargs forwarded to ax.imshow (optional).
 
     Returns:
-        The set of contour lines
+        QuadContourSet/GeoContourSet for contourf, or AxesImage for imshow.
     """
-    data, lon = add_cyclic_point(var * (1 if mask is None else mask), coord=var.lon.values, axis=1)
-    if levels is None:
-        levels = np.linspace(var.min(), var.max(), n_levels)
-    im = ax.contourf(lon, var.lat.values, data, transform=ccrs.PlateCarree(),
-                     levels=levels, extend='both', cmap=cmap)
+    if imshow_kwargs is None:
+        imshow_kwargs = {}
+
+    plot_var = var if mask is None else (var * mask)
+
+    # Add cyclic point along lon axis (assumes var dims are (lat, lon) or lon is axis=1 after broadcasting)
+    data, lon_c = add_cyclic_point(plot_var.values, coord=plot_var["lon"].values, axis=1)
+    lat = plot_var["lat"].values
+
+    if not imshow:
+        if levels is None:
+            # use .values so np.linspace gets plain numbers
+            levels = np.linspace(plot_var.min().values, plot_var.max().values, n_levels)
+
+        im = ax.contourf(
+            lon_c, lat, data,
+            transform=ccrs.PlateCarree(),
+            levels=levels,
+            extend="both",
+            cmap=cmap,
+        )
+        return im
+
+    # imshow path: need "extent" to map array indices to lon/lat [web:133]
+    extent = (lon_c.min(), lon_c.max(), lat.min(), lat.max())
+
+    # Set good defaults, but let user override via imshow_kwargs
+    defaults = dict(
+        origin="lower",                 # so first row plots at southern edge if lat is increasing [web:133]
+        extent=extent,
+        transform=ccrs.PlateCarree(),   # lon/lat coordinates [web:124]
+        cmap=cmap,
+        interpolation="nearest",
+    )
+    defaults.update(imshow_kwargs)
+
+    im = ax.imshow(data, **defaults)
     return im
 
 
