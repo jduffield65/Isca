@@ -139,9 +139,10 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
                              lat_max: float = 80,
                              grid_lon: Union[List, np.ndarray] = np.arange(-180, 180.01, 60),
                              grid_lat: Union[List, np.ndarray] = np.asarray([40, 65]),
-                             coastline_color: str = 'k', gridline_color: str = 'k',
-                             coastline_lw: float = 1,
+                             gridline_color: str = 'k', gridline_lw: float = 1,
                              draw_gridline_labels: bool = True,
+                             coastline_color: str = 'k',
+                             coastline_lw: float = 1,
                              auto_aspect: bool = False,
                              return_gl: bool = False,
                              resolution: str = 'auto') -> Union[plt.Axes, Tuple[plt.Axes, plt.Axes]]:
@@ -157,8 +158,10 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
         lat_max: Highest latitude to show
         grid_lon: Position of grid vertical lines
         grid_lat: Position of horizontal lines
-        coastline_color: Coastline color
         gridline_color: Gridline color
+        gridline_lw: Gridline width
+        draw_gridline_labels: Whether to include labels on gridlines
+        coastline_color: Coastline color
         coastline_lw: Coastline width
         auto_aspect: Automatic aspect ratio, can help keep subplots looking more square
         return_gl: Whether to return gridline object for later editing
@@ -173,7 +176,7 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
     ax.coastlines(color=coastline_color, linewidth=coastline_lw, resolution=resolution)
     ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
     gl = ax.gridlines(ccrs.PlateCarree(), xlocs=grid_lon, ylocs=grid_lat, linestyle=':',
-                      color=gridline_color, alpha=1, draw_labels=draw_gridline_labels)
+                      color=gridline_color, alpha=1, draw_labels=draw_gridline_labels, linewidth=gridline_lw)
     gl.right_labels = 0
     gl.top_labels = 0
     if return_gl:
@@ -301,7 +304,8 @@ def pad_with_nans(ds: Union[xr.Dataset, xr.DataArray], n_dim_size: int,
 
 
 def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
-                   aloft_p_size_thresh: Optional[float] = mask_aloft_p_size_thresh) -> xr.DataArray:
+                   aloft_p_size_thresh: Optional[float] = mask_aloft_p_size_thresh,
+                   prefer_const: bool=False) -> xr.DataArray:
     """
     Returns mask which is True for convective days - have lower modParc error than const error.
     Also, optionally have to have LCL further than `aloft_p_size_thresh` from `p_FT`.
@@ -310,6 +314,8 @@ def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
         ds: Dataset with variables needed
         error_thresh: Must have modParc error less than this to be valid.
         aloft_p_size_thresh: Threshold for distance between LCL and FT
+        prefer_const: If True, will set invert condition so set to where `const_error` < `mod_parcel_error`
+            and `const_error` < `mask_error_thresh`
 
     Returns:
         Mask which is True for convective days
@@ -317,8 +323,10 @@ def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
     # Take average over all days for which error satisfies convective threshold
     const1_error = np.abs(ds.const1_error.sum(dim='layer') / ds.const1_integral.sum(dim='layer'))
     mod_parcel1_error = np.abs(ds.mod_parcel1_error.sum(dim='layer') / ds.mod_parcel1_integral.sum(dim='layer'))
-
-    mask_fit = (mod_parcel1_error < const1_error) & (mod_parcel1_error < error_thresh)
+    if prefer_const:
+        mask_fit = (mod_parcel1_error > const1_error) & (const1_error < error_thresh)
+    else:
+        mask_fit = (mod_parcel1_error < const1_error) & (mod_parcel1_error < error_thresh)
     if aloft_p_size_thresh is not None:
         p_lcl = lcl_sigma_bolton_simple(ds.rh_REFHT, ds.temp_surf_lcl_calc) * ds.PS
         mask_fit = mask_fit & (p_lcl - ds.p_ft > aloft_p_size_thresh)
@@ -451,8 +459,8 @@ def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: fl
     )
 
     # Expand the dictionary output entries into proper DataArrays
-    dict_ds = {'scale_factor': ds_quant['TREFHT'].diff(dim=co2_dim).isel(co2=0, drop=True)
-                               / ds_ref['TREFHT'].diff(dim=co2_dim).isel(co2=0, drop=True),
+    dict_ds = {'scale_factor': ds_quant['TREFHT'].diff(dim=co2_dim).isel(**{co2_dim: 0, 'drop': True})
+                               / ds_ref['TREFHT'].diff(dim=co2_dim).isel(**{co2_dim: 0, 'drop': True}),
                **convert_ds_of_dicts(out_cont, ds_quant[quant_dim], quant_dim)}
     if numerical:
         ds_out = xr.Dataset({"scale_factor_sum_all_terms": out1, "scale_factor_nl": out2,

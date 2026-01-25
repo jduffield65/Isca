@@ -151,7 +151,7 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
             if job_name[0] == '/':
                 job_name = job_name[1:]     # make sure does not start with '/'
             job_name = job_name.replace('.py', '')
-        # Make directory where output saved
+        # Make directory where output and error saved
         job_output_dir = os.path.join(os.environ['HOME'], 'Isca/jobs/jasmin/console_output')
         dir_output = os.path.join(job_output_dir, job_name)
         if exist_output_ok is None:
