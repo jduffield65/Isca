@@ -14,12 +14,13 @@ sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
 from isca_tools.utils.moist_physics import sphum_sat, moist_static_energy
-from isca_tools.thesis.lapse_theory import get_var_at_plev
+from isca_tools.thesis.lapse_theory import get_var_at_plev, _get_var_at_plev
 from isca_tools.papers.byrne_2021 import get_quant_ind
 from isca_tools.papers.miyawaki_2022 import get_lapse_dev
-from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr, get_lnb_ind
+from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr, get_lnb_ind, get_temp_2_layer_approx
 from isca_tools.utils.xarray import convert_ds_dtypes, wrap_with_apply_ufunc
 from isca_tools.utils.constants import lapse_dry
+from isca_tools.thesis.lapse_integral import integral_and_error_calc
 
 # -- Specific info for running the script --
 test_mode = False               # for testing on small dataset
@@ -86,6 +87,20 @@ def amend_sample_dim(ds_list, n_sample_max_range=2):
     n_sample = np.min(n_sample)
     ds_list = [ds_list[i].isel(sample=slice(0, n_sample)) for i in range(n_ds)]
     return ds_list
+
+# def get_parc_prof_error(temp_env_lev, hybm, temp_surf, p_surf, rh_surf, p_ft, temp_surf_lcl_calc=temp_surf_lcl_calc,
+#                         n_lev_above_integral=n_lev_above_integral):
+#     # Returns the integral and error associated with the perfect parcel profile approximation
+#     p_lev = p_surf * hybm
+#     ind_upper = np.where(p_lev < p_ft)[0][-n_lev_above_integral]
+#     temp_approx_lev = get_temp_2_layer_approx(p_lev, temp_surf, p_surf, rh_surf, lapse_dry,
+#                                               0, 'const', 'mod_parcel',
+#                                               temp_lower_lcl_calc=temp_surf_lcl_calc)
+#     return integral_and_error_calc(temp_env_lev, temp_approx_lev, p_lev, temp_surf, temp_surf, p_surf,
+#                                    temp_env_lev[ind_upper], temp_approx_lev[ind_upper], p_lev[ind_upper])
+# get_parc_prof_error_xr = wrap_with_apply_ufunc(get_parc_prof_error,
+#                                                input_core_dims=[['lev'], ['lev'], [], [], [], []],
+#                                                output_core_dims=[[], []])
 
 
 def get_P(ds):
@@ -297,7 +312,7 @@ if __name__ == '__main__':
             # Ensure all have same size
             ds_quant = [i.isel(sample=slice(0, n_sample)) for i in ds_quant]
         ds_quant = xr.concat(ds_quant, dim=xr.DataArray(quant_all, dims="quant", name='quant'))
-
+        ds_quant['hybm'] = ds.hybm      # only need single quant for hybm
 
         ## -- Get Error Parameters for lapse rate fitting --
 
@@ -312,7 +327,7 @@ if __name__ == '__main__':
             """
             ds.attrs["n_lev_above_integral"] = n_lev_above_integral
             var_names = ["lapse", "integral", "error"]
-            keys = ["const", "mod_parcel"]
+            keys = ["const", "mod_parcel", "parcel"]        # add parcel for perfect parcel error
 
             quants = ds["quant"].values
             out_list_p = []         # contains one dataarray for each p_ft
@@ -333,7 +348,10 @@ if __name__ == '__main__':
                                 ds.T_ft_env.sel(quant=q, p_ft=p_ft_use),
                                 p_ft_use,
                                 n_lev_above_upper2_integral=ds.n_lev_above_integral,
+                                method_layer1='const',
                                 method_layer2=key,
+                                mod_parcel_method='add',
+                                force_parcel=key=='parcel',
                                 temp_surf_lcl_calc=temp_surf_lcl_calc,
                             )
 
@@ -341,7 +359,14 @@ if __name__ == '__main__':
                                 # Build variable name such as "const1_lapse"
                                 vname = f"{key}1_{name}"
                                 small[vname] = var[k].expand_dims(quant=[q])
-
+                        # # Compute error from perfect parcel as well
+                        # var = \
+                        #     get_parc_prof_error_xr(ds.T.sel(quant=q), ds.hybm, ds.TREFHT.sel(quant=q),
+                        #                            ds.PREFHT.sel(quant=q),
+                        #                            ds.rh_REFHT.sel(quant=q), p_ft_use, temp_surf_lcl_calc=temp_surf_lcl_calc,
+                        #                            n_lev_above_integral=ds.n_lev_above_integral)
+                        # small['parcel_integral'] = var[0].expand_dims(quant=[q])
+                        # small['parcel_error'] = var[1].expand_dims(quant=[q])
                         # One small dataset per q
                         out_list_q.append(xr.Dataset(small))
 
@@ -374,7 +399,6 @@ if __name__ == '__main__':
                                       temp_surf_lcl_calc=temp_surf_lcl_calc))
             print_log(f'Computed LNB {i+1}/2', logger)
         ds_quant['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
-
         print_log('Computing Miyawaki 2022 params', logger)
         ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
         # Add metadata to save

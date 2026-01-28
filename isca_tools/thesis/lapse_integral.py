@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 from typing import Union, Optional, Tuple, Literal
-from ..utils.constants import g, R
+from ..utils.constants import g, R, lapse_dry
 from ..utils.moist_physics import sphum_sat
 from ..thesis.adiabat_theory import get_temp_adiabat
 

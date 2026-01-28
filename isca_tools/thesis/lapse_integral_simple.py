@@ -50,6 +50,8 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
             If `n_lev_above_upper_integral=0`, upper limit of integral will be `p_upper`.
         temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
         sanity_check: If `True` will print a sanity check to ensure the calculation is correct.
+        method: Recommend `add`, `multiply` is another method I tried where you don't add to the moist
+            adiabatic lapse rate at each level but multiply it by a scaling factor.
 
     Returns:
         lapse_diff_const: Lapse rate adjustment, $\eta$ which needs to be added to $\Gamma_{p}(p, T_p(p))$
@@ -117,6 +119,67 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
     return lapse_diff_const * (1000 if method == 'add' else 1), lapse_integral * 1000, lapse_integral_error * 1000
 
 
+def parcel_fitting(temp_env_lev: np.ndarray, p_lev: np.ndarray,
+                   temp_env_lower: float, p_lower: float, rh_lower: float,
+                   temp_env_upper: float, p_upper: float,
+                   temp_env_upper2: float, p_upper2: float,
+                   n_lev_above_upper2_integral: int = 0,
+                   temp_surf_lcl_calc: float = 300):
+    """
+    If follow parcel rising from the surface, this returns the error and integral value, of this profile
+    relative to the environmental profile.
+
+    Args:
+        temp_env_lev:
+        p_lev: Surface pressure
+        temp_env_lower:
+        p_lower:
+        rh_lower:
+        temp_env_upper:
+        p_upper: LCL pressure
+        temp_env_upper2:
+        p_upper2: FT pressure
+        n_lev_above_upper2_integral:
+        temp_surf_lcl_calc:
+
+    Returns:
+        lapse: `[lapse_dry, 0]` i.e. dry adiabat below LCL and moist adiabat above. Units are *K/km*.
+        integral: Result of integral $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p$ of each layer. Units are *K/km*.
+        integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
+            Units are *K/km*.
+    """
+    temp_parcel_upper = dry_profile_temp(temp_env_lower, p_lower, p_upper)  # parcel temp at lcl
+    temp_parcel_lev = np.zeros_like(temp_env_lev)
+    for i in range(p_lev.size):
+        if p_lev[i] >= p_upper:
+            # Dry adiabatic region - just follow dry adiabat
+            temp_parcel_lev[i] = dry_profile_temp(temp_env_lower, p_lower, p_lev[i])
+        else:
+            # Moist adiabatic region - same modMSE as surface
+            temp_parcel_lev[i] = get_temp_mod_parcel(rh_lower, p_lower, p_lev[i], 0, 0,
+                                                     temp_env_lower, temp_surf_lcl_calc=temp_surf_lcl_calc)
+    lapse_integral1, lapse_integral_error1 = integral_and_error_calc(temp_env_lev, temp_parcel_lev, p_lev,
+                                                                     temp_env_lower, temp_env_lower, p_lower,
+                                                                     temp_env_upper, temp_parcel_upper, p_upper)
+    if n_lev_above_upper2_integral == 0:
+        temp_parcel_upper2 = get_temp_mod_parcel(rh_lower, p_lower, p_upper2, 0, 0,
+                                                 temp_env_lower, temp_surf_lcl_calc=temp_surf_lcl_calc)
+        lapse_integral2, lapse_integral_error2 = integral_and_error_calc(temp_env_lev, temp_parcel_lev, p_lev,
+                                                                         temp_env_upper, temp_parcel_upper, p_upper,
+                                                                         temp_env_upper2, temp_parcel_upper2, p_upper2)
+    else:
+        ind_upper = np.where(p_lev < p_upper2)[0][-n_lev_above_upper2_integral]
+        lapse_integral2, lapse_integral_error2 = integral_and_error_calc(temp_env_lev, temp_parcel_lev, p_lev,
+                                                                         temp_env_upper, temp_parcel_upper, p_upper,
+                                                                         temp_env_lev[ind_upper],
+                                                                         temp_parcel_lev[ind_upper],
+                                                                         p_lev[ind_upper])
+    lapse_diff_const = np.asarray([lapse_dry, 0])
+    lapse_integral = np.asarray([lapse_integral1, lapse_integral2])
+    lapse_integral_error = np.asarray([lapse_integral_error1, lapse_integral_error2])
+    return lapse_diff_const * 1000, lapse_integral * 1000, lapse_integral_error * 1000
+
+
 def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[xr.DataArray, np.ndarray],
                     temp_env_lower: float, p_lower: float, rh_lower: float,
                     temp_env_upper: float, p_upper: float,
@@ -124,6 +187,7 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
                     method_layer1: Literal['const'] = 'const',
                     method_layer2: Literal['const', 'mod_parcel'] = 'const',
                     mod_parcel_method: Literal['add', 'multiply'] = 'add',
+                    force_parcel: bool = False,
                     n_lev_above_upper2_integral: int = 0,
                     temp_surf_lcl_calc: float = 300,
                     sanity_check: bool = False,
@@ -146,16 +210,13 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
         p_upper: Pressure level to end profile of first layer (layer closest to surface).
         temp_env_upper2: Environmental temperature at the upper pressure level of the second layer (layer furthest from surface) `p_upper2`.
         p_upper2: Pressure level to end profile of second layer (layer furthest from surface).
-        temp_parcel_lev: `[n_lev]` Parcel temperature (following moist adiabat) at pressure `p_lev`.</br>
-            Only required if either `method_layer1` or `method_layer2` are `'mod_parcel'`.
-        temp_parcel_lower: Parcel temperature at lower pressure level (nearer surface) `p_lower`.</br>
-            Only required if either `method_layer1 = 'mod_parcel'`.
-        temp_parcel_upper: Parcel temperature at the upper pressure level of the first layer (layer closest to surface) `p_upper`.</br>
-            Only required if either `method_layer1` or `method_layer2` are `'mod_parcel'`.
-        temp_parcel_upper2: Parcel temperature at the upper pressure level of the second layer (layer furthest from surface) `p_upper2`.</br>
-            Only required if either `method_layer2 = 'mod_parcel'`.
-        method_layer1: Which fitting method to use for layer 1.
-        method_layer2: Which fitting method to use for layer 2.
+        method_layer1: Which fitting method to use for layer 1. Not required if `force_parcel=True`.
+        method_layer2: Which fitting method to use for layer 2. Not required if `force_parcel=True`.
+        mod_parcel_method: Recommend `add`, `multiply` is another method I tried where you don't add to the moist
+            adiabatic lapse rate at each level but multiply it by a scaling factor.
+        force_parcel: If `True`, will use `parcel_fitting` to find error and integral values.
+            I.e. force dry adiabat below surface and moist adiabat above. But parcel rising from surface
+            so LCL parcel temperature will differ from environmental.
         n_lev_above_upper2_integral: Will return `integral` and `integral_error` not up to `p_upper2` but up to
             the model level pressure `n_lev_above_upper2_integral` further from the surface than `p_upper2`.
             If `n_lev_above_upper2_integral=0`, upper limit of integral will be `p_upper2`.
@@ -170,9 +231,12 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
             Units are *K/km*.
     """
-    if (p_upper > p_lower-p_range_calc) | (p_upper2 > p_upper-p_range_calc):
+    if (p_upper > p_lower - p_range_calc) | (p_upper2 > p_upper - p_range_calc):
         # LCL or Surface too close to FT level to compute
         return np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan])
+    if force_parcel:
+        return parcel_fitting(temp_env_lev, p_lev, temp_env_lower, p_lower, rh_lower, temp_env_upper, p_upper,
+                              temp_env_upper2, p_upper2, n_lev_above_upper2_integral, temp_surf_lcl_calc)
     if method_layer1 == 'const':
         lapse1, lapse_integral1, lapse_integral_error1 = \
             const_lapse_fitting(temp_env_lev, p_lev, temp_env_lower, p_lower, temp_env_upper, p_upper,
@@ -209,6 +273,7 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
                        method_layer1: Literal['const'] = 'const',
                        method_layer2: Literal['const', 'mod_parcel'] = 'const',
                        mod_parcel_method: Literal['add', 'multiply'] = 'add',
+                       force_parcel: bool = False,
                        n_lev_above_upper2_integral: int = 0,
                        temp_surf_lcl_calc: Optional[Union[float, xr.DataArray]] = 300,
                        sanity_check: bool = False, p_range_calc: float = 2000, lev_dim: str = 'lev',
@@ -221,11 +286,12 @@ def fitting_2_layer_xr(temp_env_lev: xr.DataArray,
     p_upper = lcl_sigma_bolton_simple(rh_lower, temp_surf_lcl_calc) * p_lower
     temp_env_upper = get_var_at_plev(temp_env_lev, p_lev, p_upper, lev_dim=lev_dim)
 
-    func_kwargs={'method_layer1': method_layer1,
-                'method_layer2': method_layer2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
-                'temp_surf_lcl_calc': temp_surf_lcl_calc, 'mod_parcel_method': mod_parcel_method,
-                'sanity_check': sanity_check, 'p_range_calc': p_range_calc}
-    input_core_dims = [[lev_dim], [lev_dim], [], [], [], [], [], [], []]    # only 'temp_env_lev' and 'lev' varies along 'lev_dim'.
+    func_kwargs = {'method_layer1': method_layer1,
+                   'method_layer2': method_layer2, 'n_lev_above_upper2_integral': n_lev_above_upper2_integral,
+                   'temp_surf_lcl_calc': temp_surf_lcl_calc, 'mod_parcel_method': mod_parcel_method,
+                   'sanity_check': sanity_check, 'p_range_calc': p_range_calc, 'force_parcel': force_parcel}
+    input_core_dims = [[lev_dim], [lev_dim], [], [], [], [], [], [],
+                       []]  # only 'temp_env_lev' and 'lev' varies along 'lev_dim'.
     output_core_dims = [[layer_dim], [layer_dim], [layer_dim]]
 
     return xr.apply_ufunc(
@@ -270,10 +336,10 @@ def get_temp_2_layer_approx(p_lev: np.ndarray, temp_env_surf: float, p_surf: flo
     return temp_lev
 
 
-def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lapse_mod_D: float=0,
-                p_surf: Optional[float]=None,
-                temp_surf:Optional[float]=None,
-                temp_surf_lcl_calc=300)-> int:
+def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lapse_mod_D: float = 0,
+                p_surf: Optional[float] = None,
+                temp_surf: Optional[float] = None,
+                temp_surf_lcl_calc=300) -> int:
     """
     Returns a proxy for the LNB (level of neutral buoyancy): the index closest to space where
     `T_parcel - T_env` is positive i.e. buoyant.
@@ -312,10 +378,10 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
         raise ValueError('If do not provide p_surf, must also not provide temp_surf.')
     p_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc) * p_surf
     # Only Consider pressure values above LCL
-    mask_ind = np.where(p_lev<p_lcl)[0]
-    temp_env_lev = temp_env_lev[p_lev<p_lcl]
-    p_lev = p_lev[p_lev<p_lcl]
-    lnb_ind = surf_ind    # default value of lnb_ind if always buoyant i.e. in space
+    mask_ind = np.where(p_lev < p_lcl)[0]
+    temp_env_lev = temp_env_lev[p_lev < p_lcl]
+    p_lev = p_lev[p_lev < p_lcl]
+    lnb_ind = surf_ind  # default value of lnb_ind if always buoyant i.e. in space
     for i in range(temp_env_lev.size):
         temp_parcel = get_temp_mod_parcel(rh_surf, p_surf, p_lev[i], lapse_mod_D,
                                           0, temp_surf, lapse_coords='z')
