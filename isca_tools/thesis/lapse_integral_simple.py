@@ -124,7 +124,8 @@ def parcel_fitting(temp_env_lev: np.ndarray, p_lev: np.ndarray,
                    temp_env_upper: float, p_upper: float,
                    temp_env_upper2: float, p_upper2: float,
                    n_lev_above_upper2_integral: int = 0,
-                   temp_surf_lcl_calc: float = 300):
+                   temp_surf_lcl_calc: float = 300,
+                   return_temp_parcel_lev: bool = False):
     """
     If follow parcel rising from the surface, this returns the error and integral value, of this profile
     relative to the environmental profile.
@@ -177,7 +178,10 @@ def parcel_fitting(temp_env_lev: np.ndarray, p_lev: np.ndarray,
     lapse_diff_const = np.asarray([lapse_dry, 0])
     lapse_integral = np.asarray([lapse_integral1, lapse_integral2])
     lapse_integral_error = np.asarray([lapse_integral_error1, lapse_integral_error2])
-    return lapse_diff_const * 1000, lapse_integral * 1000, lapse_integral_error * 1000
+    if return_temp_parcel_lev:
+        return lapse_diff_const * 1000, lapse_integral * 1000, lapse_integral_error * 1000, temp_parcel_lev
+    else:
+        return lapse_diff_const * 1000, lapse_integral * 1000, lapse_integral_error * 1000
 
 
 def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[xr.DataArray, np.ndarray],
@@ -231,6 +235,7 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
             Units are *K/km*.
     """
+    rh_lower = np.clip(rh_lower, 0, 1)          # ensure rh between 0 and 1
     if (p_upper > p_lower - p_range_calc) | (p_upper2 > p_upper - p_range_calc):
         # LCL or Surface too close to FT level to compute
         return np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan])
@@ -366,6 +371,7 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
         temperature. I.e. index of the buoyant layer furthest from the surface.
         If no buoyant layer, it will return the index of surface.
     """
+    rh_surf = np.clip(rh_surf, 0, 1)        # ensure rh between 0 and 1
     surf_ind = np.argmax(p_lev)
     if surf_ind == 0:
         raise ValueError('Must have pressure ascending in p_lev')

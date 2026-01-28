@@ -9,7 +9,6 @@ import xarray as xr
 import logging
 import sys
 
-
 sys.path.append('/Users/joshduffield/Documents/StAndrews/Isca')
 import isca_tools
 from isca_tools.utils.base import print_log
@@ -23,9 +22,10 @@ from isca_tools.utils.constants import lapse_dry
 from isca_tools.thesis.lapse_integral import integral_and_error_calc
 
 # -- Specific info for running the script --
-test_mode = False               # for testing on small dataset
-comp_level = 4                  # compression level for saving
+test_mode = False  # for testing on small dataset
+comp_level = 4  # compression level for saving
 p_ft = [500 * 100, 700 * 100]  # FT pressure level to use
+rh_mod = [-0.1, -0.05, 0, 0.05, 0.1]
 n_sample = None  # How many data points for each quantile, x to use. None to get all.
 quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
 # quant_all = np.array([1, 50, 99])    # Small test run
@@ -43,7 +43,7 @@ try:
     kappa_names = sys.argv[3]  # 'k=1' or 'k=1_5'
 except IndexError:
     # Default values of don't call from terminal - for testing
-    surf = 'aquaplanet'
+    surf = 'land'
     hemisphere = 'north'
     kappa_names = 'k=1'
 if test_mode:
@@ -88,23 +88,10 @@ def amend_sample_dim(ds_list, n_sample_max_range=2):
     ds_list = [ds_list[i].isel(sample=slice(0, n_sample)) for i in range(n_ds)]
     return ds_list
 
-# def get_parc_prof_error(temp_env_lev, hybm, temp_surf, p_surf, rh_surf, p_ft, temp_surf_lcl_calc=temp_surf_lcl_calc,
-#                         n_lev_above_integral=n_lev_above_integral):
-#     # Returns the integral and error associated with the perfect parcel profile approximation
-#     p_lev = p_surf * hybm
-#     ind_upper = np.where(p_lev < p_ft)[0][-n_lev_above_integral]
-#     temp_approx_lev = get_temp_2_layer_approx(p_lev, temp_surf, p_surf, rh_surf, lapse_dry,
-#                                               0, 'const', 'mod_parcel',
-#                                               temp_lower_lcl_calc=temp_surf_lcl_calc)
-#     return integral_and_error_calc(temp_env_lev, temp_approx_lev, p_lev, temp_surf, temp_surf, p_surf,
-#                                    temp_env_lev[ind_upper], temp_approx_lev[ind_upper], p_lev[ind_upper])
-# get_parc_prof_error_xr = wrap_with_apply_ufunc(get_parc_prof_error,
-#                                                input_core_dims=[['lev'], ['lev'], [], [], [], []],
-#                                                output_core_dims=[[], []])
-
 
 def get_P(ds):
     return ds.PS * ds.hybm
+
 
 def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere=['south', 'north'],
            dailymax=False):
@@ -125,7 +112,7 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
     n_exp = len(kappa_names)
     ds = {}
     for key in surf:
-        ds[key] = [0, 0]  # initialize as empty list
+        ds[key] = [0 for i in range(n_exp)]  # initialize as empty list
         for i in range(n_exp):
             # Load both hemispheres and combine into single ds
             ds[key][i] = [xr.open_dataset(get_ds_out_path(kappa_names[i], surf=key, hemisphere=hemisphere[j],
@@ -138,7 +125,7 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
         # print('Selecting subsection of quant')
         # ds[key] = [ds[key][i].sel(quant=[1, 50, 99]) for i in range(n_exp)]
         ds[key] = xr.concat(ds[key], dim="tau_lw")
-        ds[key]['hybm'] = ds[key].hybm.isel(quant=0, tau_lw=0, lat=0, sample=0)
+        ds[key]['hybm'] = ds[key].hybm.isel(tau_lw=0, lat=0)
         ds[key]['ZREFHT'] = ds[key].Z3.isel(lev=-1)
         ds[key]['mse_REFHT'] = moist_static_energy(ds[key].TREFHT, ds[key].QREFHT, ds[key].ZREFHT)
         ds[key]['Z_ft_env'] = get_var_at_plev(ds[key].Z3, get_P(ds[key]), ds[key].p_ft)
@@ -258,11 +245,10 @@ if __name__ == '__main__':
         if temp_surf_lcl_calc == 'median':
             temp_surf_lcl_calc = float(np.ceil(ds.TREFHT.median()))
 
-
         ds['rh_REFHT'] = ds.QREFHT / sphum_sat(ds.TREFHT, ds.PREFHT)
         p_ft_xr = xr.DataArray(p_ft, dims=["p_ft"], name="p_ft")
         var = [get_var_at_plev(ds.T, get_P(ds), p_ft[i]) for i in range(len(p_ft))]
-        ds['T_ft_env'] = xr.concat(var,p_ft_xr)
+        ds['T_ft_env'] = xr.concat(var, p_ft_xr)
         ds['T_ft_env_zonal_av'] = ds['T_ft_env'].mean(dim='lon')
 
 
@@ -312,7 +298,8 @@ if __name__ == '__main__':
             # Ensure all have same size
             ds_quant = [i.isel(sample=slice(0, n_sample)) for i in ds_quant]
         ds_quant = xr.concat(ds_quant, dim=xr.DataArray(quant_all, dims="quant", name='quant'))
-        ds_quant['hybm'] = ds.hybm      # only need single quant for hybm
+        ds_quant['hybm'] = ds.hybm  # only need single quant for hybm
+
 
         ## -- Get Error Parameters for lapse rate fitting --
 
@@ -326,54 +313,70 @@ if __name__ == '__main__':
                 xr.Dataset: Dataset with computed lapse-fitting fields for each quant.
             """
             ds.attrs["n_lev_above_integral"] = n_lev_above_integral
+            rh_mod_xr = xr.DataArray(rh_mod, dims=["rh_mod"], name="rh_mod", coords={"rh_mod": rh_mod})
             var_names = ["lapse", "integral", "error"]
-            keys = ["const", "mod_parcel", "parcel"]        # add parcel for perfect parcel error
+            keys = ["const", "mod_parcel", "parcel"]  # add parcel for perfect parcel error
 
             quants = ds["quant"].values
-            out_list_p = []         # contains one dataarray for each p_ft
+            out_list_p = []  # contains one dataarray for each p_ft
 
-            with tqdm(total=len(quants)*len(p_ft), position=0, leave=True) as pbar:
-                for p_ft_use in p_ft:
-                    out_list_q = []             # contains one dataarray for each quant
+            with tqdm(total=len(quants) * len(p_ft), position=0, leave=True) as pbar:
+                for p_ft_ind, p_ft_use in enumerate(p_ft):
+                    out_list_q = []  # contains one dataarray for each quant
                     for q in quants:
                         small = {}
-
                         for key in keys:
                             var = fitting_2_layer_xr(
                                 ds.T.sel(quant=q),
                                 get_P(ds).sel(quant=q),
                                 ds.TREFHT.sel(quant=q),
                                 ds.PREFHT.sel(quant=q),
-                                ds.rh_REFHT.sel(quant=q),
+                                ds.rh_REFHT.sel(quant=q) if key == 'parcel' else ds.rh_REFHT.sel(quant=q) + rh_mod_xr,
                                 ds.T_ft_env.sel(quant=q, p_ft=p_ft_use),
                                 p_ft_use,
                                 n_lev_above_upper2_integral=ds.n_lev_above_integral,
                                 method_layer1='const',
                                 method_layer2=key,
                                 mod_parcel_method='add',
-                                force_parcel=key=='parcel',
+                                force_parcel=key == 'parcel',
                                 temp_surf_lcl_calc=temp_surf_lcl_calc,
                             )
 
                             for k, name in enumerate(var_names):
                                 # Build variable name such as "const1_lapse"
-                                vname = f"{key}1_{name}"
-                                small[vname] = var[k].expand_dims(quant=[q])
-                        # # Compute error from perfect parcel as well
-                        # var = \
-                        #     get_parc_prof_error_xr(ds.T.sel(quant=q), ds.hybm, ds.TREFHT.sel(quant=q),
-                        #                            ds.PREFHT.sel(quant=q),
-                        #                            ds.rh_REFHT.sel(quant=q), p_ft_use, temp_surf_lcl_calc=temp_surf_lcl_calc,
-                        #                            n_lev_above_integral=ds.n_lev_above_integral)
-                        # small['parcel_integral'] = var[0].expand_dims(quant=[q])
-                        # small['parcel_error'] = var[1].expand_dims(quant=[q])
+                                vname = f"{key}_{name}"
+                                small[vname] = var[k]
+
+                        if p_ft_ind == 0:
+                            # boundary layer lapse rate is same for all methods and p_ft so just select one
+                            lapse_mod_D = small['mod_parcel_lapse'].isel(layer=0, drop=True) / 1000 - lapse_dry
+                            # 2 different estimates of LNB depending on where parcel rising from
+                            # New dimension parcel type, surf means parcel
+                            # 1st estimate lcl rising from surface so lapse_mod_D=0
+                            # fillna(-1) so negative values indicate failiure to compute because no nan in integer form
+                            small['lnb1_ind'] = get_lnb_ind_xr(ds_quant.T.sel(quant=q), get_P(ds_quant).sel(quant=q),
+                                                               ds_quant.rh_REFHT.sel(quant=q), 0,
+                                                               temp_surf_lcl_calc=temp_surf_lcl_calc)
+                            # 2nd estimate rising from modified LCL means take actual value of lapse_mod_D
+                            small['lnb2_ind'] = get_lnb_ind_xr(ds_quant.T.sel(quant=q), get_P(ds_quant).sel(quant=q),
+                                                               ds_quant.rh_REFHT.sel(quant=q) + rh_mod_xr,
+                                                               lapse_mod_D,
+                                                               temp_surf_lcl_calc=temp_surf_lcl_calc)
+                            # Compute Miyawaki parameters - independent of p_ft
+                            small['lapse_miy2022_M'], small['lapse_miy2022_D'] = \
+                                get_lapse_dev(ds_quant.T.sel(quant=q), get_P(ds_quant).sel(quant=q),
+                                              ds_quant.PS.sel(quant=q))
+
                         # One small dataset per q
-                        out_list_q.append(xr.Dataset(small))
+                        out_list_q.append(xr.Dataset(small).expand_dims(quant=[q]))
 
                         pbar.update(1)
                     # Concatenate all per-quant datasets
                     out_list_p.append(xr.concat(out_list_q, dim="quant"))
-            new_vars = xr.concat(out_list_p, dim=p_ft_xr)       # concatenate p_ft values
+            new_vars = xr.concat(out_list_p, dim=p_ft_xr)  # concatenate p_ft values
+            for key in ['lnb1_ind', 'lnb2_ind', 'lapse_miy2022_M', 'lapse_miy2022_D']:
+                # For these variables, only need a single p_ft
+                new_vars[key] = new_vars[key].isel(p_ft=0, drop=True)
             # Merge into original ds
             return xr.merge([ds, new_vars])
 
@@ -383,25 +386,27 @@ if __name__ == '__main__':
 
         print_log('Computing LNB', logger)
         # boundary layer lapse rate is same for all methods and p_ft so just select one
-        lapse_mod_D = ds_quant.mod_parcel1_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
-        # 2 different estimates of LNB depending on where parcel rising from
-        # New dimension parcel type, surf means parcel rising from surface so lapse_mod_D=0
-        # lcl means parcel rising from lcl means take actual value of lapse_mod_D
-        lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
-        lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
-        lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)   # where parcel_type=surf, set to 0
-        # ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
-        #                                      lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
-        lnb = []  # loop so can output data progress more often
-        for i in range(lapse_mod_D.parcel_type.size):
-            lnb.append(get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
-                                      lapse_mod_D.isel(parcel_type=i),
-                                      temp_surf_lcl_calc=temp_surf_lcl_calc))
-            print_log(f'Computed LNB {i+1}/2', logger)
-        ds_quant['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
-        print_log('Computing Miyawaki 2022 params', logger)
-        ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
-        # Add metadata to save
+        # lapse_mod_D = ds_quant.mod_parcel_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
+        # # 2 different estimates of LNB depending on where parcel rising from
+        # # New dimension parcel type, surf means parcel rising from surface so lapse_mod_D=0
+        # # lcl means parcel rising from lcl means take actual value of lapse_mod_D
+        # lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
+        # lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
+        # lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)  # where parcel_type=surf, set to 0
+        # # ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
+        # #                                      lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
+        # lnb = []  # loop so can output data progress more often
+        # for i in range(lapse_mod_D.parcel_type.size):
+        #     lnb.append(get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
+        #                               lapse_mod_D.isel(parcel_type=i),
+        #                               temp_surf_lcl_calc=temp_surf_lcl_calc))
+        #     print_log(f'Computed LNB {i + 1}/2', logger)
+        # ds_quant['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
+        # print_log('Computing Miyawaki 2022 params', logger)
+        # ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
+        # Save lnb indices as integers
+        ds_quant['lnb1_ind'] = ds_quant['lnb1_ind'].fillna(-1).astype(int)
+        ds_quant['lnb2_ind'] = ds_quant['lnb2_ind'].fillna(-1).astype(int)
         ds_quant.attrs['temp_surf_lcl_calc'] = temp_surf_lcl_calc
         ds_quant.attrs["region"] = region
         ds_quant.attrs["hemisphere"] = hemisphere
@@ -409,6 +414,7 @@ if __name__ == '__main__':
         ds_quant.attrs["exp_dir"] = str(exp_dir)
         ds_quant.attrs["dailymax"] = str(dailymax)
         ds_quant.attrs["lev_REFHT"] = lev_REFHT
+
         ds_quant = convert_ds_dtypes(ds_quant)
         if not os.path.exists(ds_out_path):
             ds_quant.to_netcdf(ds_out_path, format="NETCDF4",

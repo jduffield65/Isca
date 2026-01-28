@@ -45,7 +45,11 @@ def mixing_ratio_from_partial_pressure(partial_pressure: Union[float, np.ndarray
     Returns:
         Mixing ratio, $w$, in units of $kg/kg$.
     """
-    return epsilon * partial_pressure / (total_pressure - partial_pressure)
+    try:
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
+    except RuntimeWarning:
+        hi = 5
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
 
 
 def mixing_ratio_from_sphum(sphum: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
