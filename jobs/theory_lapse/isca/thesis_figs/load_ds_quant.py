@@ -384,7 +384,7 @@ if __name__ == '__main__':
         print_log('Obtaining lapse rate fitting data', logger)
         ds_quant = get_lapse_fitting_info(ds_quant)
 
-        print_log('Computing LNB', logger)
+        # print_log('Computing LNB', logger)
         # boundary layer lapse rate is same for all methods and p_ft so just select one
         # lapse_mod_D = ds_quant.mod_parcel_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
         # # 2 different estimates of LNB depending on where parcel rising from

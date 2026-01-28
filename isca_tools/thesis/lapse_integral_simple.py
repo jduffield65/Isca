@@ -235,9 +235,8 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{approx}| d\ln p$ of each layer.
             Units are *K/km*.
     """
-    rh_lower = np.clip(rh_lower, 0, 1)          # ensure rh between 0 and 1
     if (p_upper > p_lower - p_range_calc) | (p_upper2 > p_upper - p_range_calc):
-        # LCL or Surface too close to FT level to compute
+        # (LCL too close to surface) or (LCL too close to FT level) to compute
         return np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan]), np.asarray([np.nan, np.nan])
     if force_parcel:
         return parcel_fitting(temp_env_lev, p_lev, temp_env_lower, p_lower, rh_lower, temp_env_upper, p_upper,
@@ -370,8 +369,11 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
         Index of model level closest to the top of the atmosphere for which parcel temperature is warmer than environmental
         temperature. I.e. index of the buoyant layer furthest from the surface.
         If no buoyant layer, it will return the index of surface.
+        Will be -1 if could not be computed.
     """
-    rh_surf = np.clip(rh_surf, 0, 1)        # ensure rh between 0 and 1
+    if (rh_surf<0) or (rh_surf>1) or np.isnan(lapse_mod_D):
+        hi = 5
+        return -1
     surf_ind = np.argmax(p_lev)
     if surf_ind == 0:
         raise ValueError('Must have pressure ascending in p_lev')
