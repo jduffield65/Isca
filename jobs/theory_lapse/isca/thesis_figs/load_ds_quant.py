@@ -32,10 +32,15 @@ quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
 temp_surf_lcl_calc = 300  # Temperature to use to calculate the LCL. 'median' to compute from data.
 n_lev_above_integral = 3  # Used to compute error in lapse rate integral
 lev_REFHT = -1  # Model level to use for computing RH and lapse fitting
+const_layer1_method = 'optimal'
 
 region = 'tropics'
 season = 'summer'
-dailymax = False  # Take daily max data
+try:
+    dailymax = sys.argv[4].lower() == 'true'
+except IndexError:
+    dailymax = False  # Take daily max data
+
 try:
     # ideally get these from terminal
     surf = sys.argv[1]  # 'land' or 'aquaplanet'
@@ -55,7 +60,8 @@ get_lnb_ind_xr = wrap_with_apply_ufunc(get_lnb_ind, input_core_dims=[['lev'], ['
 
 def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land'] = 'aquaplanet',
                     region: Literal['tropics', 'not_tropics'] = 'tropics',
-                    hemisphere: Literal['north', 'south'] = 'north', dailymax: bool = False):
+                    hemisphere: Literal['north', 'south'] = 'north', dailymax: bool = False,
+                    const_layer1_method: Literal['bulk', 'optimal'] = const_layer1_method):
     """
     Returns path name in ./ds_processed directory
 
@@ -75,6 +81,8 @@ def get_ds_out_path(kappa_name: str, surf: Literal['aquaplanet', 'land'] = 'aqua
     if dailymax:
         ds_out_path = os.path.join(ds_out_path, 'dailymax')
     ds_out_path = os.path.join(ds_out_path, f"{kappa_name}.nc")
+    if const_layer1_method == 'optimal':
+        ds_out_path = ds_out_path.replace('.nc', '_optimal.nc')
     return ds_out_path
 
 
@@ -94,7 +102,7 @@ def get_P(ds):
 
 
 def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere=['south', 'north'],
-           dailymax=False):
+           dailymax=False, const_layer1_method=const_layer1_method):
     """
     Function to load in datasets from `ds_out_path` in this directory and combine them.
     I.e. quick function to load datasets this script creates, once finished.
@@ -116,7 +124,8 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
         for i in range(n_exp):
             # Load both hemispheres and combine into single ds
             ds[key][i] = [xr.open_dataset(get_ds_out_path(kappa_names[i], surf=key, hemisphere=hemisphere[j],
-                                                          dailymax=dailymax)).isel(surf=0)
+                                                          dailymax=dailymax,
+                                                          const_layer1_method=const_layer1_method)).isel(surf=0)
                           for j in range(len(hemisphere))]
             ds[key][i] = amend_sample_dim(ds[key][i])
             ds[key][i] = xr.concat(ds[key][i], dim='lat')
@@ -132,9 +141,6 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
         ds[key]['mse_ft_sat_env'] = moist_static_energy(ds[key].T_ft_env, sphum_sat(ds[key].T_ft_env, ds[key].p_ft),
                                                         ds[key].Z_ft_env)
         ds[key]['epsilon'] = ds[key]['mse_REFHT'] - ds[key]['mse_ft_sat_env']
-        # for key2 in ds[key]:
-        #     if 'mod_parcel' in key2:
-        #         ds[key] = ds[key].rename_vars({key2: key2.replace('mod_parcel', 'modParc')})
     return ds
 
 
@@ -337,6 +343,7 @@ if __name__ == '__main__':
                                 n_lev_above_upper2_integral=ds.n_lev_above_integral,
                                 method_layer1='const',
                                 method_layer2=key,
+                                const_layer1_method=const_layer1_method,
                                 mod_parcel_method='add',
                                 force_parcel=key == 'parcel',
                                 temp_surf_lcl_calc=temp_surf_lcl_calc,
@@ -414,6 +421,7 @@ if __name__ == '__main__':
         ds_quant.attrs["exp_dir"] = str(exp_dir)
         ds_quant.attrs["dailymax"] = str(dailymax)
         ds_quant.attrs["lev_REFHT"] = lev_REFHT
+        ds_quant.attrs["const_layer1_method"] = const_layer1_method
 
         ds_quant = convert_ds_dtypes(ds_quant)
         if not os.path.exists(ds_out_path):

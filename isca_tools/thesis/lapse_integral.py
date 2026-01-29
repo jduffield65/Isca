@@ -1,8 +1,11 @@
 import numpy as np
 import xarray as xr
 from typing import Union, Optional, Tuple, Literal
-from ..utils.constants import g, R, lapse_dry
+
+from ..utils.base import insert_to_array
+from ..utils.constants import g, R
 from ..utils.moist_physics import sphum_sat
+from ..utils.numerical import weighted_median
 from ..thesis.adiabat_theory import get_temp_adiabat
 
 
@@ -119,9 +122,83 @@ def integral_and_error_calc(temp_env_lev: Union[xr.DataArray, np.ndarray],
     return integral, error
 
 
+def fit_lapse_L1_dlnT(temp_env_lev: np.ndarray, p_lev: np.ndarray, mask_lev: Optional[np.ndarray] = None) -> float:
+    """Fit a single lapse parameter by minimizing an L1 mismatch in d(ln T).
+
+    We consider a temperature profile `T_env(p)` sampled on levels `p_lev`, and
+    fit a single scalar lapse parameter that best matches the *log-temperature
+    increments* in an L1 (absolute deviation) sense.
+
+    Discretely, define layer quantities (between adjacent levels):
+    - `dlnT_k = ln(T[k+1]) - ln(T[k])`
+    - `dlnp_k = ln(p[k+1]) - ln(p[k])`
+
+    If you write the approximation as `ln T_approx = const + a ln p` with
+    `a = (R/g) * lapse`, then `dlnT_approx_k = a * dlnp_k`. Minimizing
+    `sum_k |dlnT_env_k - a dlnp_k|` reduces to a weighted median problem for
+    `a_k = dlnT_env_k / dlnp_k` with weights `w_k = |dlnp_k|`. [web:83]
+
+    Args:
+        temp_env_lev: Environmental temperature on levels, shape `(n_lev,)`.
+            Must be positive on included levels (log is taken).
+        p_lev: Pressure on the same levels, shape `(n_lev,)`. Must be positive
+            on included levels (log is taken).
+        mask_lev: Optional boolean mask on levels, shape `(n_lev,)`. True means
+            keep level. Layers are kept only if both bounding levels are kept.
+
+    Returns:
+        Best-fit scalar lapse (float), using the weighted-median (L1-optimal)
+        solution. [web:83]
+
+    Raises:
+        ValueError: If arrays are not 1D, shapes differ, or if no valid layers
+            remain after masking/positivity checks.
+    """
+    T = np.asarray(temp_env_lev)
+    p = np.asarray(p_lev)
+
+    if T.ndim != 1 or p.ndim != 1:
+        raise ValueError("temp_env_lev and p_lev must be 1D arrays.")
+    if T.shape != p.shape:
+        raise ValueError("temp_env_lev and p_lev must have the same shape.")
+
+    if mask_lev is None:
+        mask_lev = np.ones_like(T, dtype=bool)
+    else:
+        mask_lev = np.asarray(mask_lev, dtype=bool)
+        if mask_lev.shape != T.shape:
+            raise ValueError("mask_lev must have the same shape as temp_env_lev.")
+
+    # Valid layers require: both endpoints selected, positive T and p, and p changes.
+    layer_mask = (
+        mask_lev[:-1]
+        & mask_lev[1:]
+        & (T[:-1] > 0)
+        & (T[1:] > 0)
+        & (p[:-1] > 0)
+        & (p[1:] > 0)
+        & (p[:-1] != p[1:])
+    )
+
+    if not np.any(layer_mask):
+        raise ValueError("No valid layers available to fit lapse.")
+
+    dlnT = np.diff(np.log(T))[layer_mask]
+    dlnp = np.diff(np.log(p))[layer_mask]
+
+    a_k = dlnT / dlnp
+    w_k = np.abs(dlnp)
+
+    a_star = weighted_median(a_k, w_k)  # L1 minimizer via weighted median.
+    lapse_star = (g / R) * a_star
+    return float(lapse_star)
+
+
 def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[xr.DataArray, np.ndarray],
                         temp_env_lower: float, p_lower: float,
                         temp_env_upper: float, p_upper: float, n_lev_above_upper_integral: int = 0,
+                        temp_approx_lower: Optional[float] = None,
+                        lapse_method: Literal['bulk', 'optimal'] = 'bulk',
                         sanity_check: bool = False) -> Tuple[float, float, float]:
     """
     Find the bulk lapse rate such that $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p = \Gamma_{bulk} \ln (p_2/p_1)$.
@@ -137,6 +214,12 @@ def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Un
         n_lev_above_upper_integral: Will return `integral` and `integral_error` not up to `p_upper` but up to
             the model level pressure `n_lev_above_upper_integral` further from the surface than `p_upper`.
             If `n_lev_above_upper_integral=0`, upper limit of integral will be `p_upper`.
+        temp_approx_lower: Temperature of the approximate profile at lower pressure level.
+            Will set to `temp_env_lower` if not provided.
+        lapse_method: If 'bulk', will compute lapse rate which intersects exactly with `temp_approx_lower` at `p_lower`
+            and `temp_env_upper` at `p_upper`.
+            If `optimal`, will use `fit_lapse_L1_dlnT` to compute the optimal lapse rate i.e., to minimize the error.
+            Will still intersect `temp_approx_lower` at `p_lower`, but not `temp_env_upper` at `p_upper`.
         sanity_check: If `True` will print a sanity check to ensure the calculation is correct.
 
     Returns:
@@ -145,37 +228,56 @@ def const_lapse_fitting(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Un
         integral_error: Result of integral $\int_{p_1}^{p_2} |\Gamma_{env}(p) - \Gamma_{bulk}| d\ln p$.
             Units are *K/km*.
     """
-    # Compute integral of actual environmental lapse rate between p_lower and p_upper
-    lapse_integral = g / R * np.log(temp_env_upper / temp_env_lower)
-    # Define bulk lapse rate such that a profile following constant lapse rate between p_lower and p_upper
-    # would have same value of above integral as actual profile
-    lapse_bulk = lapse_integral / np.log(p_upper / p_lower)
-    temp_env_approx_lev = get_temp_const_lapse(p_lev, temp_env_lower, p_lower, lapse_bulk)
+    if temp_approx_lower is None:
+        temp_approx_lower = temp_env_lower
+    if lapse_method == 'bulk':
+        # Compute integral of approx lapse rate between p_lower and p_upper
+        # Intersects exactly with temp_approx at p_lower and temp_env at p_upper
+        lapse_integral = g / R * np.log(temp_env_upper / temp_approx_lower)
+        # Define bulk lapse rate such that a profile following constant lapse rate between p_lower and p_upper
+        # would have same value of above integral as actual profile
+        lapse_bulk = lapse_integral / np.log(p_upper / p_lower)
+    elif lapse_method == 'optimal':
+        p_add = []
+        temp_add = []
+        if p_lower not in p_lev:
+            p_add.append(p_lower)
+            temp_add.append(temp_env_lower)
+        if p_upper not in p_lev:
+            p_add.append(p_upper)
+            temp_add.append(temp_env_upper)
+        p_lev_use, temp_env_lev_use = insert_to_array(p_lev, temp_env_lev, p_add, temp_add)
+        lapse_bulk = fit_lapse_L1_dlnT(temp_env_lev_use, p_lev_use, mask_lev=(p_lev_use <= p_lower) & (p_lev_use >= p_upper))
+    else:
+        raise ValueError(f'lapse_method={lapse_method} not recognized.')
+    temp_approx_lev = get_temp_const_lapse(p_lev, temp_approx_lower, p_lower, lapse_bulk)
 
     if sanity_check:
+        temp_approx_upper = get_temp_const_lapse(p_upper, temp_approx_lower, p_lower, lapse_bulk)
+        lapse_integral = g / R * np.log(temp_approx_upper / temp_approx_lower)
         # sanity check, this should be the same as lapse_integral
-        lapse_integral_approx = integral_lapse_dlnp_hydrostatic(temp_env_approx_lev, p_lev, p_lower, p_upper,
-                                                                temp_env_lower, temp_env_upper)
+        lapse_integral_approx = integral_lapse_dlnp_hydrostatic(temp_approx_lev, p_lev, p_lower, p_upper,
+                                                                temp_approx_lower, temp_approx_upper)
         print(
             f'Actual lapse integral: {lapse_integral * 1000:.3f} K/km\nApprox lapse integral: {lapse_integral_approx * 1000:.3f} K/km')
         # Will use lapse rate such that approx value of T_upper is exact. Check that here
-        temp_env_approx_upper = get_temp_const_lapse(p_upper, temp_env_lower, p_lower, lapse_bulk)
-        print(f'Actual temp_upper: {temp_env_upper:.3f} K\nApprox temp_upper: {temp_env_approx_upper:.3f} K')
+        print(f'Actual temp_upper: {temp_env_upper:.3f} K\nApprox temp_upper: {temp_approx_upper:.3f} K')
 
     if n_lev_above_upper_integral == 0:
-        lapse_integral, lapse_integral_error = integral_and_error_calc(temp_env_lev, temp_env_approx_lev, p_lev,
-                                                                       temp_env_lower, temp_env_lower, p_lower,
-                                                                       temp_env_upper, temp_env_upper, p_upper)
+        temp_approx_upper = get_temp_const_lapse(p_upper, temp_approx_lower, p_lower, lapse_bulk)
+        lapse_integral, lapse_integral_error = integral_and_error_calc(temp_env_lev, temp_approx_lev, p_lev,
+                                                                       temp_env_lower, temp_approx_lower, p_lower,
+                                                                       temp_env_upper, temp_approx_upper, p_upper)
     else:
         if n_lev_above_upper_integral < 0:
             raise ValueError('n_lev_above_upper_integral must be greater than 0')
         if p_lev[1] < p_lev[0]:
             raise ValueError('p_lev[1] must be greater than p_lev[0]')
         ind_upper = np.where(p_lev < p_upper)[0][-n_lev_above_upper_integral]
-        lapse_integral, lapse_integral_error = integral_and_error_calc(temp_env_lev, temp_env_approx_lev, p_lev,
-                                                                       temp_env_lower, temp_env_lower, p_lower,
+        lapse_integral, lapse_integral_error = integral_and_error_calc(temp_env_lev, temp_approx_lev, p_lev,
+                                                                       temp_env_lower, temp_approx_lower, p_lower,
                                                                        float(temp_env_lev[ind_upper]),
-                                                                       float(temp_env_approx_lev[ind_upper]),
+                                                                       float(temp_approx_lev[ind_upper]),
                                                                        float(p_lev[ind_upper]))
     return lapse_bulk * 1000, lapse_integral * 1000, lapse_integral_error * 1000
 

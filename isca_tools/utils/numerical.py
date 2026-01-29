@@ -575,3 +575,44 @@ def hybrid_root_find(
         raise ValueError("brentq did not converge within constructed bracket.")
 
     return sol.root
+
+
+def weighted_median(x: np.ndarray, w: np.ndarray) -> float:
+    """Compute the (lower) weighted median of 1D data.
+
+    This returns the first value `x[i]` (after sorting by `x`) for which the
+    cumulative weight is at least half of the total weight. This is a common
+    convention and always yields a valid weighted median (though the weighted
+    median set can be an interval in special tie cases).
+
+    Args:
+        x: 1D array of values, shape `(n,)`.
+        w: 1D array of non-negative weights, shape `(n,)`. Typically you want
+            strictly positive weights on the points you include.
+
+    Returns:
+        Weighted median value (float). By construction this implementation
+        returns a value that is an element of `x`.
+
+    Raises:
+        ValueError: If `x` and `w` have different shapes, are not 1D, or if the
+            total weight is zero.
+    """
+    x = np.asarray(x)
+    w = np.asarray(w)
+
+    if x.ndim != 1 or w.ndim != 1:
+        raise ValueError("x and w must be 1D arrays.")
+    if x.shape != w.shape:
+        raise ValueError("x and w must have the same shape.")
+    wsum = np.sum(w)
+    if wsum <= 0:
+        raise ValueError("Sum of weights must be > 0.")
+
+    order = np.argsort(x)
+    x = x[order]
+    w = w[order]
+
+    cw = np.cumsum(w)
+    cutoff = 0.5 * wsum
+    return float(x[np.searchsorted(cw, cutoff, side="left")])
