@@ -20,6 +20,8 @@ from isca_tools.convection.base import lcl_metpy
 from isca_tools.thesis.lapse_theory import get_var_at_plev
 from geocat.comp.interpolation import interp_hybrid_to_pressure
 from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr, get_lnb_ind
+from tqdm import tqdm
+from typing import Literal, Optional
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
@@ -30,7 +32,7 @@ from jobs.theory_lapse.scripts.lcl import load_ds_quant, data_dir, var_keep
 
 var_initial_load = [item for item in var_keep if
                     item not in ['Z3', 'CAPE', 'FREQZM']]  # get rid of variables don't need
-test_mode = False            # for testing on a small dataset
+test_mode = True            # for testing on a small dataset
 try:
     # ideally get quant_type from terminal
     quant_type = sys.argv[1]  # e.g. 'REFHT_quant50'
@@ -46,18 +48,20 @@ try:
 except IndexError:
     # Default values of don't call from terminal - for testing
     exp_name = ['pre_industrial', 'co2_2x']
-    quant_type = 'REFHT_quant95'
+    quant_type = 'REFHT_quant50'
     lat_ind_start = 1
     lat_ind_end = None
 exp_name = np.atleast_1d(exp_name)
 processed_dir = [os.path.join(data_dir, exp_name[i], quant_type, 'lapse_fitting') for i in range(len(exp_name))]
 processed_file_name = 'ds_lapse_simple.nc'  # combined file from all samples
 p_ft = [400 * 100, 500 * 100]  # Free tropospheric levels - for each one, will obtain lapse fitting info
+rh_mod = [-0.1, -0.05, 0, 0.05, 0.1]        # modifications to rh and thus LCL to consider
 p_ft = np.atleast_1d(p_ft)
 comp_level = 4
 n_lev_above_integral = 3
 temp_surf_lcl_calc = 300  # Compute LCL from RH using 300K as surf temp
 lev_REFHT = -1  # Model level used to compute rh_REFHT, and subsequent lapse fitting. If None will use actual REFHT
+const_layer1_method = 'optimal'
 
 
 def get_ds_quant_lat(co2_ind, lat_ind):
@@ -80,7 +84,141 @@ def get_ds_quant_lat(co2_ind, lat_ind):
     ds.attrs['temp_surf_lcl_calc'] = temp_surf_lcl_calc
     ds.attrs['n_lev_above_integral'] = n_lev_above_integral
     ds.attrs['lev_REFHT'] = lev_REFHT
+    ds.attrs['const_layer1_method'] = const_layer1_method
     return ds
+
+
+def get_lapse_fitting_info(
+        ds: xr.Dataset,
+        n_lev_above_integral: int,
+        rh_mod: np.ndarray,
+        var_loop: str,
+        p_lev: Optional[float] = None,
+        temp_surf_lcl_calc: float = 300,
+        const_layer1_method: Literal['bulk', 'optimal'] = 'optimal') -> xr.Dataset:
+    """Compute lapse fitting diagnostics for each value of `var_loop`, returning ds with added vars.
+
+    This loops over `p_ft` and over a chosen dataset dimension/coordinate given by `var_loop`
+    (e.g. "quant"), and computes lapse-fitting fields for each combination.
+
+    Args:
+        ds (xr.Dataset): Input dataset containing `p_ft` and the loop coordinate `var_loop`,
+            plus the variables used in fitting (e.g. T, TREFHT, PREFHT, rh_REFHT, T_ft_env, PS).
+        n_lev_above_integral (int): Number of levels above the upper layer boundary used in
+            the integral calculation; saved to `ds.attrs["n_lev_above_integral"]`.
+        rh_mod (np.ndarray): Relative-humidity perturbations to apply for the modified-parcel
+            calculation; mapped onto an xarray coordinate called "rh_mod".
+        var_loop (str): Name of the coordinate/dimension to loop over;
+            must be indexable via `.sel({var_loop: value})` on required variables.
+        p_lev (float, optional): Pressure levels to use in fitting. If None, uses `ds.P`.
+        temp_surf_lcl_calc:
+        const_layer1_method:
+
+    Returns:
+        xr.Dataset: Dataset with computed lapse-fitting fields added.
+    """
+    if p_lev is None:
+        p_lev = ds.P
+
+    ds.attrs["n_lev_above_integral"] = n_lev_above_integral
+    ds.attrs['temp_surf_lcl_calc'] = temp_surf_lcl_calc
+    ds.attrs["const_layer1_method"] = const_layer1_method
+
+    rh_mod_xr = xr.DataArray(
+        rh_mod,
+        dims=["rh_mod"],
+        name="rh_mod",
+        coords={"rh_mod": rh_mod},
+        attrs={"long_name": "RH perturbations applied to REFHT RH for modified parcel"},
+    )
+
+    var_names = ["lapse", "integral", "error"]
+    keys = ["const", "mod_parcel", "parcel"]  # add parcel for perfect parcel error
+
+    # Values to loop over (formerly ds["quant"].values)
+    loop_vals = ds[var_loop].values
+    out_list_p = []  # contains one dataset for each p_ft
+
+    with tqdm(total=len(loop_vals) * len(ds.p_ft), position=0, leave=True) as pbar:
+        for p_ft_ind, p_ft_use in enumerate(ds.p_ft):
+            out_list_l = []  # contains one dataset for each var_loop value
+
+            for v in loop_vals:
+                small = {}
+
+                # --- fitting outputs for each method ---
+                for key in keys:
+                    var = fitting_2_layer_xr(
+                        ds.T.sel({var_loop: v}),
+                        p_lev.sel({var_loop: v}),
+                        ds.TREFHT.sel({var_loop: v}),
+                        ds.PREFHT.sel({var_loop: v}),
+                        ds.rh_REFHT.sel({var_loop: v})
+                        if key == "parcel"
+                        else ds.rh_REFHT.sel({var_loop: v}) + rh_mod_xr,
+                        ds.T_ft_env.sel({var_loop: v, "p_ft": p_ft_use}),
+                        p_ft_use,
+                        n_lev_above_upper2_integral=ds.n_lev_above_integral,
+                        method_layer1="const",
+                        method_layer2=key,
+                        const_layer1_method=const_layer1_method,
+                        mod_parcel_method="add",
+                        force_parcel=key == "parcel",
+                        temp_surf_lcl_calc=temp_surf_lcl_calc,
+                    )
+
+                    for k, name in enumerate(var_names):
+                        vname = f"{key}_{name}"
+                        small[vname] = var[k]
+
+                # --- diagnostics that only need one p_ft ---
+                if p_ft_ind == 0:
+                    lapse_mod_D = (
+                            small["mod_parcel_lapse"].isel(layer=0, drop=True) / 1000 - lapse_dry
+                    )
+
+                    small["lnb1_ind"] = get_lnb_ind_xr(
+                        ds.T.sel({var_loop: v}),
+                        p_lev.sel({var_loop: v}),
+                        ds.rh_REFHT.sel({var_loop: v}),
+                        0,
+                        temp_surf_lcl_calc=temp_surf_lcl_calc,
+                    )
+                    small["lnb2_ind"] = get_lnb_ind_xr(
+                        ds.T.sel({var_loop: v}),
+                        p_lev.sel({var_loop: v}),
+                        ds.rh_REFHT.sel({var_loop: v}) + rh_mod_xr,
+                        lapse_mod_D,
+                        temp_surf_lcl_calc=temp_surf_lcl_calc,
+                    )
+                    small["lapse_miy2022_M"], small["lapse_miy2022_D"] = get_lapse_dev(
+                        ds.T.sel({var_loop: v}),
+                        p_lev.sel({var_loop: v}),
+                        ds.PS.sel({var_loop: v}),
+                    )
+
+                # Add variable-level attrs (strings) for everything created in `small`
+                for vn, da in list(small.items()):
+                    if hasattr(da, "attrs"):
+                        da.attrs.setdefault("long_name", vn)
+
+                # One small dataset per loop value
+                out_list_l.append(xr.Dataset(small).expand_dims({var_loop: [v]}))
+
+                pbar.update(1)
+
+            # Concatenate all per-var_loop datasets at fixed p_ft
+            out_list_p.append(xr.concat(out_list_l, dim=var_loop))
+
+    # Concatenate across p_ft values
+    new_vars = xr.concat(out_list_p, dim=ds.p_ft)
+
+    # For these variables, only need a single p_ft
+    for key in ["lnb1_ind", "lnb2_ind", "lapse_miy2022_M", "lapse_miy2022_D"]:
+        new_vars[key] = new_vars[key].isel(p_ft=0, drop=True)
+
+    # Merge into original ds
+    return xr.merge([ds, new_vars])
 
 
 if __name__ == '__main__':
@@ -127,44 +265,15 @@ if __name__ == '__main__':
             print_log(
                 f'File {i * n_lat + j + 1}/{n_files} | Data loaded | Memory used {get_memory_usage() / 1000:.1f}GB',
                 logger)
-            for key in ['const', 'mod_parcel']:
-                # Compute for multiple p_ft and T_ft_env at the same time
-                var = fitting_2_layer_xr(ds_use.T, ds_use.P, ds_use.TREFHT, ds_use.PREFHT, ds_use.rh_REFHT,
-                                         ds_use.T_ft_env, ds_use.p_ft,
-                                         n_lev_above_upper2_integral=ds_use.n_lev_above_integral,
-                                         temp_surf_lcl_calc=ds_use.temp_surf_lcl_calc, method_layer2=key)
-                for k, key2 in enumerate(var_names):
-                    ds_use[f'{key}1_{key2}'] = var[k]
-                print_log(
-                    f'File {i * n_lat + j + 1}/{n_files} | {key}1 Lapse Fitting Complete | Memory used {get_memory_usage() / 1000:.1f}GB',
-                    logger)
-
-            # boundary layer lapse rate is same for all methods and p_ft so just select one
-            # 2 different estimates of LNB depending on where parcel rising from
-            # New dimension parcel type, surf means parcel rising from surface so lapse_mod_D=0
-            # lcl means parcel rising from lcl means take actual value of lapse_mod_D
-            lapse_mod_D = ds_use.mod_parcel1_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
-            lapse_mod_D = lapse_mod_D.fillna(0)  # if nan set to exactly dry adiabat for lnb computation
-            lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
-            lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
-            lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)  # where parcel_type=surf, set to 0
-            # ds_use['lnb_ind'] = get_lnb_ind_xr(ds_use.T, ds_use.P, ds_use.rh_REFHT, lapse_mod_D,
-            #                                    temp_surf=None, p_surf=None, temp_surf_lcl_calc=temp_surf_lcl_calc)
-            lnb = []  # loop so can output data progress more often
-            for q in range(lapse_mod_D.parcel_type.size):
-                lnb.append(get_lnb_ind_xr(ds_use.T, ds_use.P, ds_use.rh_REFHT,
-                                          lapse_mod_D.isel(parcel_type=q),
-                                          temp_surf=None, p_surf=None, temp_surf_lcl_calc=temp_surf_lcl_calc))
-                print_log(
-                    f'File {i * n_lat + j + 1}/{n_files} | Computed LNB {q+1}/2 | Memory used {get_memory_usage() / 1000:.1f}GB',
-                    logger)
-            ds_use['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type).astype(int)
-
-            ds_use['lapse_miy2022_M'], ds_use['lapse_miy2022_D'] = \
-                get_lapse_dev(ds_use.T, ds_use.P, ds_use.PS)
+            ds_use = get_lapse_fitting_info(ds_use, n_lev_above_integral, rh_mod, var_loop='lon',
+                                            temp_surf_lcl_calc=temp_surf_lcl_calc,
+                                            const_layer1_method=const_layer1_method)
             print_log(
-                f'File {i * n_lat + j + 1}/{n_files} | Computed Miyawaki 2022 params | Memory used {get_memory_usage() / 1000:.1f}GB',
+                f'File {i * n_lat + j + 1}/{n_files} | Obtained lapse info | Memory used {get_memory_usage() / 1000:.1f}GB',
                 logger)
+            # Save lnb indices as integers
+            ds_use['lnb1_ind'] = ds_use['lnb1_ind'].fillna(-1).astype(int)
+            ds_use['lnb2_ind'] = ds_use['lnb2_ind'].fillna(-1).astype(int)
 
             # Save data
             ds_use['layer'] = xr.DataArray(['below lcl', 'above lcl'], name='layer', dims='layer')

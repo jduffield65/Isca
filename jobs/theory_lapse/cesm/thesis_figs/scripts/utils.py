@@ -1,7 +1,6 @@
 # Basic functions for loading processed JASMIN data that has been processed and saved locally
 # These data sets are all averaged over a given quantile
 import re
-
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
@@ -472,3 +471,4 @@ def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: fl
     other_dims = [d for d in ds_out.dims if d != quant_dim]
     ds_out = ds_out.transpose(*other_dims, quant_dim)  # make quant the last dimension
     return ds_out
+

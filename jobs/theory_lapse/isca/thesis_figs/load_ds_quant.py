@@ -20,12 +20,13 @@ from isca_tools.thesis.lapse_integral_simple import fitting_2_layer_xr, get_lnb_
 from isca_tools.utils.xarray import convert_ds_dtypes, wrap_with_apply_ufunc
 from isca_tools.utils.constants import lapse_dry
 from isca_tools.thesis.lapse_integral import integral_and_error_calc
+from jobs.theory_lapse.scripts.lapse_fitting_simple import get_lapse_fitting_info
 
 # -- Specific info for running the script --
-test_mode = False  # for testing on small dataset
+test_mode = True  # for testing on small dataset
 comp_level = 4  # compression level for saving
 p_ft = [500 * 100, 700 * 100]  # FT pressure level to use
-rh_mod = [-0.1, -0.05, 0, 0.05, 0.1]
+rh_mod = [-0.1, -0.05, 0, 0.05, 0.1]        # modifications to rh and thus LCL to consider
 n_sample = None  # How many data points for each quantile, x to use. None to get all.
 quant_all = np.arange(1, 100, 1)  # Quantiles, x, to get data for.
 # quant_all = np.array([1, 50, 99])    # Small test run
@@ -307,110 +308,10 @@ if __name__ == '__main__':
         ds_quant['hybm'] = ds.hybm  # only need single quant for hybm
 
 
-        ## -- Get Error Parameters for lapse rate fitting --
-
-        def get_lapse_fitting_info(ds: xr.Dataset):
-            """Compute lapse fitting diagnostics for each quant, returning ds with added vars.
-
-            Args:
-                ds (xr.Dataset): Input dataset with dimension 'quant'.
-
-            Returns:
-                xr.Dataset: Dataset with computed lapse-fitting fields for each quant.
-            """
-            ds.attrs["n_lev_above_integral"] = n_lev_above_integral
-            rh_mod_xr = xr.DataArray(rh_mod, dims=["rh_mod"], name="rh_mod", coords={"rh_mod": rh_mod})
-            var_names = ["lapse", "integral", "error"]
-            keys = ["const", "mod_parcel", "parcel"]  # add parcel for perfect parcel error
-
-            quants = ds["quant"].values
-            out_list_p = []  # contains one dataarray for each p_ft
-
-            with tqdm(total=len(quants) * len(p_ft), position=0, leave=True) as pbar:
-                for p_ft_ind, p_ft_use in enumerate(p_ft):
-                    out_list_q = []  # contains one dataarray for each quant
-                    for q in quants:
-                        small = {}
-                        for key in keys:
-                            var = fitting_2_layer_xr(
-                                ds.T.sel(quant=q),
-                                get_P(ds).sel(quant=q),
-                                ds.TREFHT.sel(quant=q),
-                                ds.PREFHT.sel(quant=q),
-                                ds.rh_REFHT.sel(quant=q) if key == 'parcel' else ds.rh_REFHT.sel(quant=q) + rh_mod_xr,
-                                ds.T_ft_env.sel(quant=q, p_ft=p_ft_use),
-                                p_ft_use,
-                                n_lev_above_upper2_integral=ds.n_lev_above_integral,
-                                method_layer1='const',
-                                method_layer2=key,
-                                const_layer1_method=const_layer1_method,
-                                mod_parcel_method='add',
-                                force_parcel=key == 'parcel',
-                                temp_surf_lcl_calc=temp_surf_lcl_calc,
-                            )
-
-                            for k, name in enumerate(var_names):
-                                # Build variable name such as "const1_lapse"
-                                vname = f"{key}_{name}"
-                                small[vname] = var[k]
-
-                        if p_ft_ind == 0:
-                            # boundary layer lapse rate is same for all methods and p_ft so just select one
-                            lapse_mod_D = small['mod_parcel_lapse'].isel(layer=0, drop=True) / 1000 - lapse_dry
-                            # 2 different estimates of LNB depending on where parcel rising from
-                            # New dimension parcel type, surf means parcel
-                            # 1st estimate lcl rising from surface so lapse_mod_D=0
-                            # fillna(-1) so negative values indicate failiure to compute because no nan in integer form
-                            small['lnb1_ind'] = get_lnb_ind_xr(ds_quant.T.sel(quant=q), get_P(ds_quant).sel(quant=q),
-                                                               ds_quant.rh_REFHT.sel(quant=q), 0,
-                                                               temp_surf_lcl_calc=temp_surf_lcl_calc)
-                            # 2nd estimate rising from modified LCL means take actual value of lapse_mod_D
-                            small['lnb2_ind'] = get_lnb_ind_xr(ds_quant.T.sel(quant=q), get_P(ds_quant).sel(quant=q),
-                                                               ds_quant.rh_REFHT.sel(quant=q) + rh_mod_xr,
-                                                               lapse_mod_D,
-                                                               temp_surf_lcl_calc=temp_surf_lcl_calc)
-                            # Compute Miyawaki parameters - independent of p_ft
-                            small['lapse_miy2022_M'], small['lapse_miy2022_D'] = \
-                                get_lapse_dev(ds_quant.T.sel(quant=q), get_P(ds_quant).sel(quant=q),
-                                              ds_quant.PS.sel(quant=q))
-
-                        # One small dataset per q
-                        out_list_q.append(xr.Dataset(small).expand_dims(quant=[q]))
-
-                        pbar.update(1)
-                    # Concatenate all per-quant datasets
-                    out_list_p.append(xr.concat(out_list_q, dim="quant"))
-            new_vars = xr.concat(out_list_p, dim=p_ft_xr)  # concatenate p_ft values
-            for key in ['lnb1_ind', 'lnb2_ind', 'lapse_miy2022_M', 'lapse_miy2022_D']:
-                # For these variables, only need a single p_ft
-                new_vars[key] = new_vars[key].isel(p_ft=0, drop=True)
-            # Merge into original ds
-            return xr.merge([ds, new_vars])
-
-
         print_log('Obtaining lapse rate fitting data', logger)
-        ds_quant = get_lapse_fitting_info(ds_quant)
+        ds_quant = get_lapse_fitting_info(ds_quant, n_lev_above_integral, rh_mod, 'quant', get_P(ds_quant),
+                                          temp_surf_lcl_calc, const_layer1_method)
 
-        # print_log('Computing LNB', logger)
-        # boundary layer lapse rate is same for all methods and p_ft so just select one
-        # lapse_mod_D = ds_quant.mod_parcel_lapse.isel(layer=0, p_ft=0, drop=True) / 1000 - lapse_dry
-        # # 2 different estimates of LNB depending on where parcel rising from
-        # # New dimension parcel type, surf means parcel rising from surface so lapse_mod_D=0
-        # # lcl means parcel rising from lcl means take actual value of lapse_mod_D
-        # lapse_mod_D = lapse_mod_D.expand_dims({'parcel_type': ['surf', 'lcl']})
-        # lapse_mod_D = lapse_mod_D.assign_coords(parcel_type=['surf', 'lcl'])
-        # lapse_mod_D = lapse_mod_D.where(lapse_mod_D.parcel_type == 'lcl', 0.)  # where parcel_type=surf, set to 0
-        # # ds_quant['lnb_ind'] = get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
-        # #                                      lapse_mod_D, temp_surf_lcl_calc=temp_surf_lcl_calc)
-        # lnb = []  # loop so can output data progress more often
-        # for i in range(lapse_mod_D.parcel_type.size):
-        #     lnb.append(get_lnb_ind_xr(ds_quant.T, get_P(ds_quant), ds_quant.rh_REFHT,
-        #                               lapse_mod_D.isel(parcel_type=i),
-        #                               temp_surf_lcl_calc=temp_surf_lcl_calc))
-        #     print_log(f'Computed LNB {i + 1}/2', logger)
-        # ds_quant['lnb_ind'] = xr.concat(lnb, dim=lapse_mod_D.parcel_type)
-        # print_log('Computing Miyawaki 2022 params', logger)
-        # ds_quant['lapse_miy2022_M'], ds_quant['lapse_miy2022_D'] = get_lapse_dev(ds_quant.T, get_P(ds_quant), ds_quant.PS)
         # Save lnb indices as integers
         ds_quant['lnb1_ind'] = ds_quant['lnb1_ind'].fillna(-1).astype(int)
         ds_quant['lnb2_ind'] = ds_quant['lnb2_ind'].fillna(-1).astype(int)
