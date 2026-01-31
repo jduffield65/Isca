@@ -23,7 +23,7 @@ from isca_tools.thesis.lapse_integral import integral_and_error_calc
 from jobs.theory_lapse.scripts.lapse_fitting_simple import get_lapse_fitting_info
 
 # -- Specific info for running the script --
-test_mode = True  # for testing on small dataset
+test_mode = False  # for testing on small dataset
 comp_level = 4  # compression level for saving
 p_ft = [500 * 100, 700 * 100]  # FT pressure level to use
 rh_mod = [-0.1, -0.05, 0, 0.05, 0.1]        # modifications to rh and thus LCL to consider
@@ -103,7 +103,8 @@ def get_P(ds):
 
 
 def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere=['south', 'north'],
-           dailymax=False, const_layer1_method=const_layer1_method):
+           dailymax=False, const_layer1_method=const_layer1_method,
+           take_best_rh_mod: bool = True):
     """
     Function to load in datasets from `ds_out_path` in this directory and combine them.
     I.e. quick function to load datasets this script creates, once finished.
@@ -114,6 +115,10 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
         hemisphere:
         dailymax: If `True`, will load in ds conditioned on hour of max surface temperature for each day.
             If `False`, will use daily average.
+        const_layer1_method: Whether to load 'bulk' or 'optimal' layer 1 method.
+        take_best_rh_mod: If `const_layer1_method='optimal'` and this is True, will choose the rh_mod
+            value for each day to minimize error. And save this ind as `{key}_rh_mod_ind` for key=`const` and
+            key = `mod_parcel`.
 
     Returns:
 
@@ -142,6 +147,11 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
         ds[key]['mse_ft_sat_env'] = moist_static_energy(ds[key].T_ft_env, sphum_sat(ds[key].T_ft_env, ds[key].p_ft),
                                                         ds[key].Z_ft_env)
         ds[key]['epsilon'] = ds[key]['mse_REFHT'] - ds[key]['mse_ft_sat_env']
+        if (const_layer1_method == 'optimal') and take_best_rh_mod:
+            for key2 in ['mod_parcel', 'const']:
+                ds[key][f'{key2}_rh_mod_ind'] = ds[key][f'{key2}_error'].sum(dim='layer').argmin(dim='rh_mod')
+                for key3 in ['lapse', 'integral', 'error']:
+                    ds[key][f'{key2}_{key3}'] = ds[key][f'{key2}_{key3}'].isel(rh_mod = ds[key][f'{key2}_rh_mod_ind'])
     return ds
 
 

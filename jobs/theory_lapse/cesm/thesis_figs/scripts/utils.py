@@ -24,7 +24,45 @@ sf_label = "Scaling Factor, $\delta T_s(x)/\delta \overline{T}_s$ [KK$^{-1}$]"
 labels_cont = {'temp_ft_change': 'FT change', 'rh_change': 'RH change', 'sCAPE_change': 'CAPE change',
                'temp_surf_anom': 'Hot-get-hotter', 'rh_anom': 'Drier-get-hotter', 'lapse_D_change': '$\eta_D$ change',
                'lapse_M_change': '$\eta_M$ change', 'lapse_D_anom': '$\eta_D$ climatological',
-               'p_surf_change': '$p_s$ change', 'p_surf_anom': 'Higher-get-hotter'}
+               'p_surf_change': '$p_s$ change', 'p_surf_anom': 'Higher-get-hotter',
+               'rh_mod_change': '$r_{\\text{mod}}$ change',
+               'rh_mod_anom': '$r_{\\text{mod}}$ climatological'}
+
+style_map_cont = {
+    # --- change (solid) ---
+    "temp_ft_change": ("C2", "-", labels_cont['temp_ft_change']),
+    "rh_change": ("C0", "-", labels_cont['rh_change']),
+    "lapse_D_change": ("C8", "-", labels_cont['lapse_D_change']),
+    "lapse_M_change": ("C1", "-", labels_cont['lapse_M_change']),
+    "sCAPE_change": ("C1", ":", labels_cont['sCAPE_change']),
+    "p_surf_change": ("C0", ":", labels_cont['p_surf_change']),
+    "rh_mod_change": ("C0", ':', labels_cont['rh_mod_change']),
+
+    # --- anomalies (dotted) ---
+    "temp_surf_anom": ("C3", "-", labels_cont['temp_surf_anom']),
+    "rh_anom": ("C4", "-", labels_cont['rh_anom']),
+    "p_surf_anom": ("C4", ":", labels_cont['p_surf_anom']),
+    "rh_mod_anom": ("C4", ":", labels_cont['rh_mod_anom']),
+
+    # sf
+    "scale_factor": ('k', "-", 'Simulated'),
+    "scale_factor_sum": ('k', "--", 'Theory'),
+
+    # non-linear
+    "nl_temp_surf_anom_rh_change": ('C3', '-', '$\Delta T_s \delta r_s$'),
+    "nl_rh_change_lapse_D_anom": ('C0', '-', '$\Delta \eta_D \delta r_s$'),
+    "nl_rh_change_lapse_M_anom": ('C1', '-', '$\Delta \eta_M \delta r_s$'),
+    "nl_temp_surf_anom_lapse_M_change": ('C1', '-', '$\Delta T_s \delta \eta_M$'),
+    "nl_temp_surf_anom_sCAPE_change": ('C1', ':', '$\Delta T_s \delta sCAPE$'),
+    "nl_temp_ft_change_rh_anom": ('C2', '-', '$\Delta T_s \delta T_{FT}$'),
+    "nl_temp_ft_change_p_surf_anom": ('C2', '-', '$\Delta p_s \delta T_{FT}$'),
+    "nl_temp_surf_anom_rh_anom": ('C4', '-', '$\Delta T_s \Delta r_s$'),
+    "nl_temp_surf_anom_p_surf_anom": ('C4', ':', '$\Delta T_s \Delta p_s$'),
+    "nl_rh_change_rh_anom": ('C0', '-', '$\Delta r_s \delta r_s$'),
+    "nl_rh_anom_lapse_D_change": ('C8', '-', '$\Delta r_s \delta \eta_D$'),
+    "nl_rh_anom_lapse_M_change": ('C4', '-', '$\Delta r_s \delta \eta_M$'),
+}
+
 
 # Where topography and land frac data stored - copied from JASMIN to local
 invariant_data_path = ('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'
@@ -320,12 +358,12 @@ def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
         Mask which is True for convective days
     """
     # Take average over all days for which error satisfies convective threshold
-    const1_error = np.abs(ds.const1_error.sum(dim='layer') / ds.const1_integral.sum(dim='layer'))
-    mod_parcel1_error = np.abs(ds.mod_parcel1_error.sum(dim='layer') / ds.mod_parcel1_integral.sum(dim='layer'))
+    const_error = np.abs(ds.const_error.sum(dim='layer') / ds.const_integral.sum(dim='layer'))
+    mod_parcel_error = np.abs(ds.mod_parcel_error.sum(dim='layer') / ds.mod_parcel_integral.sum(dim='layer'))
     if prefer_const:
-        mask_fit = (mod_parcel1_error > const1_error) & (const1_error < error_thresh)
+        mask_fit = (mod_parcel_error > const_error) & (const_error < error_thresh)
     else:
-        mask_fit = (mod_parcel1_error < const1_error) & (mod_parcel1_error < error_thresh)
+        mask_fit = (mod_parcel_error < const_error) & (mod_parcel_error < error_thresh)
     if aloft_p_size_thresh is not None:
         p_lcl = lcl_sigma_bolton_simple(ds.rh_REFHT, ds.temp_surf_lcl_calc) * ds.PS
         mask_fit = mask_fit & (p_lcl - ds.p_ft > aloft_p_size_thresh)

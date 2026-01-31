@@ -32,20 +32,20 @@ from jobs.theory_lapse.scripts.lcl import load_ds_quant, data_dir, var_keep
 
 var_initial_load = [item for item in var_keep if
                     item not in ['Z3', 'CAPE', 'FREQZM']]  # get rid of variables don't need
-test_mode = True            # for testing on a small dataset
+test_mode = False            # for testing on a small dataset
 try:
     # ideally get quant_type from terminal
     quant_type = sys.argv[1]  # e.g. 'REFHT_quant50'
     exp_name = sys.argv[2]    # 'pre_industrial' or 'co2_2x'
     try:
         lat_ind_start = int(sys.argv[3])
-    except IndexError:
+    except (IndexError, ValueError):
         lat_ind_start = 1       # starts at 1
     try:
         lat_ind_end = int(sys.argv[4])
-    except IndexError:
+    except (IndexError, ValueError):
         lat_ind_end = None
-except IndexError:
+except (IndexError, ValueError):
     # Default values of don't call from terminal - for testing
     exp_name = ['pre_industrial', 'co2_2x']
     quant_type = 'REFHT_quant50'
@@ -92,7 +92,7 @@ def get_lapse_fitting_info(
         ds: xr.Dataset,
         n_lev_above_integral: int,
         rh_mod: np.ndarray,
-        var_loop: str,
+        var_loop: Optional[str],
         p_lev: Optional[float] = None,
         temp_surf_lcl_calc: float = 300,
         const_layer1_method: Literal['bulk', 'optimal'] = 'optimal') -> xr.Dataset:
@@ -135,8 +135,16 @@ def get_lapse_fitting_info(
     var_names = ["lapse", "integral", "error"]
     keys = ["const", "mod_parcel", "parcel"]  # add parcel for perfect parcel error
 
-    # Values to loop over (formerly ds["quant"].values)
-    loop_vals = ds[var_loop].values
+    # Keep the same structure: always loop over *some* dimension, but make it temporary if var_loop is None.
+    tmp_dim = None
+    if var_loop is None:
+        tmp_dim = "var_loop_tmp"
+        var_loop_use = tmp_dim
+        loop_vals = np.array([0])
+    else:
+        var_loop_use = var_loop
+        loop_vals = ds[var_loop_use].values
+
     out_list_p = []  # contains one dataset for each p_ft
 
     with tqdm(total=len(loop_vals) * len(ds.p_ft), position=0, leave=True) as pbar:
@@ -146,17 +154,23 @@ def get_lapse_fitting_info(
             for v in loop_vals:
                 small = {}
 
+                # Helper selector: either select along var_loop, or do nothing if tmp dim.
+                if tmp_dim is None:
+                    sel_loop = {var_loop_use: v}
+                else:
+                    sel_loop = {}
+
                 # --- fitting outputs for each method ---
                 for key in keys:
                     var = fitting_2_layer_xr(
-                        ds.T.sel({var_loop: v}),
-                        p_lev.sel({var_loop: v}),
-                        ds.TREFHT.sel({var_loop: v}),
-                        ds.PREFHT.sel({var_loop: v}),
-                        ds.rh_REFHT.sel({var_loop: v})
+                        ds.T.sel(sel_loop),
+                        p_lev.sel(sel_loop),
+                        ds.TREFHT.sel(sel_loop),
+                        ds.PREFHT.sel(sel_loop),
+                        ds.rh_REFHT.sel(sel_loop)
                         if key == "parcel"
-                        else ds.rh_REFHT.sel({var_loop: v}) + rh_mod_xr,
-                        ds.T_ft_env.sel({var_loop: v, "p_ft": p_ft_use}),
+                        else ds.rh_REFHT.sel(sel_loop) + rh_mod_xr,
+                        ds.T_ft_env.sel({**sel_loop, "p_ft": p_ft_use}),
                         p_ft_use,
                         n_lev_above_upper2_integral=ds.n_lev_above_integral,
                         method_layer1="const",
@@ -178,23 +192,23 @@ def get_lapse_fitting_info(
                     )
 
                     small["lnb1_ind"] = get_lnb_ind_xr(
-                        ds.T.sel({var_loop: v}),
-                        p_lev.sel({var_loop: v}),
-                        ds.rh_REFHT.sel({var_loop: v}),
+                        ds.T.sel(sel_loop),
+                        p_lev.sel(sel_loop),
+                        ds.rh_REFHT.sel(sel_loop),
                         0,
                         temp_surf_lcl_calc=temp_surf_lcl_calc,
                     )
                     small["lnb2_ind"] = get_lnb_ind_xr(
-                        ds.T.sel({var_loop: v}),
-                        p_lev.sel({var_loop: v}),
-                        ds.rh_REFHT.sel({var_loop: v}) + rh_mod_xr,
+                        ds.T.sel(sel_loop),
+                        p_lev.sel(sel_loop),
+                        ds.rh_REFHT.sel(sel_loop) + rh_mod_xr,
                         lapse_mod_D,
                         temp_surf_lcl_calc=temp_surf_lcl_calc,
                     )
                     small["lapse_miy2022_M"], small["lapse_miy2022_D"] = get_lapse_dev(
-                        ds.T.sel({var_loop: v}),
-                        p_lev.sel({var_loop: v}),
-                        ds.PS.sel({var_loop: v}),
+                        ds.T.sel(sel_loop),
+                        p_lev.sel(sel_loop),
+                        ds.PS.sel(sel_loop),
                     )
 
                 # Add variable-level attrs (strings) for everything created in `small`
@@ -203,12 +217,12 @@ def get_lapse_fitting_info(
                         da.attrs.setdefault("long_name", vn)
 
                 # One small dataset per loop value
-                out_list_l.append(xr.Dataset(small).expand_dims({var_loop: [v]}))
+                out_list_l.append(xr.Dataset(small).expand_dims({var_loop_use: [v]}))
 
                 pbar.update(1)
 
             # Concatenate all per-var_loop datasets at fixed p_ft
-            out_list_p.append(xr.concat(out_list_l, dim=var_loop))
+            out_list_p.append(xr.concat(out_list_l, dim=var_loop_use))
 
     # Concatenate across p_ft values
     new_vars = xr.concat(out_list_p, dim=ds.p_ft)
@@ -216,6 +230,11 @@ def get_lapse_fitting_info(
     # For these variables, only need a single p_ft
     for key in ["lnb1_ind", "lnb2_ind", "lapse_miy2022_M", "lapse_miy2022_D"]:
         new_vars[key] = new_vars[key].isel(p_ft=0, drop=True)
+
+    # Drop the temporary loop dimension if we created it (size-1).
+    # squeeze(..., drop=True) removes the length-1 dimension and drops its coordinate. [web:21]
+    if tmp_dim is not None:
+        new_vars = new_vars.squeeze(tmp_dim, drop=True)
 
     # Merge into original ds
     return xr.merge([ds, new_vars])
