@@ -198,13 +198,13 @@ def get_lapse_fitting_info(
                         0,
                         temp_surf_lcl_calc=temp_surf_lcl_calc,
                     )
-                    small["lnb2_ind"] = get_lnb_ind_xr(
-                        ds.T.sel(sel_loop),
-                        p_lev.sel(sel_loop),
-                        ds.rh_REFHT.sel(sel_loop) + rh_mod_xr,
-                        lapse_mod_D,
-                        temp_surf_lcl_calc=temp_surf_lcl_calc,
-                    )
+                    # small["lnb2_ind"] = get_lnb_ind_xr(
+                    #     ds.T.sel(sel_loop),
+                    #     p_lev.sel(sel_loop),
+                    #     ds.rh_REFHT.sel(sel_loop) + rh_mod_xr,
+                    #     lapse_mod_D,
+                    #     temp_surf_lcl_calc=temp_surf_lcl_calc,
+                    # )
                     small["lapse_miy2022_M"], small["lapse_miy2022_D"] = get_lapse_dev(
                         ds.T.sel(sel_loop),
                         p_lev.sel(sel_loop),
@@ -228,7 +228,7 @@ def get_lapse_fitting_info(
     new_vars = xr.concat(out_list_p, dim=ds.p_ft)
 
     # For these variables, only need a single p_ft
-    for key in ["lnb1_ind", "lnb2_ind", "lapse_miy2022_M", "lapse_miy2022_D"]:
+    for key in ["lnb1_ind", "lapse_miy2022_M", "lapse_miy2022_D"]:
         new_vars[key] = new_vars[key].isel(p_ft=0, drop=True)
 
     # Drop the temporary loop dimension if we created it (size-1).
@@ -292,7 +292,7 @@ if __name__ == '__main__':
                 logger)
             # Save lnb indices as integers
             ds_use['lnb1_ind'] = ds_use['lnb1_ind'].fillna(-1).astype(int)
-            ds_use['lnb2_ind'] = ds_use['lnb2_ind'].fillna(-1).astype(int)
+            # ds_use['lnb2_ind'] = ds_use['lnb2_ind'].fillna(-1).astype(int)
 
             # Save data
             ds_use['layer'] = xr.DataArray(['below lcl', 'above lcl'], name='layer', dims='layer')
@@ -311,7 +311,7 @@ if __name__ == '__main__':
             ds_lapse['hyam'] = ds_lapse['hyam'].isel(lat=0, drop=True)
             ds_lapse['hybm'] = ds_lapse['hybm'].isel(lat=0, drop=True)
             # Reorder
-            ds_lapse = ds_lapse.transpose('lat', 'lon', 'sample', 'p_ft', 'layer', 'parcel_type', 'lev')
+            ds_lapse = ds_lapse.transpose('lat', 'lon', 'sample', 'p_ft', 'rh_mod', 'layer', 'lev')
             ds_lapse.to_netcdf(os.path.join(processed_dir[i], processed_file_name), format="NETCDF4",
                                encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_lapse.data_vars})
             print_log(f'{exp_name[i]} | Combined samples into one {processed_file_name} File', logger)

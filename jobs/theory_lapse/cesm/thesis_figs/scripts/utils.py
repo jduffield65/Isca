@@ -81,10 +81,12 @@ path_lapse_data = lambda x, q: f"{data_dir}/{x}/REFHT_quant{q}/lapse_fitting/ds_
 out_dir = f'{jobs_dir}/theory_lapse/cesm/thesis_figs/ds_processed'      # Where files directly for thesis figs saved
 
 # Data saved in path_lapse_data
-vars_lapse_data = ['PS', 'hyam', 'hybm', 'TREFHT', 'QREFHT', 'PREFHT', 'rh_REFHT', 'T_ft_env', 'const1_lapse',
-                   'const1_integral', 'const1_error', 'mod_parcel1_lapse', 'mod_parcel1_integral',
-                   'mod_parcel1_error', 'lnb_ind', 'lapse_miy2022_M', 'lapse_miy2022_D']
-attrs_lapse_data = ['P0', 'temp_surf_lcl_calc', 'n_lev_above_integral', 'lev_REFHT']
+vars_lapse_data = ['PS', 'hyam', 'hybm', 'TREFHT', 'QREFHT', 'PREFHT', 'rh_REFHT', 'T_ft_env',
+                   'const_lapse', 'const_integral', 'const_error',
+                   'mod_parcel_lapse', 'mod_parcel_integral', 'mod_parcel_error',
+                   'parcel_lapse', 'parcel_integral', 'parcel_error',
+                   'lnb1_ind', 'lapse_miy2022_M', 'lapse_miy2022_D']
+attrs_lapse_data = ['P0', 'temp_surf_lcl_calc', 'n_lev_above_integral', 'lev_REFHT', 'const_layer1_method']
 
 # `gw` parameter from dataset
 lat_weights = xr.load_dataset('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'
@@ -358,8 +360,12 @@ def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
         Mask which is True for convective days
     """
     # Take average over all days for which error satisfies convective threshold
-    const_error = np.abs(ds.const_error.sum(dim='layer') / ds.const_integral.sum(dim='layer'))
-    mod_parcel_error = np.abs(ds.mod_parcel_error.sum(dim='layer') / ds.mod_parcel_integral.sum(dim='layer'))
+    if 'const_error' in ds:
+        const_error = np.abs(ds.const_error.sum(dim='layer') / ds.const_integral.sum(dim='layer'))
+        mod_parcel_error = np.abs(ds.mod_parcel_error.sum(dim='layer') / ds.mod_parcel_integral.sum(dim='layer'))
+    else:
+        const_error = np.abs(ds.const1_error.sum(dim='layer') / ds.const1_integral.sum(dim='layer'))
+        mod_parcel_error = np.abs(ds.mod_parcel1_error.sum(dim='layer') / ds.mod_parcel1_integral.sum(dim='layer'))
     if prefer_const:
         mask_fit = (mod_parcel_error > const_error) & (const_error < error_thresh)
     else:

@@ -119,7 +119,7 @@ if __name__ == '__main__':
     ds_quant['hyam'] = hyam
     ds_quant['hybm'] = hybm
 
-    ds_quant['lnb_ind'] = ds_quant['lnb_ind'].fillna(-1).astype(int)       # Set nan values to negative so can save as int
+    ds_quant['lnb1_ind'] = ds_quant['lnb1_ind'].fillna(-1).astype(int)       # Set nan values to negative so can save as int
     ds_quant = convert_ds_dtypes(ds_quant)                      # make sure lower memory
 
     if not os.path.exists(ds_out_path(surf)):
