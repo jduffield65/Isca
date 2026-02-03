@@ -11,7 +11,6 @@ from cartopy.util import add_cyclic_point
 from matplotlib.contour import QuadContourSet
 from matplotlib.image import AxesImage
 
-
 from isca_tools.cesm.load import load_z2m
 from isca_tools.convection.base import lcl_sigma_bolton_simple
 from isca_tools.papers.byrne_2021 import get_quant_ind
@@ -35,13 +34,13 @@ style_map_cont = {
     "lapse_D_change": ("C8", "-", labels_cont['lapse_D_change']),
     "lapse_M_change": ("C1", "-", labels_cont['lapse_M_change']),
     "sCAPE_change": ("C1", ":", labels_cont['sCAPE_change']),
-    "p_surf_change": ("C0", ":", labels_cont['p_surf_change']),
+    "p_surf_change": ("C2", ":", labels_cont['p_surf_change']),
     "rh_mod_change": ("C0", ':', labels_cont['rh_mod_change']),
 
     # --- anomalies (dotted) ---
     "temp_surf_anom": ("C3", "-", labels_cont['temp_surf_anom']),
     "rh_anom": ("C4", "-", labels_cont['rh_anom']),
-    "p_surf_anom": ("C4", ":", labels_cont['p_surf_anom']),
+    "p_surf_anom": ("C3", ":", labels_cont['p_surf_anom']),
     "rh_mod_anom": ("C4", ":", labels_cont['rh_mod_anom']),
 
     # sf
@@ -57,12 +56,11 @@ style_map_cont = {
     "nl_temp_ft_change_rh_anom": ('C2', '-', '$\Delta T_s \delta T_{FT}$'),
     "nl_temp_ft_change_p_surf_anom": ('C2', '-', '$\Delta p_s \delta T_{FT}$'),
     "nl_temp_surf_anom_rh_anom": ('C4', '-', '$\Delta T_s \Delta r_s$'),
-    "nl_temp_surf_anom_p_surf_anom": ('C4', ':', '$\Delta T_s \Delta p_s$'),
+    "nl_temp_surf_anom_p_surf_anom": ('C3', ':', '$\Delta T_s \Delta p_s$'),
     "nl_rh_change_rh_anom": ('C0', '-', '$\Delta r_s \delta r_s$'),
     "nl_rh_anom_lapse_D_change": ('C8', '-', '$\Delta r_s \delta \eta_D$'),
     "nl_rh_anom_lapse_M_change": ('C4', '-', '$\Delta r_s \delta \eta_M$'),
 }
-
 
 # Where topography and land frac data stored - copied from JASMIN to local
 invariant_data_path = ('/Users/joshduffield/Documents/StAndrews/Isca/jobs/cesm/input_data/'
@@ -78,7 +76,7 @@ data_dir = f'{jobs_dir}/cesm/3_hour/hottest_quant'
 path_all_data = lambda x, q: f"{data_dir}/{x}/REFHT_quant{q}/output.nc"  # Contains all data transferred from JASMIN
 # Processed data to create lapse fitting info
 path_lapse_data = lambda x, q: f"{data_dir}/{x}/REFHT_quant{q}/lapse_fitting/ds_lapse_simple.nc"
-out_dir = f'{jobs_dir}/theory_lapse/cesm/thesis_figs/ds_processed'      # Where files directly for thesis figs saved
+out_dir = f'{jobs_dir}/theory_lapse/cesm/thesis_figs/ds_processed'  # Where files directly for thesis figs saved
 
 # Data saved in path_lapse_data
 vars_lapse_data = ['PS', 'hyam', 'hybm', 'TREFHT', 'QREFHT', 'PREFHT', 'rh_REFHT', 'T_ft_env',
@@ -114,6 +112,8 @@ def get_co2_multiplier(name: Literal['pre_industrial', 'co2_2x']) -> float:
         return 1  # for pre_industrial or other defaults
     else:
         raise ValueError(f'Not valid name = {name}')
+
+
 co2_labels = [f"${get_co2_multiplier(name):.0f} \\times CO_2$" for name in exp_names]
 
 
@@ -225,14 +225,14 @@ def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float
 
 
 def plot_contour_projection(
-    ax: plt.Axes,
-    var: xr.DataArray,
-    levels: Optional[Union[np.ndarray, List]] = None,
-    n_levels: int = 10,
-    mask: Optional[xr.DataArray] = None,
-    cmap: str = "viridis",
-    imshow: bool = False,
-    imshow_kwargs: Optional[dict] = None,
+        ax: plt.Axes,
+        var: xr.DataArray,
+        levels: Optional[Union[np.ndarray, List]] = None,
+        n_levels: int = 10,
+        mask: Optional[xr.DataArray] = None,
+        cmap: str = "viridis",
+        imshow: bool = False,
+        imshow_kwargs: Optional[dict] = None,
 ) -> Union[GeoContourSet, QuadContourSet, AxesImage]:
     """
     Contourf (default) or imshow plot in axes initialized with a Cartopy projection.
@@ -281,9 +281,9 @@ def plot_contour_projection(
 
     # Set good defaults, but let user override via imshow_kwargs
     defaults = dict(
-        origin="lower",                 # so first row plots at southern edge if lat is increasing [web:133]
+        origin="lower",  # so first row plots at southern edge if lat is increasing [web:133]
         extent=extent,
-        transform=ccrs.PlateCarree(),   # lon/lat coordinates [web:124]
+        transform=ccrs.PlateCarree(),  # lon/lat coordinates [web:124]
         cmap=cmap,
         interpolation="nearest",
     )
@@ -344,7 +344,7 @@ def pad_with_nans(ds: Union[xr.Dataset, xr.DataArray], n_dim_size: int,
 
 def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
                    aloft_p_size_thresh: Optional[float] = mask_aloft_p_size_thresh,
-                   prefer_const: bool=False) -> xr.DataArray:
+                   prefer_const: bool = False) -> xr.DataArray:
     """
     Returns mask which is True for convective days - have lower modParc error than const error.
     Also, optionally have to have LCL further than `aloft_p_size_thresh` from `p_FT`.
@@ -516,3 +516,58 @@ def apply_scale_factor_theory(ds_quant: xr.Dataset, ds_ref: xr.Dataset, p_ft: fl
     ds_out = ds_out.transpose(*other_dims, quant_dim)  # make quant the last dimension
     return ds_out
 
+
+def apply_sf_theory_with_rh_mod(ds_quant: xr.Dataset, ds_ref: xr.Dataset,
+                                p_ft: float, temp_surf_lcl_calc: float,
+                                rh_mod_name: str = 'rh_mod',
+                                sCAPE_form: bool = False,
+                                co2_dim: str = 'co2', quant_dim: str = 'quant',
+                                numerical: bool = False, lapse_coords: Literal['z', 'lnp'] = 'lnp'):
+    """
+    Apply get_scale_factor_theory_numerical to an xarray.Dataset.
+    Works in sCAPE or modParc form, depending on sCAPE_form parameter
+
+    Deals with `rh_mod` in the following way (in both cases assume `ds_ref.rh_mod=0`):
+    * If `numerical=True`, will use `rh_REFHT+rh_mod` for ds_quant i.e. combine physical and rh_mod effects
+    * If `numerical=False`, will compute sf using `rh_REFHT`, then compute again using `rh_REFHT+rh_mod`
+        Then find `rh_mod_anom` and `rh_mod_change` mechanisms by subtracting the `rh_REFHT` sf contribution
+        from the `rh_REFHT+rh_mod` contribution. I.e. in this case, treat physical and `rh_mod` mechanisms differently.
+
+    Args:
+        ds_quant: Dataset with `quant_dim` dimension along which compute scaling factor
+        ds_ref: Dataset with no `quant_dim` dimension but all other dimensions in `ds_quant`, that scaling factor
+            is computed with respect to.
+        p_ft: Free tropospheric pressure in Pa.
+        temp_surf_lcl_calc: Temperature used to compute the LCL.
+        rh_mod_name: Name of the `rh_mod` variable within `ds_quant`.
+        sCAPE_form: If `True`, will include sCAPE mechanism instead of modified lapse rate mechanisms.
+        co2_dim: Dimension of warming i.e. difference between climates is computed along this dimension.
+        quant_dim: Dimension in scaling factor, i.e. compute anomalous temperature change along this dimension.
+        numerical: Whether to compute scaling factor and contributions numerically
+        lapse_coords: If `numerical=True`, have option to provide `lapse_D` and `lapse_M` in z coordinates,
+            rather than log pressure coordinates. Specify here.
+
+    Returns:
+        Dataset with scaling factor, theoretical estimate and contribution from each mechanism.
+    """
+    if numerical:
+        # Combine rh_mod and rh mechanisms
+        ds_use = ds_quant.copy(deep=True)
+        ds_use['rh_REFHT'] = ds_use['rh_REFHT'] + ds_use[rh_mod_name]
+        return apply_scale_factor_theory(ds_use, ds_ref, p_ft, temp_surf_lcl_calc, co2_dim=co2_dim,
+                                         lapse_coords=lapse_coords, quant_dim=quant_dim, numerical=numerical,
+                                         sCAPE_form=sCAPE_form)
+    else:
+        # Calculate sf using physical relative humidity
+        ds_sf = apply_scale_factor_theory(ds_quant, ds_ref, p_ft, temp_surf_lcl_calc, co2_dim=co2_dim,
+                                          lapse_coords=lapse_coords, quant_dim=quant_dim, sCAPE_form=sCAPE_form)
+        # Calculate sf using modified relative humidity (ref has rh_mod=0 so no change)
+        ds_use = ds_quant.copy(deep=True)
+        ds_use['rh_REFHT'] = ds_use['rh_REFHT'] + ds_use[rh_mod_name]
+        var = apply_scale_factor_theory(ds_use, ds_ref, p_ft, temp_surf_lcl_calc, co2_dim=co2_dim,
+                                        lapse_coords=lapse_coords, quant_dim=quant_dim, sCAPE_form=sCAPE_form)
+        # Set mod mechanisms as difference between modified and physical RH mechanisms - ds_ref same so simple addition
+        ds_sf['rh_mod_anom'] = var['rh_anom'] - ds_sf['rh_anom'] + 1
+        ds_sf['rh_mod_change'] = var['rh_change'] - ds_sf['rh_change'] + 1
+        ds_sf['scale_factor_sum'] = var['scale_factor_sum']  # sum of mechanisms is that using modified RH
+    return ds_sf
