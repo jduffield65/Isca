@@ -21,6 +21,7 @@ from isca_tools.utils.xarray import convert_ds_dtypes, wrap_with_apply_ufunc
 from isca_tools.utils.constants import lapse_dry
 from isca_tools.thesis.lapse_integral import integral_and_error_calc
 from jobs.theory_lapse.scripts.lapse_fitting_simple import get_lapse_fitting_info
+from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import sel_best_rh_mod
 
 # -- Specific info for running the script --
 test_mode = False  # for testing on small dataset
@@ -148,10 +149,7 @@ def get_ds(surf=['aquaplanet', 'land'], kappa_names=['k=1', 'k=1_5'], hemisphere
                                                         ds[key].Z_ft_env)
         ds[key]['epsilon'] = ds[key]['mse_REFHT'] - ds[key]['mse_ft_sat_env']
         if (const_layer1_method == 'optimal') and take_best_rh_mod:
-            for key2 in ['mod_parcel', 'const']:
-                ds[key][f'{key2}_rh_mod_ind'] = ds[key][f'{key2}_error'].sum(dim='layer').argmin(dim='rh_mod')
-                for key3 in ['lapse', 'integral', 'error']:
-                    ds[key][f'{key2}_{key3}'] = ds[key][f'{key2}_{key3}'].isel(rh_mod = ds[key][f'{key2}_rh_mod_ind'])
+            ds[key] = sel_best_rh_mod(ds[key])
     return ds
 
 

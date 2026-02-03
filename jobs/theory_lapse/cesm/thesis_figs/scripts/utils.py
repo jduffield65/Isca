@@ -173,6 +173,32 @@ def load_ds(exp_name: Literal['pre_industrial', 'co2_2x'], quant: Literal[50, 95
             ds['ZREFHT'] = load_z2m(invariant_data_path, ds[reindex_var])
     return ds
 
+def sel_best_rh_mod(ds: xr.Dataset) -> xr.Dataset:
+    """
+    This will remove the `rh_mod` dimension, by selecting the `rh_mod` value such that the error is minimized.
+    Does this separately for `mod_parcel` and `const` methods.
+    Will return the optimal `rh_mod_ind` as new variable `{key}_rh_mod_ind`.
+
+    Args:
+        ds: Dataset with `{key}_lapse`, `{key}_integral` and `{key}_error` variables for `key=mod_parcel`
+            and `key=const`
+
+    Returns:
+        ds: Same dataset as input but with no `rh_mod` dimension, and new variable `{key}_rh_mod_ind`
+            for `key=mod_parcel` and `key=const`.
+    """
+    ind0 = int(np.where(ds.rh_mod == 0)[0])         # index where equals zero
+    for key2 in ['mod_parcel', 'const']:
+        # skipna is crucial, otherwise sum of nans equals zero which would be the best error
+        error_sum = ds[f'{key2}_error'].sum(dim='layer', skipna=False)
+        all_nan = error_sum.isnull().all(dim='rh_mod')
+        ind_best = error_sum.fillna(np.inf).argmin(dim='rh_mod')
+        ind_best = ind_best.where(~all_nan, other=ind0)     # if error nan for all rh_mod, set rh_mod value to 0
+        ds[f'{key2}_rh_mod_ind'] = ind_best
+        for key3 in ['lapse', 'integral', 'error']:
+            ds[f'{key2}_{key3}'] = ds[f'{key2}_{key3}'].isel(rh_mod=ds[f'{key2}_rh_mod_ind'])
+    return ds
+
 
 def initialize_ax_projection(ax: plt.Axes, lon_min: float = -180, lon_max: float = 180, lat_min: float = 30,
                              lat_max: float = 80,
@@ -361,11 +387,11 @@ def get_valid_mask(ds: xr.Dataset, error_thresh: float = mask_error_thresh,
     """
     # Take average over all days for which error satisfies convective threshold
     if 'const_error' in ds:
-        const_error = np.abs(ds.const_error.sum(dim='layer') / ds.const_integral.sum(dim='layer'))
-        mod_parcel_error = np.abs(ds.mod_parcel_error.sum(dim='layer') / ds.mod_parcel_integral.sum(dim='layer'))
+        const_error = np.abs(ds.const_error.sum(dim='layer', skipna=False) / ds.const_integral.sum(dim='layer', skipna=False))
+        mod_parcel_error = np.abs(ds.mod_parcel_error.sum(dim='layer', skipna=False) / ds.mod_parcel_integral.sum(dim='layer', skipna=False))
     else:
-        const_error = np.abs(ds.const1_error.sum(dim='layer') / ds.const1_integral.sum(dim='layer'))
-        mod_parcel_error = np.abs(ds.mod_parcel1_error.sum(dim='layer') / ds.mod_parcel1_integral.sum(dim='layer'))
+        const_error = np.abs(ds.const1_error.sum(dim='layer', skipna=False) / ds.const1_integral.sum(dim='layer', skipna=False))
+        mod_parcel_error = np.abs(ds.mod_parcel1_error.sum(dim='layer', skipna=False) / ds.mod_parcel1_integral.sum(dim='layer', skipna=False))
     if prefer_const:
         mask_fit = (mod_parcel_error > const_error) & (const_error < error_thresh)
     else:
