@@ -20,7 +20,7 @@ from pathlib import Path
 exp_name = 'e.e20.E1850TEST.f09_g17.3hour_output'                               # 1xCO2 dataset with 3 hourly output
 file_name = 'e.e20.E1850TEST.f09_g17.3hour_output.cam.h1.0061-07-02-54000.nc'   # July of 1 year - one file for speed
 var_keep = ['T', 'TREFHT', 'Q', 'QREFHT', 'PS']
-lev_REFHT = -1          # temperature to use to compute hottest day (None to use REFHT)
+lev_REFHT = None          # temperature to use to compute hottest day (None to use REFHT)
 comp_level = 4
 dir_script = Path(__file__).resolve().parent         # directory of this script
 path_out = os.path.join(dir_script.parent, 'ds_processed', 'ds_july_hottest.nc')
@@ -46,21 +46,21 @@ def main():
     ds = ds[var_keep].load()
     print_log('Fully loaded dataset', logger=logger)
 
-    # Find time of max temperature in the month, then take 4 times below and 3 above so have 8 times (8x4=24 hours)
-    # for each location corresponding to the day of max temperature
+    # Find time of max temperature in the month, then take 4 times below and 4 above so have 8 times (8x3=24 hours)
+    # for each location corresponding to the day of max temperature, plus the hottest time. Spans 24 hours
     if lev_REFHT is None:
         i_max = ds.TREFHT.argmax(dim="time")  # (lat, lon)
     else:
         i_max = ds.T.isel(lev=lev_REFHT, drop=True).argmax(dim="time")
     offset_ind = xr.DataArray(
-        [-4, -3, -2, -1, 0, 1, 2, 3],
+        [-4, -3, -2, -1, 0, 1, 2, 3, 4],
         dims=("hour_offset",),
-        coords={"hour_offset": np.asarray([-4, -3, -2, -1, 0, 1, 2, 3]) * 3},
+        coords={"hour_offset": np.asarray([-4, -3, -2, -1, 0, 1, 2, 3, 4]) * 3},
     )
     i_window_raw = i_max.expand_dims(dim={"hour_offset": offset_ind.sizes["hour_offset"]}) + offset_ind
     valid = (i_window_raw >= 0) & (i_window_raw < ds.sizes["time"])         # mask which is False for times outside of month i.e. edge cases
     i_window = i_window_raw.clip(min=0, max=ds.sizes["time"] - 1)           # clip so all time indices within month dataset
-    ds_hot = ds.isel(time=i_window).where(valid)                      # select 8 time values for each location, set to nan if outside monthly dataset
+    ds_hot = ds.isel(time=i_window).where(valid)                      # select 9 time values for each location, set to nan if outside monthly dataset
     print_log('Computed hottest time', logger=logger)
 
     # Need to convert time to string to save dataset
@@ -84,7 +84,7 @@ def main():
     ds_hot['hyam'] = hyam
     ds_hot['hybm'] = hybm
     ds_hot['p0'] = p0
-    ds_hot.attrs['lev_REFHT'] = lev_REFHT
+    ds_hot.attrs['lev_REFHT'] = str(lev_REFHT)
     ds_hot.attrs['file_name'] = file_name
 
     # Save to this directory in jasmin
