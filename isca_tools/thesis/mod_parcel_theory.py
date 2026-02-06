@@ -1024,6 +1024,14 @@ def get_sCAPE_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, 
         info_cont: The individual contribution to the buoyancy from each of `lapse_D`, `lapse_M`, `rh_mod`.
             If `numerical`, will also return the nonlinear contribution as `nl`.
     """
+    if np.isnan(lapse_D) or np.isnan(lapse_M) or (np.max([rh_surf, rh_surf + rh_mod]) > 1) or \
+            (np.min([rh_surf, rh_surf + rh_mod]) < 0) or np.isnan(rh_mod) or np.isnan(rh_surf):
+        # Deal with case where cannot compute
+        hi = 5
+        if numerical:
+            return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+        else:
+            return np.nan, np.nan, np.nan, np.nan, np.nan
     sphum_sat_surf = sphum_sat(temp_surf, p_surf)
     R_mod, _, _, beta_s1, _, _, _ = \
         get_theory_prefactor_terms(temp_surf, p_surf, p, rh_surf * sphum_sat_surf)
