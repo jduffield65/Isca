@@ -989,10 +989,11 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
     return final_answer, gamma, info_var, info_cont
 
 
-def get_buoyancy_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, rh_mod: float,
-                        lapse_D: float, lapse_M: float, temp_surf_lcl_calc: Optional[float] = 300,
-                        numerical: bool = False) -> Union[
-    Tuple[float, float, float, float], Tuple[float, float, float, float, float]]:
+def get_sCAPE_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, rh_mod: float,
+                     lapse_D: float, lapse_M: float, temp_surf_lcl_calc: Optional[float] = 300,
+                     numerical: bool = False, lapse_coords: Literal['lnp', 'z'] = 'lnp') -> Union[
+    Tuple[float, float, float, float, float],
+    Tuple[float, float, float, float, float, float, float, float, float, float]]:
     """
     Obtain an estimate to the buoyancy, $B(p) = g\\frac{T_{parc}(p) - T_{env}(p)}{T_{env}(p)}$,
     at the given pressure $p$ in the modParc framework, where buoyancy can only arise from three variables:
@@ -1013,76 +1014,88 @@ def get_buoyancy_theory(p: float, p_surf: float, temp_surf: float, rh_surf: floa
         temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
             If `None`, uses `temp_surf`.
         numerical: If `True`, use a numerical method to compute the individual contributions.
+        lapse_coords: The coordinate system used for `lapse_D` and `lapse_M`. If `z`, then expect in *K/m*.
+            If `lnp`, expect in log pressure coordinates, units of *K*. This is obtained from the z coordinate
+            version $\eta_z$ through: $\eta_{D\ln p} = RT_s\eta_{Dz}/g$ and
+            $\eta_{M\ln p} = RT_{FT}\eta_{Mz}/g$.
 
     Returns:
         Buoyancy: Estimate of buoyancy at pressure `p`. Units:m/s$^2$
         info_cont: The individual contribution to the buoyancy from each of `lapse_D`, `lapse_M`, `rh_mod`.
             If `numerical`, will also return the nonlinear contribution as `nl`.
     """
+    sphum_sat_surf = sphum_sat(temp_surf, p_surf)
+    R_mod, _, _, beta_s1, _, _, _ = \
+        get_theory_prefactor_terms(temp_surf, p_surf, p, rh_surf * sphum_sat_surf)
+    # Compute environmental temperature at pressure level p
+    temp_env_p = get_temp_mod_parcel(rh_surf + rh_mod, p_surf, p, temp_surf=temp_surf,
+                                     temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_D=lapse_D,
+                                     lapse_mod_M=lapse_M, lapse_coords=lapse_coords)
+    temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
+                                    temp_surf_lcl_calc=temp_surf_lcl_calc)
+    cape_exact = R_mod * (temp_parc - temp_env_p)  # exact definition
+
+    beta_ft1 = get_theory_prefactor_terms(temp_env_p, p_surf, p)[3]
     sigma_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc)
-    exponent_lcl = np.log(sigma_lcl) / np.log(rh_surf)
+    # exponent_lcl = np.log(sigma_lcl) / np.log(rh_surf)
     p_lcl = sigma_lcl * p_surf
-    temp_lcl_parc = dry_profile_temp(temp_surf, p_surf, p_lcl)
-    temp_lcl_modparc = get_temp_const_lapse(p_lcl, temp_surf, p_surf, lapse_dry+lapse_D)
+    cont_lapse_D = -R_mod / beta_ft1 * beta_s1 * np.log(sigma_lcl) * lapse_D
+    cont_lapse_M = R_mod * np.log(p_lcl / p) * lapse_M
+    cont_rh_mod = -R_mod / beta_ft1 * L_v * sphum_sat_surf * rh_mod
+    cape_linear = cont_lapse_D + cont_lapse_M + cont_rh_mod
+
     if numerical:
-        temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
-                                        temp_surf_lcl_calc=temp_surf_lcl_calc)
         temp_env_lapse_D = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
                                                temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_D=lapse_D,
-                                               lapse_coords='z')
+                                               lapse_coords=lapse_coords)
         temp_env_lapse_M = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
                                                temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_M=lapse_M,
-                                               lapse_coords='z')
+                                               lapse_coords=lapse_coords)
         temp_env_rh_mod = get_temp_mod_parcel(rh_surf + rh_mod, p_surf, p, temp_surf=temp_surf,
                                               temp_surf_lcl_calc=temp_surf_lcl_calc)
-        temp_env_nl = get_temp_mod_parcel(rh_surf + rh_mod, p_surf, p, temp_surf=temp_surf,
-                                          temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_D=lapse_D,
-                                          lapse_mod_M=lapse_M, lapse_coords='z')
-        info_cont = {'lapse_D': g * (temp_parc / temp_env_lapse_D - 1),
-                     'lapse_M': g * (temp_parc / temp_env_lapse_M - 1),
-                     'rh_mod': g * (temp_parc / temp_env_rh_mod - 1),
-                     'nl': g * (temp_parc / temp_env_nl - 1)}
-        final_answer = info_cont['lapse_D'] + info_cont['lapse_M'] + info_cont['rh_mod']
-        info_cont['nl'] = info_cont['nl'] - final_answer
-        return final_answer, info_cont['lapse_D'], info_cont['lapse_M'], info_cont['rh_mod'], info_cont['nl']
+        # Compute sum of individual mechanisms estimate for sCAPE using numerical method
+        cont_lapse_D_nl = R_mod * (temp_parc - temp_env_lapse_D)
+        cont_lapse_M_nl = R_mod * (temp_parc - temp_env_lapse_M)
+        cont_rh_mod_nl =  R_mod * (temp_parc - temp_env_rh_mod)
+        cape_linear_num = cont_lapse_D_nl + cont_lapse_M_nl + cont_rh_mod_nl
+        cont_nl = cape_exact - cape_linear_num      # due to nonlinear combination of mechanisms
+
+        # Subtract theoretical estimates for each mechanism i.e., return excess contribution neglected
+        cont_lapse_D_nl = cont_lapse_D_nl - cont_lapse_D
+        cont_lapse_M_nl = cont_lapse_M_nl - cont_lapse_M
+        cont_rh_mod_nl = cont_rh_mod_nl - cont_rh_mod
+        return cape_exact, cape_linear, cont_lapse_D, cont_lapse_M, cont_rh_mod, \
+            cape_linear_num, cont_lapse_D_nl, cont_lapse_M_nl, cont_rh_mod_nl, cont_nl
     else:
-        lapse_moist_parc = lapse_moist(temp_lcl_parc, p_lcl)
-        lapse_moist_modparc = lapse_moist(temp_lcl_modparc, p_lcl)
-        # rh_mod theory is incorrect
-        info_cont = {'lapse_D': -R * lapse_D * np.log(sigma_lcl) +
-                                R * np.log(p/p_lcl) * (lapse_moist_parc - lapse_moist_modparc),
-                     'lapse_M': -R * lapse_M * np.log(p / p_lcl),
-                     'rh_mod': R * exponent_lcl * (lapse_moist_parc - lapse_dry) * rh_mod / rh_surf}
-        final_answer = info_cont['lapse_D'] + info_cont['lapse_M'] + info_cont['rh_mod']
-        return final_answer, info_cont['lapse_D'], info_cont['lapse_M'], info_cont['rh_mod']
+        return cape_exact, cape_linear, cont_lapse_D, cont_lapse_M, cont_rh_mod
 
 
-def get_buoyancy(p: float, temp_p, p_surf: float, temp_surf: float, rh_surf: float,
-                 temp_surf_lcl_calc: Optional[float] = 300, guess_lapse: float = lapse_dry,
-                 valid_range: float = 100):
-    """
-    Returns the buoyancy, $B(p) = g\\frac{T_{parc}(p) - T_{env}(p)}{T_{env}(p)}$, at the given pressure $p$.
-    Uses `get_temp_mod_parcel` to find parcel temperature. This makes approximation about relating
-    geopotential height to temperature. Should probably integrate moist adiabatic lapse rate to be more exact.
-
-    Args:
-        p: Pressure in Pa where you would like to compute the buoyancy
-        temp_p: Environmental temperature at pressure `p`.
-        p_surf: Surface pressure. Units: Pa.
-        temp_surf: Environmental temperature at `pressure_surf`. Units: K.
-        rh_surf: Environmental relative humidity defined at `pressure_surf`.
-        temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
-            If `None`, uses `temp_surf`.
-        guess_lapse:
-            Initial guess for temperature will be found assuming this bulk lapse rate
-            from `temp_surf` or `temp_ft`. Units: *K/m*
-        valid_range:
-            Valid temperature range in Kelvin for temperature. Allow +/- this much from the initial guess.
-
-    Returns:
-        Buoyancy: The value of the buoyancy at `pressure`. Units:m/s$^2$
-    """
-    temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
-                                    temp_surf_lcl_calc=temp_surf_lcl_calc,
-                                    guess_lapse=guess_lapse, valid_range=valid_range)
-    return g * (temp_parc - temp_p) / temp_p
+# def get_buoyancy(p: float, temp_p, p_surf: float, temp_surf: float, rh_surf: float,
+#               temp_surf_lcl_calc: Optional[float] = 300, guess_lapse: float = lapse_dry,
+#               valid_range: float = 100):
+#     """
+#     Returns the buoyancy, $B(p) = g\\frac{T_{parc}(p) - T_{env}(p)}{T_{env}(p)}$, at the given pressure $p$.
+#     Uses `get_temp_mod_parcel` to find parcel temperature. This makes approximation about relating
+#     geopotential height to temperature. Should probably integrate moist adiabatic lapse rate to be more exact.
+#
+#     Args:
+#         p: Pressure in Pa where you would like to compute the buoyancy
+#         temp_p: Environmental temperature at pressure `p`.
+#         p_surf: Surface pressure. Units: Pa.
+#         temp_surf: Environmental temperature at `pressure_surf`. Units: K.
+#         rh_surf: Environmental relative humidity defined at `pressure_surf`.
+#         temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
+#             If `None`, uses `temp_surf`.
+#         guess_lapse:
+#             Initial guess for temperature will be found assuming this bulk lapse rate
+#             from `temp_surf` or `temp_ft`. Units: *K/m*
+#         valid_range:
+#             Valid temperature range in Kelvin for temperature. Allow +/- this much from the initial guess.
+#
+#     Returns:
+#         Buoyancy: The value of the buoyancy at `pressure`. Units:m/s$^2$
+#     """
+#     temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
+#                                     temp_surf_lcl_calc=temp_surf_lcl_calc,
+#                                     guess_lapse=guess_lapse, valid_range=valid_range)
+#     return g * (temp_parc - temp_p) / temp_p

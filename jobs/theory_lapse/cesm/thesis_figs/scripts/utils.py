@@ -14,7 +14,9 @@ from matplotlib.image import AxesImage
 from isca_tools.cesm.load import load_z2m
 from isca_tools.convection.base import lcl_sigma_bolton_simple
 from isca_tools.papers.byrne_2021 import get_quant_ind
-from isca_tools.thesis.mod_parcel_theory import get_scale_factor_theory, get_scale_factor_theory_numerical2
+from isca_tools.thesis.mod_parcel_theory import get_scale_factor_theory, get_scale_factor_theory_numerical2, \
+    get_sCAPE_theory
+from isca_tools.utils.xarray import wrap_with_apply_ufunc
 import f90nml
 
 exp_names = ['pre_industrial', 'co2_2x']
@@ -597,3 +599,34 @@ def apply_sf_theory_with_rh_mod(ds_quant: xr.Dataset, ds_ref: xr.Dataset,
         ds_sf['rh_mod_change'] = var['rh_change'] - ds_sf['rh_change'] + 1
         ds_sf['scale_factor_sum'] = var['scale_factor_sum']  # sum of mechanisms is that using modified RH
     return ds_sf
+
+
+get_sCAPE_theory_xr = wrap_with_apply_ufunc(get_sCAPE_theory, output_core_dims=[[], [], [], [], [], [], [], [], [], []])
+
+def get_ds_cape(ds: xr.Dataset, rh_mod: xr.DataArray, p_ft: float, temp_surf_lcl_calc: float) -> xr.Dataset:
+    """
+    Gets breakdown of sCAPE contributions from lapse_D, lapse_M and rh_mod
+
+    Args:
+        ds:
+        rh_mod:
+        p_ft:
+        temp_surf_lcl_calc:
+
+    Returns:
+
+    """
+    if 'rh_mod' in ds.dims:
+        ds = ds.drop_dims('rh_mod')
+    if 'rh_mod' in ds.coords:
+        ds = ds.drop_vars('rh_mod')
+    if 'rh_mod' in rh_mod.dims:
+        rh_mod = rh_mod.drop_dims('rh_mod')
+    if 'rh_mod' in rh_mod.coords:
+        rh_mod = rh_mod.drop_vars('rh_mod')
+    ds_cape = get_sCAPE_theory_xr(p_ft, ds.PREFHT, ds.TREFHT, ds.rh_REFHT, rh_mod, ds.lapse_D, ds.lapse_M,
+                                  temp_surf_lcl_calc, numerical=True)
+    cape_var_names = ['exact', 'linear', 'lapse_D', 'lapse_M', 'rh_mod', 'linear_num', 'lapse_D_nl', 'lapse_M_nl',
+                  'rh_mod_nl', 'residual_nl']
+    ds_cape = xr.Dataset(dict(zip(cape_var_names, ds_cape)))
+    return ds_cape
