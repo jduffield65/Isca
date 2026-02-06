@@ -3,6 +3,7 @@ from typing import Optional, Tuple, Union, Literal
 import itertools
 from .lapse_integral import get_temp_const_lapse
 from .adiabat_theory import get_theory_prefactor_terms
+from ..convection import lapse_moist
 from ..convection.base import lcl_sigma_bolton_simple, dry_profile_temp
 from ..utils.constants import c_p, L_v, R, g, lapse_dry
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat, moist_static_energy
@@ -813,7 +814,7 @@ def get_sensitivity_factors(temp_surf: float, rh_surf: float,
     gamma['temp_ft_change'] = beta_ft1 / beta_s1
     gamma['rh_change'] = L_v * sphum / (beta_s1 * temp_surf)
     gamma['p_surf_change'] = R / (2 * beta_s1) * (1 + temp_ft / temp_surf) + L_v * sphum / (beta_s1 * temp_surf)
-    gamma['sCAPE_change'] = gamma['temp_ft_change'] * 1         # *1 so is not a copy
+    gamma['sCAPE_change'] = gamma['temp_ft_change'] * 1  # *1 so is not a copy
     gamma['lapse_D_change'] = -np.log(sigma_lcl)
     gamma['lapse_M_change'] = gamma['temp_ft_change'] * np.log(sigma_lcl * pressure_surf / pressure_ft)
 
@@ -957,12 +958,13 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         p_surf_quant = np.full_like(temp_surf_quant, p_surf_ref[:, np.newaxis])
 
     gamma = get_sensitivity_factors(temp_surf_ref[0], rh_ref, p_surf_ref, p_ft, temp_surf_lcl_calc)
-    R_mod_ref = R/2 * np.log(p_surf_ref/p_ft)
+    R_mod_ref = R / 2 * np.log(p_surf_ref / p_ft)
     temp_surf_ref_change = temp_surf_ref[1] - temp_surf_ref[0]
 
     info_var = {'temp_ft_change': np.diff(temp_ft_quant, axis=0).squeeze() / temp_surf_ref_change,
                 'rh_change': np.diff(rh_quant, axis=0).squeeze() / rh_ref * temp_surf_ref[0] / temp_surf_ref_change,
-                'p_surf_change': np.diff(p_surf_quant, axis=0).squeeze() / p_surf_ref * temp_surf_ref[0] / temp_surf_ref_change,
+                'p_surf_change': np.diff(p_surf_quant, axis=0).squeeze() / p_surf_ref * temp_surf_ref[
+                    0] / temp_surf_ref_change,
                 'temp_surf_anom': (temp_surf_quant[0] - temp_surf_ref[0]) / temp_surf_ref[0],
                 'rh_anom': (rh_quant[0] - rh_ref) / rh_ref,
                 'p_surf_anom': (p_surf_quant[0] - p_surf_ref) / p_surf_ref}
@@ -983,5 +985,104 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
         info_cont[key] = coef_sign[key] * gamma[key] * info_var[key]
         if key != 'temp_ft_change':
             info_cont[key] += 1
-    final_answer = np.asarray(sum([info_cont[key]-1 for key in info_cont])) + 1
+    final_answer = np.asarray(sum([info_cont[key] - 1 for key in info_cont])) + 1
     return final_answer, gamma, info_var, info_cont
+
+
+def get_buoyancy_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, rh_mod: float,
+                        lapse_D: float, lapse_M: float, temp_surf_lcl_calc: Optional[float] = 300,
+                        numerical: bool = False) -> Union[
+    Tuple[float, float, float, float], Tuple[float, float, float, float, float]]:
+    """
+    Obtain an estimate to the buoyancy, $B(p) = g\\frac{T_{parc}(p) - T_{env}(p)}{T_{env}(p)}$,
+    at the given pressure $p$ in the modParc framework, where buoyancy can only arise from three variables:
+    $\eta_D$, $\eta_M$ and $r_{mod}$.
+
+    Args:
+        p: Pressure in Pa where you would like to compute the buoyancy
+        p_surf: Surface pressure. Units: Pa.
+        temp_surf: Environmental temperature at `pressure_surf`. Units: K.
+        rh_surf: Environmental relative humidity defined at `pressure_surf`.
+        rh_mod: Modification to relative humidity.
+        lapse_D: The quantity $\eta_D$ such that the lapse rate between `pressure_surf` and LCL is
+            $\Gamma_D + \eta_D$ with $\Gamma_D$ being the dry adiabatic lapse rate.</br>.
+            Units: K/m
+        lapse_M: The quantity $\eta_M$ such that the lapse rate above the LCL is $\Gamma_M(p) + \eta_M$ with
+            $\Gamma_M(p)$ being the moist adiabatic lapse rate at pressure $p$.</br>
+            Units: K/m
+        temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
+            If `None`, uses `temp_surf`.
+        numerical: If `True`, use a numerical method to compute the individual contributions.
+
+    Returns:
+        Buoyancy: Estimate of buoyancy at pressure `p`. Units:m/s$^2$
+        info_cont: The individual contribution to the buoyancy from each of `lapse_D`, `lapse_M`, `rh_mod`.
+            If `numerical`, will also return the nonlinear contribution as `nl`.
+    """
+    sigma_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc)
+    exponent_lcl = np.log(sigma_lcl) / np.log(rh_surf)
+    p_lcl = sigma_lcl * p_surf
+    temp_lcl_parc = dry_profile_temp(temp_surf, p_surf, p_lcl)
+    temp_lcl_modparc = get_temp_const_lapse(p_lcl, temp_surf, p_surf, lapse_dry+lapse_D)
+    if numerical:
+        temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
+                                        temp_surf_lcl_calc=temp_surf_lcl_calc)
+        temp_env_lapse_D = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
+                                               temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_D=lapse_D,
+                                               lapse_coords='z')
+        temp_env_lapse_M = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
+                                               temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_M=lapse_M,
+                                               lapse_coords='z')
+        temp_env_rh_mod = get_temp_mod_parcel(rh_surf + rh_mod, p_surf, p, temp_surf=temp_surf,
+                                              temp_surf_lcl_calc=temp_surf_lcl_calc)
+        temp_env_nl = get_temp_mod_parcel(rh_surf + rh_mod, p_surf, p, temp_surf=temp_surf,
+                                          temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_D=lapse_D,
+                                          lapse_mod_M=lapse_M, lapse_coords='z')
+        info_cont = {'lapse_D': g * (temp_parc / temp_env_lapse_D - 1),
+                     'lapse_M': g * (temp_parc / temp_env_lapse_M - 1),
+                     'rh_mod': g * (temp_parc / temp_env_rh_mod - 1),
+                     'nl': g * (temp_parc / temp_env_nl - 1)}
+        final_answer = info_cont['lapse_D'] + info_cont['lapse_M'] + info_cont['rh_mod']
+        info_cont['nl'] = info_cont['nl'] - final_answer
+        return final_answer, info_cont['lapse_D'], info_cont['lapse_M'], info_cont['rh_mod'], info_cont['nl']
+    else:
+        lapse_moist_parc = lapse_moist(temp_lcl_parc, p_lcl)
+        lapse_moist_modparc = lapse_moist(temp_lcl_modparc, p_lcl)
+        # rh_mod theory is incorrect
+        info_cont = {'lapse_D': -R * lapse_D * np.log(sigma_lcl) +
+                                R * np.log(p/p_lcl) * (lapse_moist_parc - lapse_moist_modparc),
+                     'lapse_M': -R * lapse_M * np.log(p / p_lcl),
+                     'rh_mod': R * exponent_lcl * (lapse_moist_parc - lapse_dry) * rh_mod / rh_surf}
+        final_answer = info_cont['lapse_D'] + info_cont['lapse_M'] + info_cont['rh_mod']
+        return final_answer, info_cont['lapse_D'], info_cont['lapse_M'], info_cont['rh_mod']
+
+
+def get_buoyancy(p: float, temp_p, p_surf: float, temp_surf: float, rh_surf: float,
+                 temp_surf_lcl_calc: Optional[float] = 300, guess_lapse: float = lapse_dry,
+                 valid_range: float = 100):
+    """
+    Returns the buoyancy, $B(p) = g\\frac{T_{parc}(p) - T_{env}(p)}{T_{env}(p)}$, at the given pressure $p$.
+    Uses `get_temp_mod_parcel` to find parcel temperature. This makes approximation about relating
+    geopotential height to temperature. Should probably integrate moist adiabatic lapse rate to be more exact.
+
+    Args:
+        p: Pressure in Pa where you would like to compute the buoyancy
+        temp_p: Environmental temperature at pressure `p`.
+        p_surf: Surface pressure. Units: Pa.
+        temp_surf: Environmental temperature at `pressure_surf`. Units: K.
+        rh_surf: Environmental relative humidity defined at `pressure_surf`.
+        temp_surf_lcl_calc: Surface temperature to use when computing $\sigma_{LCL}$.
+            If `None`, uses `temp_surf`.
+        guess_lapse:
+            Initial guess for temperature will be found assuming this bulk lapse rate
+            from `temp_surf` or `temp_ft`. Units: *K/m*
+        valid_range:
+            Valid temperature range in Kelvin for temperature. Allow +/- this much from the initial guess.
+
+    Returns:
+        Buoyancy: The value of the buoyancy at `pressure`. Units:m/s$^2$
+    """
+    temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
+                                    temp_surf_lcl_calc=temp_surf_lcl_calc,
+                                    guess_lapse=guess_lapse, valid_range=valid_range)
+    return g * (temp_parc - temp_p) / temp_p
