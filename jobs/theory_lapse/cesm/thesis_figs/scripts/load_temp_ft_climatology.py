@@ -3,10 +3,6 @@
 # But have issue with args not working - just ends up with default values
 # run_script('/home/users/jamd1/Isca/jobs/theory_lapse/cesm/thesis_figs/scripts/load_temp_ft_climatology.py',
 #            script_args=['co2_2x', 400*100, 3, False], slurm=True, time = '24:00:00', mem=100)
-#
-# loads in data from July for a single year, and finds hottest day at each grid point. Saves data to compute lapse rate
-# Code from Isca/jobs/theory_lapse/cesm_3hour_diurnal.ipynb notebook but changed from
-# ds_loc.time.dt.floor('D') == hottest_day_loc as that won't work at all longitudes. Also quicker
 import xarray as xr
 import os
 import sys
