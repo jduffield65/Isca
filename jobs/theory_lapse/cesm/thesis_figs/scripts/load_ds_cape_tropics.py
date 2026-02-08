@@ -1,3 +1,4 @@
+# Need to run load_ds_tropics first, as this uses the output from that
 import xarray as xr
 import numpy as np
 import os
@@ -75,8 +76,8 @@ if __name__ == '__main__':
             print_log(f'File {i + 1}/{n_lat} Exists Already', logger)
             continue
         print_log(f'File {i + 1}/{n_lat} | Start', logger)
-        ds_cape = utils.get_ds_cape(ds.isel(quant=i),
-                                    ds['mod_parcel_rh_mod'].isel(quant=i),
+        ds_cape = utils.get_ds_cape(ds.isel(lat=i),
+                                    ds['mod_parcel_rh_mod'].isel(lat=i),
                                     p_ft, temp_surf_lcl_calc)
         print_log(f'File {i + 1}/{n_lat} | Obtained CAPE info', logger)
         ds_cape = convert_ds_dtypes(ds_cape)
@@ -84,6 +85,14 @@ if __name__ == '__main__':
             ds_cape.to_netcdf(path_use[i], format="NETCDF4",
                              encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_cape.data_vars})
         print_log(f'File {i+1}/{n_lat} | Saved', logger)
+    if not os.path.exists(out_path_cape):
+        # Combine all sample files into a single file for each experiment
+        ds_cape = xr.concat([xr.load_dataset(path_use[j]) for j in range(n_lat)], dim=ds.lat)
+        # Reorder
+        ds_cape = ds_cape.transpose('co2', 'quant', 'lat', 'lon_sample')
+        ds_cape.to_netcdf(out_path_cape, format="NETCDF4",
+                           encoding={var: {"zlib": True, "complevel": comp_level} for var in ds_cape.data_vars})
+        print_log(f'{surf} | Combined samples into one File: {out_path_cape}', logger)
     # ds_cape = xr.concat(ds_cape, dim=ds.quant)
     # comp_level = 4
     # ds_cape = convert_ds_dtypes(ds_cape)

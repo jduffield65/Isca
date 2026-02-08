@@ -605,7 +605,7 @@ get_sCAPE_theory_xr = wrap_with_apply_ufunc(get_sCAPE_theory, output_core_dims=[
 
 def get_ds_cape(ds: xr.Dataset, rh_mod: xr.DataArray, p_ft: float, temp_surf_lcl_calc: float) -> xr.Dataset:
     """
-    Gets breakdown of sCAPE contributions from lapse_D, lapse_M and rh_mod
+    Gets breakdown of sCAPE contributions from lapse_D, lapse_M and rh_mod at p_ft
 
     Args:
         ds:
@@ -625,7 +625,7 @@ def get_ds_cape(ds: xr.Dataset, rh_mod: xr.DataArray, p_ft: float, temp_surf_lcl
     if 'rh_mod' in rh_mod.coords:
         rh_mod = rh_mod.drop_vars('rh_mod')
     ds_cape = get_sCAPE_theory_xr(p_ft, ds.PREFHT, ds.TREFHT, ds.rh_REFHT, rh_mod, ds.lapse_D, ds.lapse_M,
-                                  temp_surf_lcl_calc, numerical=True)
+                                  temp_surf_lcl_calc, True, 'lnp', ds.T_ft_env)
     cape_var_names = ['exact', 'linear', 'lapse_D', 'lapse_M', 'rh_mod', 'linear_num', 'lapse_D_nl', 'lapse_M_nl',
                   'rh_mod_nl', 'residual_nl']
     ds_cape = xr.Dataset(dict(zip(cape_var_names, ds_cape)))

@@ -991,12 +991,13 @@ def get_scale_factor_theory(temp_surf_ref: np.ndarray, temp_surf_quant: np.ndarr
 
 def get_sCAPE_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, rh_mod: float,
                      lapse_D: float, lapse_M: float, temp_surf_lcl_calc: Optional[float] = 300,
-                     numerical: bool = False, lapse_coords: Literal['lnp', 'z'] = 'lnp') -> Union[
+                     numerical: bool = False, lapse_coords: Literal['lnp', 'z'] = 'lnp',
+                     temp_p: Optional[float] = None) -> Union[
     Tuple[float, float, float, float, float],
     Tuple[float, float, float, float, float, float, float, float, float, float]]:
     """
-    Obtain an estimate to the buoyancy, $B(p) = g\\frac{T_{parc}(p) - T_{env}(p)}{T_{env}(p)}$,
-    at the given pressure $p$ in the modParc framework, where buoyancy can only arise from three variables:
+    Obtain an estimate of simple CAPE, $sCAPE(p) = R\ln(p_s/p)(T_{parc}(p) - T_{env}(p))/2$,
+    at the given pressure $p$ in the modParc framework, which can only arise from three variables:
     $\eta_D$, $\eta_M$ and $r_{mod}$.
 
     Args:
@@ -1018,16 +1019,29 @@ def get_sCAPE_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, 
             If `lnp`, expect in log pressure coordinates, units of *K*. This is obtained from the z coordinate
             version $\eta_z$ through: $\eta_{D\ln p} = RT_s\eta_{Dz}/g$ and
             $\eta_{M\ln p} = RT_{FT}\eta_{Mz}/g$.
+        temp_p: Environmental temperature at pressure `p`. Used to compute `cape_exact`. If not provided,
+            will assume environmental temperature at `p` is equal to that of the modParc profile at pressure `p`.
 
     Returns:
-        Buoyancy: Estimate of buoyancy at pressure `p`. Units:m/s$^2$
-        info_cont: The individual contribution to the buoyancy from each of `lapse_D`, `lapse_M`, `rh_mod`.
-            If `numerical`, will also return the nonlinear contribution as `nl`.
+        cape_exact: Exact value of sCAPE at pressure `p` using `temp_p`. All units are J/kg.
+        cape_linear: Theoretical estimate of sCAPE as sum of three theoretical contributions of each mechanism
+        cont_lapse_D: Theoretical contribution from $\eta_D$
+        cont_lapse_M: Theoretical contribution from $\eta_M$
+        cont_rh_mod: Theoretical contribution from $r_{mod}$
+        cont_linear_num: Numerical estimate of sum of all three individual mechanisms.
+            Only returned in `numerical=True`.
+        cont_lapse_D_nl: Additional contribution from $\eta_D$ alone obtained numerically.
+            Only returned in `numerical=True`.
+        cont_lapse_M_nl: Additional contribution from $\eta_M$ alone obtained numerically.
+            Only returned in `numerical=True`.
+        cont_rh_mod_nl: Additional contribution from $r_mod$ alone obtained numerically.
+            Only returned in `numerical=True`.
+        cont_nl: Contribution from nonlinear combination of all mechanisms.
+            Only returned in `numerical=True`.
     """
     if np.isnan(lapse_D) or np.isnan(lapse_M) or (np.max([rh_surf, rh_surf + rh_mod]) > 1) or \
             (np.min([rh_surf, rh_surf + rh_mod]) < 0) or np.isnan(rh_mod) or np.isnan(rh_surf):
         # Deal with case where cannot compute
-        hi = 5
         if numerical:
             return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
         else:
@@ -1035,13 +1049,18 @@ def get_sCAPE_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, 
     sphum_sat_surf = sphum_sat(temp_surf, p_surf)
     R_mod, _, _, beta_s1, _, _, _ = \
         get_theory_prefactor_terms(temp_surf, p_surf, p, rh_surf * sphum_sat_surf)
-    # Compute environmental temperature at pressure level p
+    # Compute environmental temperature assuming modParc profile at pressure level p
     temp_env_p = get_temp_mod_parcel(rh_surf + rh_mod, p_surf, p, temp_surf=temp_surf,
                                      temp_surf_lcl_calc=temp_surf_lcl_calc, lapse_mod_D=lapse_D,
                                      lapse_mod_M=lapse_M, lapse_coords=lapse_coords)
     temp_parc = get_temp_mod_parcel(rh_surf, p_surf, p, temp_surf=temp_surf,
                                     temp_surf_lcl_calc=temp_surf_lcl_calc)
-    cape_exact = R_mod * (temp_parc - temp_env_p)  # exact definition
+    if temp_p is not None:
+        # If don't know the envrionmental temperature at pressure p, assume modParcel estimate is correct
+        cape_exact = R_mod * (temp_parc - temp_env_p)  # exact definition
+    else:
+        # If do know environmental temperature at pressure p, use that to compute cape
+        cape_exact = R_mod * (temp_parc - temp_p)  # exact definition
 
     beta_ft1 = get_theory_prefactor_terms(temp_env_p, p_surf, p)[3]
     sigma_lcl = lcl_sigma_bolton_simple(rh_surf, temp_surf_lcl_calc)
@@ -1066,7 +1085,7 @@ def get_sCAPE_theory(p: float, p_surf: float, temp_surf: float, rh_surf: float, 
         cont_lapse_M_nl = R_mod * (temp_parc - temp_env_lapse_M)
         cont_rh_mod_nl =  R_mod * (temp_parc - temp_env_rh_mod)
         cape_linear_num = cont_lapse_D_nl + cont_lapse_M_nl + cont_rh_mod_nl
-        cont_nl = cape_exact - cape_linear_num      # due to nonlinear combination of mechanisms
+        cont_nl = R_mod * (temp_parc - temp_env_p) - cape_linear_num      # due to nonlinear combination of mechanisms
 
         # Subtract theoretical estimates for each mechanism i.e., return excess contribution neglected
         cont_lapse_D_nl = cont_lapse_D_nl - cont_lapse_D

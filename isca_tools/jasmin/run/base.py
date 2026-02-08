@@ -169,6 +169,7 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
 
         # Note that sys.argv[0] is the path to the run_script.py script that was used to call this function.
         # We now call it again but with input arguments so that it runs the job on slurm.
+        # TODO: have issues when script_args do not come from input_file_path but from script_args= e.g. load_temp_ft_climatology
         submit_string = f"bash {slurm_script if dependent_job_id == '' else slurm_script.replace('.sh','_depend.sh')} "\
                         f"{job_name} {time} {n_tasks} {cpus_per_task} {mem} {partition} {qos} {account} "\
                         f"{conda_env} {script_path} {dependent_job_id}"
