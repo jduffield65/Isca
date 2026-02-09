@@ -95,6 +95,7 @@ lat_weights = xr.load_dataset('/Users/joshduffield/Documents/StAndrews/Isca/jobs
 # Used for masking
 mask_error_thresh = 0.25
 mask_aloft_p_size_thresh = 100 * 100  # pressure in Pa
+land_frac_thresh = 0.5
 
 
 def get_co2_multiplier(name: Literal['pre_industrial', 'co2_2x']) -> float:
