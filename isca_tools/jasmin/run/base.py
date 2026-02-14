@@ -5,6 +5,7 @@ from operator import itemgetter
 import importlib.util
 import sys
 import subprocess
+import socket
 # from ...run.base import get_unique_dir_name
 
 def add_list_to_str(var_str: str, var_list: Optional[Union[List, float, int, str]]) -> str:
@@ -174,7 +175,26 @@ def run_script(script_path: Optional[str] = None, script_args: Optional[Union[Li
                         f"{job_name} {time} {n_tasks} {cpus_per_task} {mem} {partition} {qos} {account} "\
                         f"{conda_env} {script_path} {dependent_job_id}"
         submit_string = add_list_to_str(submit_string.strip(), script_args)   # use strip to get rid of any empty spaces at start or end
-        output = subprocess.check_output(submit_string, shell=True).decode("utf-8").strip()  # get job just submitted info
+        # output = subprocess.check_output(submit_string, shell=True).decode("utf-8").strip()  # get job just submitted info
+        try:
+            output = subprocess.check_output(
+                submit_string,
+                shell=True,
+                stderr=subprocess.STDOUT,  # capture error text too
+                text=True  # str instead of bytes
+            ).strip()
+        except subprocess.CalledProcessError as e:
+            host = socket.gethostname()
+            msg = (e.output or "").strip()
+            hint = (
+                "Job submission failed.\n"
+                f"Host: {host}\n"
+                f"Command: {e.cmd}\n"
+                f"Exit code: {e.returncode}\n"
+                "Likely cause: 'sbatch' not on this node (common on JASMIN login nodes).\n"
+                "Fix: run on a scientific analysis server / LOTUS environment where Slurm client is available.\n"
+            )
+            raise RuntimeError(hint + ("\nOutput:\n" + msg if msg else "")) from e
         print(f"{output}{dependent_job_id if dependent_job_id == '' else ' (dependency: job ' + dependent_job_id + ')'}")
         return output.split()[-1]  # Save this job id (last word) for the next submission
     else:

@@ -14,11 +14,12 @@ import sys
 import logging
 import numpy as np
 from geocat.comp import interp_hybrid_to_pressure
+from xarray_einstats.stats import circmean as xr_circmean
+from pathlib import Path
 
 from isca_tools.utils import get_memory_usage
 from isca_tools.utils.base import print_log
 from isca_tools.cesm import get_pressure
-from pathlib import Path
 
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.xarray import convert_ds_dtypes
@@ -27,6 +28,7 @@ comp_level = 4
 p_ft = 400 * 100
 test_mode = False        # uses a small subset of samples
 lev_REFHT = -1
+temp_ft_pos_anom_thresh = 2     # Record fraction of days where anomaly larger than this
 dir_script = Path(__file__).resolve().parent  # directory of this script
 exp_names = ['pre_industrial', 'co2_2x']
 co2_vals = xr.DataArray([1, 2], dims="co2", name='co2')
@@ -36,9 +38,9 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                         stream=sys.stdout)
     logger = logging.getLogger()  # for printing to console time info
-    path_out = lambda x: os.path.join(dir_script.parent, 'ds_processed',
-                            f'ds_quant50_av_{x}.nc')
-    path_out_combined = os.path.join(dir_script.parent, 'ds_processed', f'ds_quant50_av.nc')
+    dir_out = os.path.join(dir_script.parent, 'ds_processed')
+    path_out = lambda x: os.path.join(dir_out, f'ds_quant50_av_{x}.nc')
+    path_out_combined = os.path.join(dir_out, f'ds_quant50_av.nc')
     path_input = lambda x: f'/home/users/jamd1/Isca/jobs/cesm/3_hour/hottest_quant/{x}/REFHT_quant50/T_Q_PS_all_lat/output.nc'
 
 
@@ -67,9 +69,25 @@ def main():
         ds = ds.rename_vars({'Q': 'QREFHT', 'T': 'TREFHT'})
         ds['rh_REFHT'] = ds.QREFHT / sphum_sat(ds.TREFHT, ds.PREFHT)
         print_log(f'Computed rh_REFHT | Memory used {get_memory_usage() / 1000:.1f}GB', logger=logger)
+
+        # Decompose FT into zonal mean on that day, and anomaly to this
+        temp_ft_zm = xr.load_dataset(os.path.join(dir_out, f"ds_t400_climatology_{exp_name}.nc")
+                                     ).T.sel(plev=p_ft, drop=True)
+        ds['T_ft_env_zm'] = temp_ft_zm.sel(dayofyear=ds.time.dt.dayofyear).drop_vars('dayofyear')
+        ds['T_ft_env_anom'] = ds.T_ft_env - ds['T_ft_env_zm']
+        # Record average day of the year at each grid point
+        ds['doy'] = xr_circmean(ds.time.dt.dayofyear, dims="sample", low=1, high=365,
+                                     nan_policy="omit")  # av day of year on which hot days occur
+        ds.attrs['temp_ft_pos_anom_thresh'] = temp_ft_pos_anom_thresh  # Frac of days anomalously hot at FT
+        n_sample = ds.sample.size
+        # Record number of days at each grid point with a significant positive anomaly
+        ds['n_temp_ft_pos_anom'] = (ds.T_ft_env_anom > ds.temp_ft_pos_anom_thresh).sum(dim='sample')
+        print_log(f'Computed T_ft zonal mean and anom | Memory used {get_memory_usage() / 1000:.1f}GB', logger=logger)
         ds = ds.mean(dim='sample')
         print_log(f'Computed mean | Memory used {get_memory_usage() / 1000:.1f}GB', logger=logger)
 
+        ds.attrs['temp_ft_pos_anom_thresh'] = temp_ft_pos_anom_thresh  # Frac of days anomalously hot at FT
+        ds.attrs['n_sample'] = n_sample       # number of days at each grid point
         ds.attrs['lev_REFHT'] = lev_REFHT
         ds = convert_ds_dtypes(ds)
         if not os.path.exists(path_out(exp_name)):
