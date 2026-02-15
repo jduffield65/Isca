@@ -25,7 +25,7 @@
     out_name = 'output.nc'                                        ! Name of output within out_dir
     quant_time_dir =                                   ! Leave blank to set to out_dir
     quant_time_name = 'time_ind.nc'            ! Name of file containing the times of quantiles
-    var = 'T', 'Q', 'PS'       ! Only variables to compute temp_ft and rh_REFHT later on. No interest in anything else - for naive guess of change with warming
+    var = 'T', 'Q', 'PS', 'SOLIN'       ! Only variables to compute temp_ft and rh_REFHT later on. No interest in anything else - for naive guess of change with warming
     temp_ft_plev =             ! Pressure in Pa to compute daily, zonal average of T at. Leave blank to not compute
     ind_files =                ! Select indices of files to load
     lat_ind =                  ! leave None to consider all latitudes

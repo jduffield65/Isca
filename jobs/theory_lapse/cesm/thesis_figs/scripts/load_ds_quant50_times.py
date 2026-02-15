@@ -19,9 +19,11 @@ exp_names = ['pre_industrial', 'co2_2x']
 lev_REFHT = -1
 comp_level = 4
 # Only need Canada hence a limited range
-lat_sel = slice(30, 75)
-lon_sel = slice(200, 360)
+lat_min = -45
+lat_sel = slice(lat_min, 75)
+lon_sel = slice(0, 360)
 dir_script = Path(__file__).resolve().parent
+include_temp = lat_min > 0          # If small area around Canada include temperature as well
 
 
 
@@ -35,10 +37,17 @@ def main():
         print_log(f'Dataset already exists at {path_out}', logger=logger)
         sys.exit(0)
 
+    if include_temp:
+        var_keep = ['time', 'T']
+    else:
+        var_keep = ['time']
+
     ds = []
     print_log(f'Start', logger)
     for exp_name in exp_names:
-        ds_use = xr.open_dataset(path_input(exp_name))[['time', 'T']].isel(lev=lev_REFHT).sel(lat=lat_sel, lon=lon_sel)
+        ds_use = xr.open_dataset(path_input(exp_name))[var_keep].sel(lat=lat_sel, lon=lon_sel)
+        if include_temp:
+            ds_use = ds_use.isel(lev=lev_REFHT)
         print_log(f'{exp_name} | Lazy Loaded', logger)
         ds.append(ds_use.load())
         print_log(f'{exp_name} | Fully Loaded', logger)
