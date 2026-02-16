@@ -3,6 +3,7 @@
 # Loop over raw input files, so only load one at a time to save time
 # One output file for each raw input - each file is same size but mainly nans, only contains `sample` for which
 # that raw file contains, but when concatenate, get full dataset
+# Requires `./save_quant_ind` to have been run first to generate `ind_file`.
 from geocat.comp import interp_hybrid_to_pressure
 from isca_tools import cesm
 from isca_tools.utils.ds_slicing import lat_lon_range_slice, get_time_sample_indices

@@ -26,9 +26,11 @@ from isca_tools.utils.xarray import convert_ds_dtypes
 
 comp_level = 4
 p_ft = 400 * 100
-test_mode = False        # uses a small subset of samples
+test_mode = False  # uses a small subset of samples
 lev_REFHT = -1
-temp_ft_pos_anom_thresh = 2     # Record fraction of days where anomaly larger than this
+temp_ft_pos_anom_thresh = 2  # Record fraction of days where anomaly larger than this
+cold_hour_thresh_above = 7  # Record where time of day is before midday or 7 hours after
+cold_hour_thresh_below = 0
 dir_script = Path(__file__).resolve().parent  # directory of this script
 exp_names = ['pre_industrial', 'co2_2x']
 co2_vals = xr.DataArray([1, 2], dims="co2", name='co2')
@@ -41,8 +43,8 @@ def main():
     dir_out = os.path.join(dir_script.parent, 'ds_processed')
     path_out = lambda x: os.path.join(dir_out, f'ds_quant50_av_{x}.nc')
     path_out_combined = os.path.join(dir_out, f'ds_quant50_av.nc')
-    path_input = lambda x: f'/home/users/jamd1/Isca/jobs/cesm/3_hour/hottest_quant/{x}/REFHT_quant50/T_Q_PS_all_lat/output.nc'
-
+    path_input = lambda \
+        x: f'/home/users/jamd1/Isca/jobs/cesm/3_hour/hottest_quant/{x}/REFHT_quant50/T_Q_PS_all_lat/output.nc'
 
     if os.path.exists(path_out_combined):
         print_log(f'Dataset already exists at {path_out_combined}', logger=logger)
@@ -77,18 +79,28 @@ def main():
         ds['T_ft_env_anom'] = ds.T_ft_env - ds['T_ft_env_zm']
         # Record average day of the year at each grid point
         ds['doy'] = xr_circmean(ds.time.dt.dayofyear, dims="sample", low=1, high=365,
-                                     nan_policy="omit")  # av day of year on which hot days occur
-        ds.attrs['temp_ft_pos_anom_thresh'] = temp_ft_pos_anom_thresh  # Frac of days anomalously hot at FT
+                                nan_policy="omit")  # av day of year on which hot days occur
+
         n_sample = ds.sample.size
         # Record number of days at each grid point with a significant positive anomaly
-        ds['n_temp_ft_pos_anom'] = (ds.T_ft_env_anom > ds.temp_ft_pos_anom_thresh).sum(dim='sample')
+        ds['n_temp_ft_pos_anom'] = (ds.T_ft_env_anom > temp_ft_pos_anom_thresh).sum(dim='sample')
         print_log(f'Computed T_ft zonal mean and anom | Memory used {get_memory_usage() / 1000:.1f}GB', logger=logger)
+
+        # Record time from midday and number of days for which hour is unusually cold
+        time_peak_insolation = (ds.time.dt.hour * 0 + (12 - ds.lon / 15) % 24)
+        ds['time_from_midday'] = (ds.time.dt.hour - time_peak_insolation + 12) % 24 - 12
+        ds['n_cold_hour'] = ((ds.time_from_midday > cold_hour_thresh_above) | (
+                ds.time_from_midday < cold_hour_thresh_below)).sum(dim='sample')
+        print_log(f'Computed number of cold hours | Memory used {get_memory_usage() / 1000:.1f}GB', logger=logger)
+
         ds = ds.mean(dim='sample')
         print_log(f'Computed mean | Memory used {get_memory_usage() / 1000:.1f}GB', logger=logger)
 
         ds.attrs['temp_ft_pos_anom_thresh'] = temp_ft_pos_anom_thresh  # Frac of days anomalously hot at FT
-        ds.attrs['n_sample'] = n_sample       # number of days at each grid point
+        ds.attrs['n_sample'] = n_sample  # number of days at each grid point
         ds.attrs['lev_REFHT'] = lev_REFHT
+        ds.attrs['cold_hour_thresh_above'] = cold_hour_thresh_above
+        ds.attrs['cold_hour_thresh_below'] = cold_hour_thresh_below
         ds = convert_ds_dtypes(ds)
         if not os.path.exists(path_out(exp_name)):
             ds.to_netcdf(path_out(exp_name), format="NETCDF4",

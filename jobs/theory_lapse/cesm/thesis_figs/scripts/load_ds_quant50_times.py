@@ -19,11 +19,9 @@ exp_names = ['pre_industrial', 'co2_2x']
 lev_REFHT = -1
 comp_level = 4
 # Only need Canada hence a limited range
-lat_min = -45
-lat_sel = slice(lat_min, 75)
-lon_sel = slice(0, 360)
+lat_sel = None
 dir_script = Path(__file__).resolve().parent
-include_temp = lat_min > 0          # If small area around Canada include temperature as well
+include_temp = lat_sel is not None          # If small area around Canada include temperature as well
 
 
 
@@ -38,14 +36,16 @@ def main():
         sys.exit(0)
 
     if include_temp:
-        var_keep = ['time', 'T']
+        var_keep = ['time', 'T', 'SOLIN']
     else:
-        var_keep = ['time']
+        var_keep = ['time', 'SOLIN']
 
     ds = []
     print_log(f'Start', logger)
     for exp_name in exp_names:
-        ds_use = xr.open_dataset(path_input(exp_name))[var_keep].sel(lat=lat_sel, lon=lon_sel)
+        ds_use = xr.open_dataset(path_input(exp_name))[var_keep]
+        if lat_sel is not None:
+            ds_use = xr.open_dataset(path_input(exp_name))[var_keep].sel(lat=lat_sel)
         if include_temp:
             ds_use = ds_use.isel(lev=lev_REFHT)
         print_log(f'{exp_name} | Lazy Loaded', logger)
