@@ -1,6 +1,7 @@
 # Script to save data to ds that forgot about before, or recently added not in jobs.theory_lapse.isca.thesis_figs.load_ds_quant
 # So don't have to run whole script again
 # I have used it for Isca and CESM stuff
+# Basically a residual python script
 import xarray as xr
 import sys
 import logging

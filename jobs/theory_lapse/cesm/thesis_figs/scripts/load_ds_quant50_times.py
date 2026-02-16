@@ -3,6 +3,7 @@
 # Only consider limited latitudes and longitudes as only interested in Canada
 #
 # Must first run `cesm/3_hour/hottest_quant/exp/REFHT_quant50/T_Q_PS_all_lat/input.nml` to create the output.nc files.
+# NOT ACTUALLY USED ANYWHERE - PUT ALL SOLIN AND TIME INFO IN load_ds_quant50_av.py
 
 import xarray as xr
 import os
