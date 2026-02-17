@@ -5,7 +5,7 @@ import scipy.integrate
 
 
 def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
-                   coefs_phase: Union[List[float], np.ndarray]) -> np.ndarray:
+                   coefs_phase: Union[List[float], np.ndarray], pad_coefs_phase: bool = False) -> np.ndarray:
     """
     For $N$ harmonics, the fourier series with frequency $f$ is:
 
@@ -19,6 +19,8 @@ def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
             The amplitude coefficients, $F_n$
         coefs_phase: `float [N]`</br>
             The phase coefficients in radians, $\Phi_n$
+        pad_coefs_phase: If `True`, expect `coefs_fourier_phase` to be of length `n_harmonics+1` with first value
+            equal to zero.
 
     Returns:
         `float [n_time]`</br>
@@ -28,7 +30,7 @@ def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
     n_harmonics = len(coefs_amp)
     ans = 0.5 * coefs_amp[0]
     for n in range(1, n_harmonics):
-        ans += coefs_amp[n] * np.cos(2*n*np.pi*time/period - coefs_phase[n-1])
+        ans += coefs_amp[n] * np.cos(2*n*np.pi*time/period - coefs_phase[n if pad_coefs_phase else n-1])
     return ans
 
 
@@ -114,7 +116,8 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
 
 
 def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
-                    integ_method: str = 'spline') -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                    integ_method: str = 'spline',
+                    pad_coefs_phase: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Obtains the Fourier series solution for $F=$`var`, using $N=$`n_harmonics`:
 
@@ -129,14 +132,17 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
         n_harmonics: Number of harmonics to use to fit fourier series, $N$.
         integ_method: How to perform the integration when obtaining Fourier coefficients.</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
+        pad_coefs_phase: If `True`, will set `coefs_phase` to length `n_harmonics+1`, with
+            the first value as zero. Otherwise will be size `n_harmonics`.
 
     Returns:
         `fourier_solution`: `float [n_time]`</br>
             The Fourier series solution that was fit to `var`.
-        `amp_coef`: `float [n_harmonics+1]`</br>
+        `coefs_amp`: `float [n_harmonics+1]`</br>
             The amplitude Fourier coefficients $F_n$.
-        `phase_coef`: `float [n_harmonics]`</br>
+        `coefs_phase`: `float [n_harmonics]`</br>
             The phase Fourier coefficients $\\Phi_n$.
+            If `pad_coefs_phase`, will pad at start with a zero so of length `n_harmonics+1`.
     """
     # Returns the fourier fit of a function using a given number of harmonics
     amp_coefs = np.zeros(n_harmonics+1)
@@ -144,7 +150,9 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
     amp_coefs[0] = get_fourier_coef(time, var, 0, integ_method)
     for i in range(1, n_harmonics+1):
         amp_coefs[i], phase_coefs[i-1] = get_fourier_coef(time, var, i, integ_method)
-    return fourier_series(time, amp_coefs, phase_coefs), amp_coefs, phase_coefs
+    if pad_coefs_phase:
+        phase_coefs = np.hstack((np.zeros(1), phase_coefs))
+    return fourier_series(time, amp_coefs, phase_coefs, pad_coefs_phase), amp_coefs, phase_coefs
 
 
 def coef_conversion(amp_coef: Optional[Union[float, np.ndarray]] = None,

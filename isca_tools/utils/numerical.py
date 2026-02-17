@@ -61,7 +61,8 @@ def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: 
 def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarray] = None,
                   time_start: Optional[float] = None, time_end: Optional[float] = None,
                   coefs_fourier_amp: Optional[np.ndarray] = None,
-                  coefs_fourier_phase: Optional[np.ndarray] = None) -> np.ndarray:
+                  coefs_fourier_phase: Optional[np.ndarray] = None,
+                  pad_coefs_phase: bool = False) -> np.ndarray:
     """
     Given the polynomial coefficients found by `polyfit_phase` for fitting a polynomial
     of degree `len(polyfit)-2` of $x$ to $y$, this will return the approximation of $y$:
@@ -93,6 +94,8 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
             The amplitude Fourier coefficients $F_n$.
         coefs_fourier_phase: `float [n_harmonics]`</br>
             The phase Fourier coefficients $\\Phi_n$.
+        pad_coefs_phase: If `True`, expect `coefs_fourier_phase` to be of length `n_harmonics+1` with first value
+            equal to zero.
 
     Returns:
         y_approx: `float [n_x]`</br>
@@ -104,7 +107,7 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
                      get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
     if coefs_fourier_amp is not None:
         time_use = np.arange(x.size) if time is None else time
-        y_residual_fourier = fourier_series(time_use, coefs_fourier_amp, coefs_fourier_phase)
+        y_residual_fourier = fourier_series(time_use, coefs_fourier_amp, coefs_fourier_phase, pad_coefs_phase)
     else:
         y_residual_fourier = 0
     return y_approx + poly_coefs[0] * x_shift + y_residual_fourier
@@ -115,7 +118,8 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
                   time_end: Optional[float] = None,
                   deg_phase_calc: int = 10, resample: bool = False,
                   include_phase: bool = True, fourier_harmonics: Optional[Union[int, np.ndarray]] = None,
-                  integ_method: str = 'spline') -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+                  integ_method: str = 'spline',
+                  pad_coefs_phase: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
     but also includes additional phase shift term such that the total approximation for y is:
@@ -167,6 +171,8 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             Idea behind this is to account for part of $y$ not directly related to $x$.
         integ_method: How to perform the integration when calculating Fourier coefficients..</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
+        pad_coefs_phase: If `True`, will set `coefs_fourier_phase` to length `fourier_harmonics.max()+1`, with
+            the first value as zero. Otherwise will be size `fourier_harmonics.max()`.
 
     Returns:
         poly_coefs: `float [n_deg+2]`
@@ -176,9 +182,10 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             First value will be zero, because $0^{th}$ harmonic is just a constant and so will be found in
             polynomial fitting.</br>
             Only returned if `fourier_harmonics` is provided.
-        coefs_fourier_phase: `float [fourier_harmonics.max()+1]`</br>
+        coefs_fourier_phase: `float [fourier_harmonics.max()]`</br>
             `coefs_fourier_phase[n]` is the phase fourier coefficient for the $(n+1)^{th}$ harmonic.</br>
             Only returned if `fourier_harmonics` is provided.
+            If `pad_coefs_phase`, will pad at start with a zero so of length `fourier_harmonics.max()+1`.
     """
     coefs = np.zeros(np.clip(deg, 0, 1000) + 2)  # first coef is phase coef
     if resample:
@@ -229,6 +236,9 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     if fourier_harmonics is None:
         return coefs
     else:
+        if pad_coefs_phase:
+            # Set first value to zero
+            coefs_fourier_phase = np.hstack((np.zeros(1), coefs_fourier_phase))
         return coefs, coefs_fourier_amp, coefs_fourier_phase
 
 

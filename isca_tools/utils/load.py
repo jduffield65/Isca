@@ -25,7 +25,8 @@ def get_file_suffix(dir: str, suffix: str) -> List[str]:
 
 def load_dataset(exp_name: str, run_no: Optional[int] = None,
                  data_dir: Optional[str] = None, decode_times: bool = False,
-                 use_cftime: bool = True) -> xr.Dataset:
+                 use_cftime: bool = True,
+                 first_month_file: Optional[int] = None) -> xr.Dataset:
     """
     This loads a dataset produced by Isca containing all the diagnostics specified.
 
@@ -40,6 +41,8 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
         use_cftime: If `True`, will decode times into `cftime.datetime` objects,
             rather than `np.datetime64` objects. Only relevant if `decode_times` is `True`.
             Useful if using 360 day calendar.
+        first_month_file: Can specify the index of first month in dataset to suppress warning.
+            If first month is not equal to this, will hit error.
 
     Returns:
         Dataset containing all diagnostics specified for the experiment.
@@ -53,7 +56,10 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
     files_run = [filename for filename in os.listdir(exp_dir) if filename.startswith('run')]
     files_run.sort()
     first_month = int(files_run[0][-4:])
-    if first_month != 1:
+    if first_month_file is not None:
+        if first_month != first_month_file:
+            raise ValueError(f'Actual first month is {first_month} not the provided first_month_file={first_month_file}')
+    elif first_month != 1:
         warnings.warn(f'First month saved is {first_month} not 1.')
 
     # File name is the same for all runs and is the only file with the suffix '.nc' in the run folder

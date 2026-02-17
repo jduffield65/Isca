@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Any, Sequence, Literal
+from typing import Optional, Callable, Any, Sequence, Literal, Union
 import xarray as xr
 import numpy as np
 
@@ -256,3 +256,43 @@ def isel_float(var: xr.DataArray, ind_float: xr.DataArray, dim='lev') -> xr.Data
 
     # now do the "fractional isel" via interp along lev
     return var.interp(lev=lev_k)
+
+
+def update_dim_slice(obj: Union[xr.DataArray, xr.Dataset], dim: str, dim_val,
+                     var: Union[xr.DataArray, np.ndarray, float], var_name: Optional[str] = None):
+    """Update values at one coordinate along `dim` for a Dataset or DataArray.
+
+    If `obj` is a Dataset, updates `obj[var_name]` at `dim=dim_val`.
+    If `obj` is a DataArray, updates `obj` itself at `dim=dim_val` and ignores
+    `var_name` (unless you want to rename the returned DataArray).
+
+    Args:
+        obj: xarray Dataset or DataArray to update.
+        dim: Dimension name to index (e.g. "fit_method").
+        dim_val: Coordinate value along `dim` to update (e.g. "simulated").
+        var: New values (DataArray/ndarray/scalar) broadcastable to the target slice.
+        var_name: Variable name to update if `obj` is a Dataset. If None, tries
+            to infer from `var.name` when `var` is a DataArray.
+
+    Returns:
+        Updated object (same type as input). Note: this mutates data in place.
+
+    Raises:
+        ValueError: If `obj` is a Dataset and `var_name` cannot be inferred.
+        TypeError: If `obj` is neither Dataset nor DataArray.
+    """
+    if isinstance(obj, xr.Dataset):
+        if var_name is None:
+            if isinstance(var, xr.DataArray) and (var.name is not None):
+                var_name = var.name
+            else:
+                raise ValueError("Provide var_name (or pass a DataArray with var.name set).")
+
+        obj[var_name].loc[{dim: dim_val}] = var
+        return obj
+
+    if isinstance(obj, xr.DataArray):
+        obj.loc[{dim: dim_val}] = var
+        return obj
+
+    raise TypeError(f"Expected xarray Dataset or DataArray, got {type(obj)}")
