@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from typing import Union, Literal, Optional
+from typing import Union, Literal, Optional, Tuple
 from isca_tools.utils import numerical
 
-from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical
+from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice
@@ -12,12 +12,18 @@ from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice
 # Plotting info
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
 # Default parameters
-ax_linewidth = plt.rcParams['axes.linewidth']
+label_lat = "Latitude [deg]"
+label_error = 'Error [%]'
+leg_handlelength = 1.5
+month_ticks = (np.arange(15, 12 * 30 + 15, 30), ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
+
+# General info
 smooth_n_days = 50  # default smoothing window in days
-resample = False    # Don't do resample in polyfit_phase as complicated
-deg_max = 2             # In fitting go up to maximum of T^2 dependence of surface fluxes
+resample = False  # Don't do resample in polyfit_phase as complicated
+deg_max = 2  # In fitting go up to maximum of T^2 dependence of surface fluxes
 # Lowest power is last in deg to match polyfit
-deg_vals = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg_max+1).tolist()[::-1], dims="deg", name="deg")
+deg_vals = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg_max + 1).tolist()[::-1], dims="deg", name="deg")
+
 
 
 def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,
@@ -123,14 +129,14 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
     if deg > 2:
         raise ValueError('deg must be <= 2')
     polyfit_phase_wrap = wrap_with_apply_ufunc(numerical.polyfit_phase, input_core_dims=[['time'], ['time']],
-                                             output_core_dims=[['deg']])
+                                               output_core_dims=[['deg']])
     var = polyfit_phase_wrap(x, y, deg=deg, time=time, time_start=time_start, time_end=time_end,
                              deg_phase_calc=deg_phase_calc, resample=resample, include_phase=include_phase,
                              fourier_harmonics=fourier_harmonics, integ_method=integ_method,
                              pad_coefs_phase=pad_coefs_phase)
     if fourier_harmonics is None:
         # Polyfit outputs phase first and then highest poly coef power is first
-        deg_in_var = ['phase'] + np.arange(deg+1)[::-1].tolist()
+        deg_in_var = ['phase'] + np.arange(deg + 1)[::-1].tolist()
         var = var.assign_coords(deg=deg_in_var)
         # Also output the fourier cos and sin coefs but set to zero
         var = var.reindex(deg=deg_vals, fill_value=0)
@@ -152,9 +158,10 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
     Returns:
         x_approx: The approximate value of $y$ obtained using `param_coefs` and `x`.
     """
+
     def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coefs_fourier2_amp: float, coefs_fourier2_phase: float):
         # Simple wrapper so takes in 2nd harmonic fourier coefs
-        if coefs_fourier2_amp==0 and coefs_fourier2_phase==0:
+        if coefs_fourier2_amp == 0 and coefs_fourier2_phase == 0:
             coefs_fourier_amp = None
             coefs_fourier_phase = None
         else:
@@ -164,15 +171,44 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
             coefs_fourier_phase = np.hstack((np.zeros(2), coefs_fourier2_phase))
         return numerical.polyval_phase(poly_coefs, x, coefs_fourier_amp=coefs_fourier_amp,
                                        coefs_fourier_phase=coefs_fourier_phase, pad_coefs_phase=True)
+
     polyval_phase_wrap = wrap_with_apply_ufunc(_polyval_phase, input_core_dims=[['deg'], ['time'], [], []],
-                                             output_core_dims=[['time']])
+                                               output_core_dims=[['time']])
     if include_fourier:
-        #TODO: edit to include fourier stuff
+        # TODO: edit to include fourier stuff
         var = polyval_phase_wrap(param_coefs.sel(deg=['phase', 2, 1, 0]), x)
     else:
         # Remember highest polyfit power first hence [2, 1, 0] after phase
         var = polyval_phase_wrap(param_coefs.sel(deg=['phase', 2, 1, 0]), x, 0, 0)
     return var
+
+
+def get_temp_fourier_analytic_xr(time: xr.DataArray, swdn_sfc: xr.DataArray, heat_capacity: xr.DataArray,
+                                 param_coefs: xr.DataArray, n_harmonics: int = 2
+                                 ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
+    """
+    Xarray version of `get_temp_fourier_analytic`. Takes output from `polyfit_phase_xr`.
+    Runs with `pad_coefs_phase=True`, so there will be `n_harmonics+1` phase coefficients returned, with
+    the first as zero.
+
+    Args:
+        time:
+        swdn_sfc:
+        heat_capacity:
+        param_coefs: Output from `polyfit_phase_xr` with `deg` dimension.
+        n_harmonics:
+
+    Returns:
+
+    """
+    get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic,
+                                                           input_core_dims=[['time'], ['time'], [], [], [], [], [], []],
+                                                           output_core_dims=[['time'], ['harmonic'], ['harmonic'],
+                                                                             ['harmonic'], ['harmonic']])
+    return get_temp_fourier_analytic_wrap(time, swdn_sfc, heat_capacity, param_coefs.sel(deg='1'),
+                                          param_coefs.sel(deg='phase'), param_coefs.sel(deg='2'),
+                                          param_coefs.sel(deg='cos'), param_coefs.sel(deg='sin'),
+                                          n_harmonics_sw=n_harmonics, pad_coefs_phase=True)
 
 
 def update_ds_extrema(ds: xr.Dataset, time: xr.DataArray, temp: xr.DataArray, fit_method: str):
@@ -209,7 +245,8 @@ def update_ds_extrema(ds: xr.Dataset, time: xr.DataArray, temp: xr.DataArray, fi
 
 
 def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'median', 'max'] = "mean",
-              norm: bool = False, dim: Union[str, list] = "time") -> xr.DataArray:
+              norm: bool = True, dim: Union[str, list] = "time",
+              norm_dim: Optional[Union[str, list]]='lat') -> xr.DataArray:
     """Compute an absolute-error summary between two DataArrays.
 
     Args:
@@ -217,9 +254,11 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
         x_approx: Approximation DataArray (broadcastable to `x`).
         kind: Error reduction to apply over `dim`. One of {"mean", "median", "max"}.
             Defaults to "mean".
-        norm: If True, normalize by 0.01*(max-min) of `x` over `dim`. Defaults to False.
+        norm: If True, normalize by 0.01*(max-min) of `x` over `dim`; then takes average of this over `norm_dim.
             I.e., convert to a percentage.
         dim: Dimension name(s) to reduce over. Defaults to "time".
+        norm_dim: Dimension name(s) to average normalizing factor over.
+            By default, `norm_dim=lat` so that have a single normalization factor for each mixed layer depth.
 
     Returns:
         DataArray of the reduced absolute error (and optionally normalized), with
@@ -240,7 +279,9 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
         raise ValueError(f'Unknown kind="{kind}". Expected "mean", "median", or "max".')
 
     if norm:
-        scale = 0.01 * (x.max(dim=dim) - x.min(dim=dim))
+        scale = (x.max(dim=dim)-x.min(dim=dim))/100          # /100 so turn to percentage
+        if norm_dim is not None:
+            scale = scale.mean(dim=norm_dim)
         out = out / scale
 
     return out

@@ -1,19 +1,20 @@
 ! This experiment is the same as frierson_test_case but with a mixed layer depth of 5m rather 2.5m
 ! in the mixed_layer_nml namelist.
 ! It is also run for 15 years, longer because larger mixed layer depth
-! Exact same as tau_sweep/aquaplanet/depth=1/k=1 apart from mixed layer depth
+! Uses prescribed drag coefficient based on previous simulation values
+! Exact same as tau_sweep/aquaplanet/depth=1/k=1 apart from drag and mixed layer depth
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'thesis_season/depth=5/k=1'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/thesis_season/depth=5/k=1'
+   name = 'thesis_season/depth=20/k=1_const_drag'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/thesis_season/depth=20/k=1_const_drag'
    n_months_total = 180         ! Total duration of simulation in months.
    n_months_job = 180           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
-   n_cores = 16                 ! Number of cores for each node to run job on (Slurm info) - 16 if small-short | 32 if long-short
+   n_cores = 32                 ! Number of cores for each node to run job on (Slurm info).
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
-   partition = 'small-short'          ! Queue to submit job to (Slurm info).
+   partition = 'large-short'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
    compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '24:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
@@ -60,6 +61,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
+    drag_const = 0.0009              ! this is for no-WISHE | Only difference from normal case
 /
 
 &atmosphere_nml
@@ -68,7 +70,7 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 5.0                         ! different from frierson_test_case value of 2.5
+    depth = 20.0                         ! different from frierson_test_case value of 2.5
     evaporation = .true.
     prescribe_initial_dist = .true.
     tconst = 285.0

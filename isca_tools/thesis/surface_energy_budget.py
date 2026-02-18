@@ -152,7 +152,7 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
                               n_harmonics_sw: int = 2,
                               n_harmonics_temp: Optional[int] = None,
                               include_sw_phase: bool = False,
-                              day_seconds: float = 86400) -> Tuple[
+                              day_seconds: float = 86400, pad_coefs_phase: bool = False) -> Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Seeks a fourier solution of the form $T'(t) = \\sum_{n=1}^{N} T_n\\cos(2n\\pi t/\mathcal{T} - \\phi_n)$
@@ -220,6 +220,9 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
             These phase factors are usually very small, and it makes the solution for $T'(t)$ more simple if they
             are set to 0, hence the option.
         day_seconds: Duration of a day in seconds.
+        pad_coefs_phase: If `True`, will set `temp_fourier_phase` and `sw_fourier_phase`
+            to length `n_harmonics+1` to match `_fourier_amp`, with the first value as zero.
+            Otherwise, it will be size `n_harmonics`.
 
     Returns:
         temp_fourier: `float [n_time]`</br>
@@ -228,10 +231,12 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
             The amplitude Fourier coefficients for surface temperature: $T_n$.
         temp_fourier_phase: `float [n_harmonics]`</br>
             The phase Fourier coefficients for surface temperature: $\phi_n$.
+            If `pad_coefs_phase`, it will be of the length `n_harmonics+1`, with the first value as zero.
         sw_fourier_amp: `float [n_harmonics+1]`</br>
             The amplitude Fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $F_n$.
         sw_fourier_phase: `float [n_harmonics]`</br>
             The phase Fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $\\varphi_n$.
+            If `pad_coefs_phase`, it will be of the length `n_harmonics+1`, with the first value as zero.
     """
     n_year_days = len(time)
     if n_harmonics_temp is None:
@@ -293,6 +298,9 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
             sw_cos[1] -= 0.5 * lambda_sq * temp_fourier_amp[1] ** 2 * np.cos(2 * temp_fourier_phase[0]
                                                                              ) / sw_fourier_amp[2]
     temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
+    if pad_coefs_phase:
+        temp_fourier_phase = np.hstack((np.zeros(1), temp_fourier_phase))
+        sw_fourier_phase = np.hstack((np.zeros(1), sw_fourier_phase))
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
 
 
