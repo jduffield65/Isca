@@ -334,7 +334,8 @@ def raise_if_common_dims_not_identical(x, y, name_x="x", name_y="y"):
             f"{name_x} common dims = {x_common}\n"
             f"{name_y} common dims = {y_common}\n"
             f"{name_x}.dims = {x.dims}\n"
-            f"{name_y}.dims = {y.dims}"
+            f"{name_y}.dims = {y.dims}\n"
+            f"Try using `transpose_common_dims_like` function to fix"
         )
 
 

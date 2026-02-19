@@ -3,7 +3,7 @@ from ..utils import fourier, numerical
 from scipy import optimize
 from scipy.interpolate import CubicSpline
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Literal
 
 
 def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: np.ndarray,
@@ -98,7 +98,7 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
     if gamma_fourier_term and phase_gamma_fit:
         gamma_approx_coefs, gamma_fourier_term_coefs_amp, gamma_fourier_term_coefs_phase = \
             numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
-                                    include_phase=phase_gamma_fit, fourier_harmonics=np.arange(2, n_harmonics_temp+1))
+                                    include_phase=phase_gamma_fit, fourier_harmonics=np.arange(2, n_harmonics_temp + 1))
     else:
         gamma_approx_coefs = numerical.polyfit_phase(temp_anom, gamma, deg_gamma_fit, resample=resample,
                                                      include_phase=phase_gamma_fit)
@@ -137,7 +137,7 @@ def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: n
             sw_fourier_fit, sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, n_harmonics_sw)[:2]
         else:
             sw_fourier_amp, sw_fourier_phase = fourier.get_fourier_fit(time, swdn_sfc, n_harmonics_sw)[1:]
-            sw_fourier_fit = fourier.fourier_series(time, sw_fourier_amp, sw_fourier_phase*0)
+            sw_fourier_fit = fourier.fourier_series(time, sw_fourier_amp, sw_fourier_phase * 0)
     p0[0] = sw_fourier_amp[1] / np.cos(p0[n_harmonics_temp]) / (
             (2 * np.pi * f * heat_capacity) * np.tan(p0[n_harmonics_temp]) + gamma_approx_coefs[-2])
     args_found = optimize.curve_fit(fit_func, time, sw_fourier_fit, p0)[0]
@@ -277,7 +277,8 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
 
         temp_fourier_phase[n - 1] = np.arctan(
             (2 * np.pi * n * f * heat_capacity + sw_tan[n - 1] * lambda_term_cos - lambda_term_sin) / (
-                    -2 * np.pi * n * f * heat_capacity * sw_tan[n - 1] + lambda_term_cos - sw_tan[n - 1] * lambda_term_sin))
+                    -2 * np.pi * n * f * heat_capacity * sw_tan[n - 1] + lambda_term_cos - sw_tan[
+                n - 1] * lambda_term_sin))
         temp_fourier_amp[n] = sw_fourier_amp[n] * sw_cos[n - 1] / np.cos(
             temp_fourier_phase[n - 1]) / (
                                       (2 * np.pi * n * f * heat_capacity - lambda_term_sin) * np.tan(
@@ -301,6 +302,157 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
     if pad_coefs_phase:
         temp_fourier_phase = np.hstack((np.zeros(1), temp_fourier_phase))
         sw_fourier_phase = np.hstack((np.zeros(1), sw_fourier_phase))
+    return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
+
+
+def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capacity: float,
+                               lambda_const: float, lambda_phase: float = 0,
+                               lambda_sq: float = 0, lambda_cos: float = 0, lambda_sin: float = 0,
+                               lambda_0: float = 0,
+                               n_harmonics: Literal[1, 2] = 2,
+                               day_seconds: float = 86400, pad_coefs_phase: bool = False) -> Tuple[
+    np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Seeks a fourier solution of the form $T(t) = \\frac{T_0}{2} + \\sum_{n=1}^{2} T_n\\cos(2n\\pi t/\mathcal{T} - \\phi_n)$
+    to the surface energy budget of the general form:
+
+    $$
+    \\begin{align}
+    \\begin{split}
+    C\\frac{\partial T}{\partial t} = &F(t) - \lambda_0 -
+    \\frac{1}{2}\lambda_{phase}(T(t-\mathcal{T}/4) - T(t+\mathcal{T}/4)) -  \\\\
+    &\lambda T(t) - \lambda_{sq} T'^{2}(t) - \Lambda_{cos}\\cos(4\\pi t/\mathcal{T}) -
+    \Lambda_{sin}\\sin(4\\pi t/\mathcal{T})
+    \\end{split}
+    \\end{align}
+    $$
+
+    where:
+
+    * $T' = T(t) - \overline{T}$ is the surface temperature anomaly
+    * $C$ is the heat capacity of the surface
+    * $\overline{T} = T_0/2$ is the mean temperature.
+    * $F(t) = \\frac{F_0}{2} + \\sum_{n=1}^{N} F_n\\cos(2n\\pi t/\mathcal{T})$ is the Fourier representation
+    of the downward shortwave radiation at the surface, $SW^{\downarrow}$.
+    * $\lambda_0 + \lambda T - \lambda_{sq} T'^{2} +
+    \\frac{1}{2}\lambda_{phase}(T(t-\mathcal{T}/4) - T(t+\mathcal{T}/4)) +$</br>
+    $\Lambda_{cos}\\cos(4\\pi t/\mathcal{T}) + \Lambda_{sin}\\sin(4\\pi t/\mathcal{T})$
+    is the approximation for $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.
+    * $\mathcal{T}$ is the period i.e. one year.
+
+    The solution is exact if $\lambda_{sq}=0$, and otherwise approximate assuming first harmonic dominates $T'^2$
+    such that $T'^2(t) \\approx (T_1\\cos(2\\pi ft - \\phi_1))^2 + T_2^2/2$:
+
+    * $T_0 = (F_0-2\lambda_0)/\lambda - \\frac{\lambda_{sq}}{\lambda}(T_1^2 + T_2^2)$
+    * $\\tan \phi_1 = x(1 - \\frac{\lambda_{phase}}{2\pi fC})$ where $x=\\frac{2\pi fC}{\lambda}$ and $f=1/\mathcal{T}$.
+    * $T_1 = \\frac{F_1}{\lambda}\\frac{1}{1+\\tan^2\phi_1}$
+    * $\\tan \phi_2 = 2x \\frac{1-\\frac{1}{2x}\\frac{\\alpha_2}{1-\\alpha_1}}{1+2x\\frac{\\alpha_2}{1-\\alpha_1}}$
+    * $T_2 = \\frac{F_2(1-\Lambda_{cos}')}{\lambda}\\frac{1+\\tan^2\phi_2}{1+2x\\tan\phi_2}(1-\\alpha_1)$
+
+    where we use the following dimensionless parameters:
+
+    * $\Lambda_{cos}' = \Lambda_{cos}/F_2$
+    * $\Lambda_{sin}' = \Lambda_{sin}/F_2$
+    * $\lambda_{sq}' = \\frac{\lambda_{sq}F_1^2}{2\lambda^2F_2}$
+    * $\\alpha_1 = \\frac{\lambda_{sq}'}{1-\Lambda_{cos}'}\\frac{1-\\tan^2(\phi_1)}{(1+\\tan^2(\phi_1))^2}$
+    * $\\alpha_2 = \\frac{\Lambda_{sin}'}{1-\Lambda_{cos}'} + \\frac{2\lambda_{sq}'}{1-\Lambda_{cos}'}\\frac{\\tan(\phi_1)}{(1+\\tan^2(\phi_1))^2}$
+
+    Args:
+        time: `float [n_time]`</br>
+            Time in days (assumes periodic e.g. annual mean, so `time = np.arange(360)`).
+        swdn_sfc: `float [n_time]`</br>
+            Downward shortwave radiation at the surface, $SW^{\\downarrow}$. I.e. `swdn_sfc` output by Isca.
+            Units: $Wm^{-2}$.
+        heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
+            Obtained from mixed layer depth of ocean using
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
+        lambda_const: The constant $\lambda$ used in the approximation for
+            $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
+        lambda_phase: The constants $\lambda_{phase}$ used in the approximation for $\Gamma^{\\uparrow}$.
+        lambda_sq: The constant $\lambda_{sq}$ used in the approximation for $\Gamma^{\\uparrow}$.
+        lambda_cos: The constant $\Lambda_{cos}$ used in the approximation for $\Gamma^{\\uparrow}$.
+        lambda_sin: The constant $\Lambda_{sin}$ used in the approximation for $\Gamma^{\\uparrow}$.
+        lambda_0: The constant $\lambda_0$ used in the approximation for $\Gamma^{\\uparrow}$.
+        n_harmonics: Number of harmonics to use to fit fourier series for $SW^{\\downarrow}$.
+            Cannot exceed `n_harmonics_temp` as extra harmonics would not be used.
+        day_seconds: Duration of a day in seconds.
+        pad_coefs_phase: If `True`, will set `temp_fourier_phase` and `sw_fourier_phase`
+            to length `n_harmonics+1` to match `_fourier_amp`, with the first value as zero.
+            Otherwise, it will be size `n_harmonics`.
+
+    Returns:
+        temp_fourier: `float [n_time]`</br>
+            The Fourier series solution that was found for surface temperature, $T$.
+        temp_fourier_amp: `float [n_harmonics+1]`</br>
+            The amplitude Fourier coefficients for surface temperature: $T_n$.
+        temp_fourier_phase: `float [n_harmonics]`</br>
+            The phase Fourier coefficients for surface temperature: $\phi_n$.
+            If `pad_coefs_phase`, it will be of the length `n_harmonics+1`, with the first value as zero.
+        sw_fourier_amp: `float [n_harmonics+1]`</br>
+            The amplitude Fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $F_n$.
+        sw_fourier_phase: `float [n_harmonics]`</br>
+            The phase Fourier coefficients for shortwave radiation, $SW^{\\downarrow}$: $\\varphi_n$.
+            If `pad_coefs_phase`, it will be of the length `n_harmonics+1`, with the first value as zero.
+    """
+    n_year_days = len(time)
+    f = 1 / (n_year_days * day_seconds)  # must have frequency in units of s^{-1} to deal with phase stuff in radians
+
+    if n_harmonics == 1 and lambda_sq != 0:
+        raise ValueError('Cannot solve for non-zero lambda_sq with single harmonic - '
+                         'use get_temp_fourier_numerical instead')
+    # Get fourier representation of SW radiation. Note I force phase coefs to zero
+    sw_fourier_amp = fourier.get_fourier_fit(time, swdn_sfc, n_harmonics)[1]
+
+    temp_fourier_amp = np.zeros(n_harmonics + 1)  # 1st component will remain 0 so mean of temperature is 0
+    temp_fourier_phase = np.zeros(n_harmonics + 1)
+
+    # 1st Harmonic
+    heat_cap_eff = heat_capacity * (1 - lambda_phase / (2 * np.pi * f * heat_capacity))
+    x = 2 * np.pi * f * heat_capacity / lambda_const
+    tan_phase1 = 2 * np.pi * f * heat_cap_eff / lambda_const
+    temp_fourier_phase[1] = np.arctan(tan_phase1)
+    temp_fourier_amp[1] = sw_fourier_amp[1] / lambda_const / np.sqrt(1 + x ** 2)
+
+    # 2nd Harmonic - not exact if lambda_sq!=0, as approx T^2 given by first harmonic squared only
+    if n_harmonics == 2:
+        # Put empirical params in dimensionless form
+        lambda_cos_dim = lambda_cos / sw_fourier_amp[2]
+        lambda_sin_dim = lambda_sin / sw_fourier_amp[2]
+        lambda_sq_dim = lambda_sq * sw_fourier_amp[1] ** 2 / (2 * lambda_const ** 2 * sw_fourier_amp[2])
+
+        # Combine to form other dimensionless factors
+        alpha_1 = lambda_sq_dim / (1 - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
+        alpha_2 = lambda_sin_dim / (1 - lambda_cos_dim) + 2 * lambda_sq_dim / (1 - lambda_cos_dim) * tan_phase1 / (
+                    1 + tan_phase1 ** 2) ** 2
+        phase_mod_factor = (1 - 1 / 2 / x * alpha_2 / (1 - alpha_1)) / (1 + 2 * x * (alpha_2 / (1 - alpha_1)))
+        amp_mod_factor = (1-lambda_cos_dim) * (1-alpha_1)
+
+        # Combine usual phase and amp factors with modification factors
+        tan_phase2 = 2 * x * phase_mod_factor
+        temp_fourier_phase[2] = np.arctan(tan_phase2)
+        temp_fourier_amp[2] = sw_fourier_amp[2]/lambda_const * (1+tan_phase2**2)/(1+2*x*tan_phase2) * amp_mod_factor
+
+        # sw_amp2_eff = sw_fourier_amp[2]-lambda_cos
+        # lambda_sin_eff = lambda_sin/sw_amp2_eff
+        # lambda_sq_eff = lambda_sq/2 * temp_fourier_amp[1]**2 / (2*sw_amp2_eff)
+        # alpha_1 = lambda_sq_eff * (1-x**2)/(1+x**2)
+        # alpha_2 = lambda_sin_eff + 2 * lambda_sq_eff * x/(1+x**2)
+        # phase_mod_factor = (1-lambda_const/(4*np.pi*f*heat_capacity)*(alpha_2/(1-alpha_1)))/(
+        #         1+4*np.pi*f*heat_capacity/lambda_const*(alpha_2/(1-alpha_1)))
+        # x2 = phase_mod_factor * 4*np.pi*f*heat_capacity/lambda_const        # tan of phase_2
+        # temp_fourier_phase[2] = np.arctan(x2)
+        # temp_fourier_amp[2] = sw_amp2_eff * np.sqrt(1+x2**2) / (lambda_const + 4*np.pi*f*heat_capacity*x2) * (1-alpha_1)
+
+    # 0th Harmonic
+    temp_fourier_amp[0] = (sw_fourier_amp[0] - 2 * lambda_0) / lambda_const
+    if n_harmonics == 2:
+        # If include squared term, then get an extra contribution to T_0
+        temp_fourier_amp[0] -= lambda_sq / lambda_const * (temp_fourier_amp[1] ** 2 + temp_fourier_amp[2] ** 2)
+
+    temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase, pad_coefs_phase=True)
+    if not pad_coefs_phase:
+        temp_fourier_phase = temp_fourier_phase[1:]
+    sw_fourier_phase = np.zeros_like(temp_fourier_phase)
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
 
 
@@ -340,15 +492,15 @@ Union[float, np.ndarray]]:
         amp_extrema1: Absolute amplitude of extrema to occur first
         amp_extrema2: Absolute amplitude of extrema to occur last
     """
-    f = 1/(n_year_days*day_seconds)
+    f = 1 / (n_year_days * day_seconds)
     if sw_fourier_amp2 == 0:
         if lambda_sq != 0:
             raise ValueError('Cannot solve for non-zero lambda_sq with single harmonic - '
                              'get extrema numerically instead')
-        tan_phase = (2*np.pi*heat_capacity*f - lambda_phase) / lambda_const
-        time_extrema1 = np.arctan(tan_phase)/(2*np.pi) * n_year_days
-        time_extrema2 = time_extrema1 + n_year_days/2
-        amp_extrema1 = np.abs(sw_fourier_amp1/lambda_const) / (np.sqrt(1+tan_phase**2))
+        tan_phase = (2 * np.pi * heat_capacity * f - lambda_phase) / lambda_const
+        time_extrema1 = np.arctan(tan_phase) / (2 * np.pi) * n_year_days
+        time_extrema2 = time_extrema1 + n_year_days / 2
+        amp_extrema1 = np.abs(sw_fourier_amp1 / lambda_const) / (np.sqrt(1 + tan_phase ** 2))
         amp_extrema2 = amp_extrema1
     return time_extrema1, time_extrema2, amp_extrema1, amp_extrema2
 
