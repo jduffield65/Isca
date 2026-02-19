@@ -308,11 +308,15 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
 def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capacity: float,
                                lambda_const: float, lambda_phase: float = 0,
                                lambda_sq: float = 0, lambda_cos: float = 0, lambda_sin: float = 0,
-                               lambda_0: float = 0,
+                               lambda_0: Optional[float] = None,
                                n_harmonics: Literal[1, 2] = 2,
                                day_seconds: float = 86400, pad_coefs_phase: bool = False) -> Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
+    This is the same as `get_temp_fourier_analytic` but is constrained to only work with `n_harmonics=1` and
+    `n_harmonics=2` and enforces `include_sw_phase=False`.
+    Also, it is coded in a way to reflect the algebra more closely.
+
     Seeks a fourier solution of the form $T(t) = \\frac{T_0}{2} + \\sum_{n=1}^{2} T_n\\cos(2n\\pi t/\mathcal{T} - \\phi_n)$
     to the surface energy budget of the general form:
 
@@ -373,6 +377,7 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
         lambda_cos: The constant $\Lambda_{cos}$ used in the approximation for $\Gamma^{\\uparrow}$.
         lambda_sin: The constant $\Lambda_{sin}$ used in the approximation for $\Gamma^{\\uparrow}$.
         lambda_0: The constant $\lambda_0$ used in the approximation for $\Gamma^{\\uparrow}$.
+            Leave as `None` to set $T_0=0$ i.e., return the anomaly $T_s-\overline{T}_s$.
         n_harmonics: Number of harmonics to use to fit fourier series for $SW^{\\downarrow}$.
             Cannot exceed `n_harmonics_temp` as extra harmonics would not be used.
         day_seconds: Duration of a day in seconds.
@@ -423,14 +428,15 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
         # Combine to form other dimensionless factors
         alpha_1 = lambda_sq_dim / (1 - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
         alpha_2 = lambda_sin_dim / (1 - lambda_cos_dim) + 2 * lambda_sq_dim / (1 - lambda_cos_dim) * tan_phase1 / (
-                    1 + tan_phase1 ** 2) ** 2
+                1 + tan_phase1 ** 2) ** 2
         phase_mod_factor = (1 - 1 / 2 / x * alpha_2 / (1 - alpha_1)) / (1 + 2 * x * (alpha_2 / (1 - alpha_1)))
-        amp_mod_factor = (1-lambda_cos_dim) * (1-alpha_1)
+        amp_mod_factor = (1 - lambda_cos_dim) * (1 - alpha_1)
 
         # Combine usual phase and amp factors with modification factors
         tan_phase2 = 2 * x * phase_mod_factor
         temp_fourier_phase[2] = np.arctan(tan_phase2)
-        temp_fourier_amp[2] = sw_fourier_amp[2]/lambda_const * (1+tan_phase2**2)/(1+2*x*tan_phase2) * amp_mod_factor
+        temp_fourier_amp[2] = sw_fourier_amp[2] / lambda_const * (1 + tan_phase2 ** 2) / (
+                    1 + 2 * x * tan_phase2) * amp_mod_factor
 
         # sw_amp2_eff = sw_fourier_amp[2]-lambda_cos
         # lambda_sin_eff = lambda_sin/sw_amp2_eff
@@ -444,10 +450,11 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
         # temp_fourier_amp[2] = sw_amp2_eff * np.sqrt(1+x2**2) / (lambda_const + 4*np.pi*f*heat_capacity*x2) * (1-alpha_1)
 
     # 0th Harmonic
-    temp_fourier_amp[0] = (sw_fourier_amp[0] - 2 * lambda_0) / lambda_const
-    if n_harmonics == 2:
-        # If include squared term, then get an extra contribution to T_0
-        temp_fourier_amp[0] -= lambda_sq / lambda_const * (temp_fourier_amp[1] ** 2 + temp_fourier_amp[2] ** 2)
+    if lambda_0 is not None:
+        temp_fourier_amp[0] = (sw_fourier_amp[0] - 2 * lambda_0) / lambda_const
+        if n_harmonics == 2:
+            # If include squared term, then get an extra contribution to T_0
+            temp_fourier_amp[0] -= lambda_sq / lambda_const * (temp_fourier_amp[1] ** 2 + temp_fourier_amp[2] ** 2)
 
     temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase, pad_coefs_phase=True)
     if not pad_coefs_phase:
