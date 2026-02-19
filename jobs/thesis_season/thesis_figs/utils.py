@@ -7,7 +7,7 @@ from isca_tools.utils import numerical
 from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
-from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice
+from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 
 # Plotting info
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
@@ -128,6 +128,8 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
     """
     if deg > 2:
         raise ValueError('deg must be <= 2')
+    # Not required to be the same order for code to work, but think makes neater
+    raise_if_common_dims_not_identical(x, y)
     polyfit_phase_wrap = wrap_with_apply_ufunc(numerical.polyfit_phase, input_core_dims=[['time'], ['time']],
                                                output_core_dims=[['deg']])
     var = polyfit_phase_wrap(x, y, deg=deg, time=time, time_start=time_start, time_end=time_end,
@@ -158,7 +160,8 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
     Returns:
         x_approx: The approximate value of $y$ obtained using `param_coefs` and `x`.
     """
-
+    # Not required to be the same order for code to work, but think makes neater
+    raise_if_common_dims_not_identical(x, param_coefs, name_y='param_coefs')
     def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coefs_fourier2_amp: float, coefs_fourier2_phase: float):
         # Simple wrapper so takes in 2nd harmonic fourier coefs
         if coefs_fourier2_amp == 0 and coefs_fourier2_phase == 0:
@@ -201,6 +204,8 @@ def get_temp_fourier_analytic_xr(time: xr.DataArray, swdn_sfc: xr.DataArray, hea
     Returns:
 
     """
+    # Not required to be the same order for code to work, but think makes neater
+    raise_if_common_dims_not_identical(swdn_sfc, param_coefs, name_x='swdn_sfc', name_y='param_coefs')
     get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic,
                                                            input_core_dims=[['time'], ['time'], [], [], [], [], [], []],
                                                            output_core_dims=[['time'], ['harmonic'], ['harmonic'],
@@ -267,6 +272,7 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
     Raises:
         ValueError: If `kind` is not one of {"mean", "median", "max"}.
     """
+    raise_if_common_dims_not_identical(x, x_approx, name_y='x_approx')
     err = np.abs(x - x_approx)
 
     if kind == "mean":

@@ -299,3 +299,63 @@ def update_dim_slice(obj: Union[xr.DataArray, xr.Dataset], dim: str, dim_val,
         return obj
 
     raise TypeError(f"Expected xarray Dataset or DataArray, got {type(obj)}")
+
+
+def raise_if_common_dims_not_identical(x, y, name_x="x", name_y="y"):
+    """Raise an error if the shared dimensions of two xarray objects differ in order.
+
+    This compares only the dimensions that appear in both `x` and `y`. It
+    extracts the subsequence of `x.dims` containing only shared dims and does
+    the same for `y.dims`, then checks the two subsequences are identical (same
+    dim names in the same order).
+
+    Args:
+        x: An xarray object (DataArray or Dataset) with a `.dims` attribute.
+        y: An xarray object (DataArray or Dataset) with a `.dims` attribute.
+        name_x: Name to use for `x` in the error message. Defaults to "x".
+        name_y: Name to use for `y` in the error message. Defaults to "y".
+
+    Raises:
+        ValueError: If the order (or names) of the dimensions shared by `x` and
+            `y` are not identical.
+
+    Example:
+        If `x.dims == ('time', 'lat', 'lon')` and `y.dims == ('lat', 'time')`,
+        the shared dims are `('time', 'lat')` for `x` and `('lat', 'time')` for
+        `y`, so this function raises.
+    """
+    common = [d for d in x.dims if d in y.dims]  # preserves x order
+    x_common = tuple(d for d in x.dims if d in common)
+    y_common = tuple(d for d in y.dims if d in common)
+
+    if x_common != y_common:
+        raise ValueError(
+            f"{name_x} and {name_y} common-dim order differs.\n"
+            f"{name_x} common dims = {x_common}\n"
+            f"{name_y} common dims = {y_common}\n"
+            f"{name_x}.dims = {x.dims}\n"
+            f"{name_y}.dims = {y.dims}"
+        )
+
+
+def transpose_common_dims_like(y: xr.DataArray, x: xr.DataArray) -> xr.DataArray:
+    """Reorder y so any dims shared with x follow x's dim order.
+
+    Dims that are not in `x.dims` are left in their original relative order and
+    appended after the reordered common dims.
+
+    Args:
+        y: Target xarray object (DataArray or Dataset) to reorder.
+        x: Reference xarray object (DataArray or Dataset). Only `x.dims` is used.
+
+    Returns:
+        `y` transposed so that its common dims with `x` match the order in `x`.
+
+    Raises:
+        ValueError: If `y` is missing any dim required to complete the transpose
+            order (should only happen if `y.dims` changes unexpectedly).
+    """
+    common_order = [d for d in x.dims if d in y.dims]
+    remaining = [d for d in y.dims if d not in common_order]
+    order = tuple(common_order + remaining)
+    return y.transpose(*order)
