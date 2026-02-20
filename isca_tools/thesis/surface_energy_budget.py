@@ -416,7 +416,7 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
     x = 2 * np.pi * f * heat_capacity / lambda_const
     tan_phase1 = 2 * np.pi * f * heat_cap_eff / lambda_const
     temp_fourier_phase[1] = np.arctan(tan_phase1)
-    temp_fourier_amp[1] = sw_fourier_amp[1] / lambda_const / np.sqrt(1 + x ** 2)
+    temp_fourier_amp[1] = sw_fourier_amp[1] / lambda_const / np.sqrt(1 + tan_phase1 ** 2)
 
     # 2nd Harmonic - not exact if lambda_sq!=0, as approx T^2 given by first harmonic squared only
     if n_harmonics == 2:
@@ -435,7 +435,7 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
         # Combine usual phase and amp factors with modification factors
         tan_phase2 = 2 * x * phase_mod_factor
         temp_fourier_phase[2] = np.arctan(tan_phase2)
-        temp_fourier_amp[2] = sw_fourier_amp[2] / lambda_const * (1 + tan_phase2 ** 2) / (
+        temp_fourier_amp[2] = sw_fourier_amp[2] / lambda_const * np.sqrt(1 + tan_phase2 ** 2) / (
                     1 + 2 * x * tan_phase2) * amp_mod_factor
 
         # sw_amp2_eff = sw_fourier_amp[2]-lambda_cos

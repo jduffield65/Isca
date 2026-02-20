@@ -1,1 +1,2 @@
 from .test_lapse_integral import TestLapseIntegral, TestFitting
+from .test_surface_energy_budget import TestFourierAnalytic
