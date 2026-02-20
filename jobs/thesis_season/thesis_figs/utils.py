@@ -24,6 +24,7 @@ resample = False  # Don't do resample in polyfit_phase as complicated
 deg_max = 2  # In fitting go up to maximum of T^2 dependence of surface fluxes
 # Lowest power is last in deg to match polyfit
 deg_vals = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg_max + 1).tolist()[::-1], dims="deg", name="deg")
+day_seconds = 86400
 
 
 def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,

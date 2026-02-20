@@ -4,6 +4,7 @@ from scipy import optimize
 from scipy.interpolate import CubicSpline
 import warnings
 from typing import Optional, Tuple, Union, Literal
+import xarray as xr
 
 
 def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: np.ndarray,
@@ -305,6 +306,57 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
 
 
+def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
+                            heat_capacity: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
+                            n_year_days: Optional[int]=None,
+                            sw_fourier_amp1: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
+                            sw_fourier_amp2: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
+                            lambda_const: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
+                            day_seconds: float = 86400
+                            ) -> Union[float, np.ndarray, xr.DataArray]:
+    """
+    Returns dimensionless versions of empirical fitting parameter, without changing the sign.
+    There are three possibilities for how `var` is made dimensionless:
+
+    * If provide `heat_capacity`, $C$, and `n_year_days`, $\mathcal{T}$, then will assume `var` is $\lambda$ or
+    $\lambda_{phase}$. Will return $\lambda' = \\frac{\lambda}{2\pi fC}$ where $f=1/\mathcal{T}$.
+    * If provide `sw_fourier_amp1`, $F_1$, `sw_fourier_amp2`, $F_2$, and `lambda_const`, $\lambda$, then will
+    assume `var` is $\lambda_{sq}$. Will return $\lambda_{sq}' = \\frac{\lambda_{sq}F_1^2}{2\lambda^2F_2}$.
+    * If provide `sw_fourier_amp2`, $F_2$, only then will assume `var` is $\Lambda_{cos}$ or $\Lambda_{sin}$:
+    $\Lambda_{cos}' = \Lambda_{cos}/F_2$.
+
+    Args:
+        var: Parameter to make dimensionless.
+        heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
+            Obtained from mixed layer depth of ocean using
+            [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
+        n_year_days: Number of days in the year.
+        sw_fourier_amp1: The first harmonic amplitude Fourier coefficient for shortwave radiation, $F_1$.
+        sw_fourier_amp2: The second harmonic amplitude Fourier coefficients for shortwave radiation, $F_2$.
+        lambda_const: The linear constant $\lambda$ used in the approximation for
+            $\Gamma^{\\uparrow}. In normal form with units of Wm$^{-2}$K$^{-1}$.
+        day_seconds: Duration of a day in seconds.
+
+    Returns:
+        var_dim: Dimensionless version of `var`.
+    """
+    # May be issue here with var changing sign, but don't think so as only negative is sw_fourier_amp1 and square that
+    # But in southern hemisphere, may be different with sw_fourier_amp2
+    if (heat_capacity is not None) and (n_year_days is not None):
+        # lambda_phase or lambda_const
+        f = 1/(n_year_days * day_seconds)
+        var = var / (2*np.pi*f*heat_capacity)
+    elif (sw_fourier_amp1 is not None) and (sw_fourier_amp2 is not None) and (lambda_const is not None):
+        # lambda_sq
+        var = var * sw_fourier_amp1**2 / (2 * lambda_const ** 2 * sw_fourier_amp2)
+    elif sw_fourier_amp2 is not None:
+        # lambda_cos and lambda_sin
+        var = var/sw_fourier_amp2
+    else:
+        raise ValueError("Combination of parameters provided not correct for any parameter")
+    return var
+
+
 def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capacity: float,
                                lambda_const: float, lambda_phase: float = 0,
                                lambda_sq: float = 0, lambda_cos: float = 0, lambda_sin: float = 0,
@@ -370,7 +422,7 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
         heat_capacity: $C$, the heat capacity of the surface in units of $JK^{-1}m^{-2}$.</br>
             Obtained from mixed layer depth of ocean using
             [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
-        lambda_const: The constant $\lambda$ used in the approximation for
+        lambda_const: The linear constant $\lambda$ used in the approximation for
             $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.</br>
         lambda_phase: The constants $\lambda_{phase}$ used in the approximation for $\Gamma^{\\uparrow}$.
         lambda_sq: The constant $\lambda_{sq}$ used in the approximation for $\Gamma^{\\uparrow}$.
@@ -421,9 +473,10 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
     # 2nd Harmonic - not exact if lambda_sq!=0, as approx T^2 given by first harmonic squared only
     if n_harmonics == 2:
         # Put empirical params in dimensionless form
-        lambda_cos_dim = lambda_cos / sw_fourier_amp[2]
-        lambda_sin_dim = lambda_sin / sw_fourier_amp[2]
-        lambda_sq_dim = lambda_sq * sw_fourier_amp[1] ** 2 / (2 * lambda_const ** 2 * sw_fourier_amp[2])
+        lambda_cos_dim = get_param_dimensionless(lambda_cos, sw_fourier_amp2=sw_fourier_amp[2])
+        lambda_sin_dim = get_param_dimensionless(lambda_sin, sw_fourier_amp2=sw_fourier_amp[2])
+        lambda_sq_dim = get_param_dimensionless(lambda_sq, sw_fourier_amp1=sw_fourier_amp[1],
+                                                sw_fourier_amp2=sw_fourier_amp[2], lambda_const=lambda_const)
 
         # Combine to form other dimensionless factors
         alpha_1 = lambda_sq_dim / (1 - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
