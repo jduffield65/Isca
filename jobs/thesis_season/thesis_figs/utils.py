@@ -4,7 +4,8 @@ import xarray as xr
 from typing import Union, Literal, Optional, Tuple
 from isca_tools.utils import numerical
 
-from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic
+from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic, \
+    get_temp_fourier_analytic2
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
@@ -23,7 +24,6 @@ resample = False  # Don't do resample in polyfit_phase as complicated
 deg_max = 2  # In fitting go up to maximum of T^2 dependence of surface fluxes
 # Lowest power is last in deg to match polyfit
 deg_vals = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg_max + 1).tolist()[::-1], dims="deg", name="deg")
-
 
 
 def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,
@@ -162,6 +162,7 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
     """
     # Not required to be the same order for code to work, but think makes neater
     raise_if_common_dims_not_identical(x, param_coefs, name_y='param_coefs')
+
     def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coefs_fourier2_amp: float, coefs_fourier2_phase: float):
         # Simple wrapper so takes in 2nd harmonic fourier coefs
         if coefs_fourier2_amp == 0 and coefs_fourier2_phase == 0:
@@ -187,7 +188,8 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
 
 
 def get_temp_fourier_analytic_xr(time: xr.DataArray, swdn_sfc: xr.DataArray, heat_capacity: xr.DataArray,
-                                 param_coefs: xr.DataArray, n_harmonics: int = 2
+                                 param_coefs: xr.DataArray, n_harmonics: int = 2,
+                                 func_use: Literal[1, 2] = 2
                                  ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
     """
     Xarray version of `get_temp_fourier_analytic`. Takes output from `polyfit_phase_xr`.
@@ -206,14 +208,23 @@ def get_temp_fourier_analytic_xr(time: xr.DataArray, swdn_sfc: xr.DataArray, hea
     """
     # Not required to be the same order for code to work, but think makes neater
     raise_if_common_dims_not_identical(swdn_sfc, param_coefs, name_x='swdn_sfc', name_y='param_coefs')
-    get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic,
-                                                           input_core_dims=[['time'], ['time'], [], [], [], [], [], []],
-                                                           output_core_dims=[['time'], ['harmonic'], ['harmonic'],
-                                                                             ['harmonic'], ['harmonic']])
+    if func_use == 1:
+        get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic,
+                                                               input_core_dims=[['time'], ['time'], [], [], [], [], [], []],
+                                                               output_core_dims=[['time'], ['harmonic'], ['harmonic'],
+                                                                                 ['harmonic'], ['harmonic']])
+        kwargs = {'n_harmonics_sw': n_harmonics, 'pad_coefs_phase': True}
+    else:
+        get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic2,
+                                                                input_core_dims=[['time'], ['time'], [], [], [], [], [],
+                                                                                 []],
+                                                                output_core_dims=[['time'], ['harmonic'], ['harmonic'],
+                                                                                  ['harmonic'], ['harmonic']])
+        kwargs = {'n_harmonics': n_harmonics, 'pad_coefs_phase': True}
     return get_temp_fourier_analytic_wrap(time, swdn_sfc, heat_capacity, param_coefs.sel(deg='1'),
                                           param_coefs.sel(deg='phase'), param_coefs.sel(deg='2'),
                                           param_coefs.sel(deg='cos'), param_coefs.sel(deg='sin'),
-                                          n_harmonics_sw=n_harmonics, pad_coefs_phase=True)
+                                          **kwargs)
 
 
 def update_ds_extrema(ds: xr.Dataset, time: xr.DataArray, temp: xr.DataArray, fit_method: str):
@@ -251,7 +262,7 @@ def update_ds_extrema(ds: xr.Dataset, time: xr.DataArray, temp: xr.DataArray, fi
 
 def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'median', 'max'] = "mean",
               norm: bool = True, dim: Union[str, list] = "time",
-              norm_dim: Optional[Union[str, list]]='lat') -> xr.DataArray:
+              norm_dim: Optional[Union[str, list]] = 'lat') -> xr.DataArray:
     """Compute an absolute-error summary between two DataArrays.
 
     Args:
@@ -285,7 +296,7 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
         raise ValueError(f'Unknown kind="{kind}". Expected "mean", "median", or "max".')
 
     if norm:
-        scale = (x.max(dim=dim)-x.min(dim=dim))/100          # /100 so turn to percentage
+        scale = (x.max(dim=dim) - x.min(dim=dim)) / 100  # /100 so turn to percentage
         if norm_dim is not None:
             scale = scale.mean(dim=norm_dim)
         out = out / scale
