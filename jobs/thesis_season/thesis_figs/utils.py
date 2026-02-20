@@ -17,6 +17,22 @@ label_lat = "Latitude [deg]"
 label_error = 'Error [%]'
 leg_handlelength = 1.5
 month_ticks = (np.arange(15, 12 * 30 + 15, 30), ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
+style_map = {
+    # --- change (solid) ---
+    "simulated": ("k", "-", "Simulated"),
+    "direct1": ("k", "-", "Direct"),
+    "direct2": ("C1", "-", "Direct"),
+    "direct5": ("C3", "-", "Direct"),
+    "linear": ("C0", ":", "Linear"),
+    "linear_phase": ("C0", "--", "Linear phase"),
+    "square_phase": ("C1", "-.", "Square phase"),
+    "square_phase+": ("C1", "-", "Square phase+"),
+    "poly10_phase+": ("C2", "-", "Poly10 phase+"),
+    "lw": ("C1", "-", "$\\text{LW}^{\\uparrow}_{\\text{net}}$"),
+    "lh": ("C0", ":", "LH$^{\\uparrow}$"),
+    "sh": ("C2", ":", "SH$^{\\uparrow}$"),
+    "net": ("k", "-", "Sum"),
+}
 
 # General info
 smooth_n_days = 50  # default smoothing window in days
