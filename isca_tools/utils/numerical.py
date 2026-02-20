@@ -168,6 +168,8 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             series will be directly fit to this residual including all the harmonics in `fourier_harmonics`.
             If `fourier_harmonics` is an integer, all harmonics up to and including the value will be fit.</br>
             The final polynomial of degree `deg` will then be fit to `y - y_phase - y_fourier`.</br>
+            If provide array, only harmonics included in array will be fit, but will return coefficients for
+            all up to the max harmonic given, with zeros wherever harmonic not in `fourier_harmonics`.</br>
             Idea behind this is to account for part of $y$ not directly related to $x$.
         integ_method: How to perform the integration when calculating Fourier coefficients..</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.

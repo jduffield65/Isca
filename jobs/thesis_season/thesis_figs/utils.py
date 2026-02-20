@@ -98,16 +98,17 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                      deg: int, time: Optional[xr.DataArray] = None, time_start: Optional[float] = None,
                      time_end: Optional[float] = None,
                      deg_phase_calc: int = 10, resample: bool = resample,
-                     include_phase: bool = True, fourier_harmonics: Optional[Union[int, np.ndarray]] = None,
-                     integ_method: str = 'spline',
-                     pad_coefs_phase: bool = False):
+                     include_phase: bool = True, include_fourier: bool = False,
+                     integ_method: str = 'spline'):
     """
     Applying `polyfit_phase` to xarray.
-    Will always return 6 values across `deg` dimension: [phase, cos, sin, 2, 1, 0].
+    Will always return atleast 6 values across `deg` dimension: [phase, cos, sin, 2, 1, 0].
     First value only non zero if include_phase=True.
     Second and third values only non zero if specify `fourier_harmonics`.
-    Fourth value only non zero if `deg=2`; error hit if `deg>2` as outside the scope of the thesis chapter.
-    Returns highest polyfit power first to match how np.polyfit works
+    Fourth value only non zero if `deg=2`.
+    Returns highest polyfit power first to match how np.polyfit works.
+
+    If `deg>2`, will return more values e.g. for deg=4: [phase, cos, sin, 4, 3, 2, 1, 0].
 
     Args:
         x:
@@ -119,43 +120,57 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
         deg_phase_calc:
         resample:
         include_phase:
-        fourier_harmonics:
+        fourier_harmonics: Whether to include a fourier residual with frequency of 2nd harmonic.
+            Only 2nd harmonic as that is our expression for approx to $\Gamma$. No point fitting 1st harmonic,
+            because approx very good. No point going to higher order as not analytic anymore with 2 harmonic temperature
+            expression.
         integ_method:
-        pad_coefs_phase:
 
     Returns:
 
     """
-    if deg > 2:
-        raise ValueError('deg must be <= 2')
     # Not required to be the same order for code to work, but think makes neater
     raise_if_common_dims_not_identical(x, y)
     polyfit_phase_wrap = wrap_with_apply_ufunc(numerical.polyfit_phase, input_core_dims=[['time'], ['time']],
-                                               output_core_dims=[['deg']])
+                                               output_core_dims=[['deg'], ['harmonic'], ['harmonic']]
+                                               if include_fourier else [['deg']])
     var = polyfit_phase_wrap(x, y, deg=deg, time=time, time_start=time_start, time_end=time_end,
                              deg_phase_calc=deg_phase_calc, resample=resample, include_phase=include_phase,
-                             fourier_harmonics=fourier_harmonics, integ_method=integ_method,
-                             pad_coefs_phase=pad_coefs_phase)
-    if fourier_harmonics is None:
-        # Polyfit outputs phase first and then highest poly coef power is first
-        deg_in_var = ['phase'] + np.arange(deg + 1)[::-1].tolist()
+                             fourier_harmonics=np.atleast_1d(2) if include_fourier else None,
+                             # Only find 2nd harmonic coef as that is our approx for
+                             integ_method=integ_method, pad_coefs_phase=True)
+    # Polyfit outputs phase first and then highest poly coef power is first
+    deg_in_var = ['phase'] + np.arange(deg + 1)[::-1].tolist()
+    if deg <= 2:
+        # Always include 2nd harmonic, but just set to zero if deg=1
+        deg_vals_use = deg_vals
+    else:
+        deg_vals_use = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg + 1).tolist()[::-1], dims="deg",
+                                      name="deg")
+    if not include_fourier:
         var = var.assign_coords(deg=deg_in_var)
         # Also output the fourier cos and sin coefs but set to zero
-        var = var.reindex(deg=deg_vals, fill_value=0)
+        var = var.reindex(deg=deg_vals_use, fill_value=0)
         return var
     else:
-        # TODO: will need to modify this so returns in same format as above
+        # For fourier, need to add the cos and sin coefs as well
+        coef_cos, coef_sin = fourier.coef_conversion(var[1].sel(harmonic=2), var[2].sel(harmonic=2))
+        var = var[0].assign_coords(deg=deg_in_var)
+        var = var.reindex(deg=deg_vals_use, fill_value=0)
+        var = update_dim_slice(var, 'deg', 'cos', coef_cos)
+        var = update_dim_slice(var, 'deg', 'sin', coef_sin)
         return var
 
 
-def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier: bool = False):
+def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier_thresh: float = 1e-4):
     """
     Applying `polyval_phase` to xarray to estimate $y$ from `x`.
 
     Args:
         param_coefs: The output from `polyfit_phase_xr`
         x: The variable to apply `param_coefs` to along the dimension `time`.
-        include_fourier: Whether to include `deg=cos` and `deg=sin` coefs in `param_coefs` in the fitting procedure.
+        include_fourier_thresh: If $\Lambda_{cos}$ or $\Lambda_{sin}$ have a max absolute value greater
+            than this, will do include these coefficients in obtaining the estimate of $y$.
 
     Returns:
         x_approx: The approximate value of $y$ obtained using `param_coefs` and `x`.
@@ -163,27 +178,36 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
     # Not required to be the same order for code to work, but think makes neater
     raise_if_common_dims_not_identical(x, param_coefs, name_y='param_coefs')
 
-    def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coefs_fourier2_amp: float, coefs_fourier2_phase: float):
+    def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coef_cos: Optional[float]=None,
+                       coef_sin: Optional[float]=None):
         # Simple wrapper so takes in 2nd harmonic fourier coefs
-        if coefs_fourier2_amp == 0 and coefs_fourier2_phase == 0:
+        if (coef_cos is None) and (coef_sin is None):
             coefs_fourier_amp = None
             coefs_fourier_phase = None
         else:
+            # Need to convert (cos, sin) form of params to (amplitude, phase) form expected by polyval_phase
+            coefs_fourier_amp, coefs_fourier_phase = fourier.coef_conversion(cos_coef=coef_cos, sin_coef=coef_sin)
             # Only given 2nd harmonic coef, so need to pad with zeros
             # Set 0th and 1st harmonic to zero
-            coefs_fourier_amp = np.hstack((np.zeros(2), coefs_fourier2_amp))
-            coefs_fourier_phase = np.hstack((np.zeros(2), coefs_fourier2_phase))
+            coefs_fourier_amp = np.hstack((np.zeros(2), coefs_fourier_amp))
+            coefs_fourier_phase = np.hstack((np.zeros(2), coefs_fourier_phase))
         return numerical.polyval_phase(poly_coefs, x, coefs_fourier_amp=coefs_fourier_amp,
                                        coefs_fourier_phase=coefs_fourier_phase, pad_coefs_phase=True)
 
     polyval_phase_wrap = wrap_with_apply_ufunc(_polyval_phase, input_core_dims=[['deg'], ['time'], [], []],
                                                output_core_dims=[['time']])
-    if include_fourier:
-        # TODO: edit to include fourier stuff
-        var = polyval_phase_wrap(param_coefs.sel(deg=['phase', 2, 1, 0]), x)
-    else:
+
+    # Decide whether to fit fourier coefs - only if params significant
+    include_fourier = np.abs(param_coefs.sel(deg=['cos', 'sin'])).max() > include_fourier_thresh
+
+    if not include_fourier:
         # Remember highest polyfit power first hence [2, 1, 0] after phase
-        var = polyval_phase_wrap(param_coefs.sel(deg=['phase', 2, 1, 0]), x, 0, 0)
+        var = polyval_phase_wrap(param_coefs.sel(deg=[key for key in param_coefs.deg.values if key not in ['cos', 'sin']]),
+                                 x, None, None)
+    else:
+        var = polyval_phase_wrap(param_coefs.sel(deg=[key for key in param_coefs.deg.values if key not in ['cos', 'sin']]),
+                                 x, param_coefs.sel(deg='cos'),
+                                 param_coefs.sel(deg='sin'))
     return var
 
 
@@ -210,16 +234,17 @@ def get_temp_fourier_analytic_xr(time: xr.DataArray, swdn_sfc: xr.DataArray, hea
     raise_if_common_dims_not_identical(swdn_sfc, param_coefs, name_x='swdn_sfc', name_y='param_coefs')
     if func_use == 1:
         get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic,
-                                                               input_core_dims=[['time'], ['time'], [], [], [], [], [], []],
+                                                               input_core_dims=[['time'], ['time'], [], [], [], [], [],
+                                                                                []],
                                                                output_core_dims=[['time'], ['harmonic'], ['harmonic'],
                                                                                  ['harmonic'], ['harmonic']])
         kwargs = {'n_harmonics_sw': n_harmonics, 'pad_coefs_phase': True}
     else:
         get_temp_fourier_analytic_wrap = wrap_with_apply_ufunc(get_temp_fourier_analytic2,
-                                                                input_core_dims=[['time'], ['time'], [], [], [], [], [],
-                                                                                 []],
-                                                                output_core_dims=[['time'], ['harmonic'], ['harmonic'],
-                                                                                  ['harmonic'], ['harmonic']])
+                                                               input_core_dims=[['time'], ['time'], [], [], [], [], [],
+                                                                                []],
+                                                               output_core_dims=[['time'], ['harmonic'], ['harmonic'],
+                                                                                 ['harmonic'], ['harmonic']])
         kwargs = {'n_harmonics': n_harmonics, 'pad_coefs_phase': True}
     return get_temp_fourier_analytic_wrap(time, swdn_sfc, heat_capacity, param_coefs.sel(deg='1'),
                                           param_coefs.sel(deg='phase'), param_coefs.sel(deg='2'),

@@ -2,6 +2,7 @@ import numpy as np
 from typing import List, Union, Tuple, Optional
 from scipy.interpolate import CubicSpline
 import scipy.integrate
+import xarray as xr
 
 
 def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
@@ -155,11 +156,11 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
     return fourier_series(time, amp_coefs, phase_coefs, pad_coefs_phase), amp_coefs, phase_coefs
 
 
-def coef_conversion(amp_coef: Optional[Union[float, np.ndarray]] = None,
-                    phase_coef: Optional[Union[float, np.ndarray]] = None,
-                    cos_coef: Optional[Union[float, np.ndarray]] = None,
-                    sin_coef: Optional[Union[float, np.ndarray]] = None) -> Tuple[Union[float, np.ndarray],
-Union[float, np.ndarray]]:
+def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
+                    phase_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
+                    cos_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
+                    sin_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None
+                    ) -> Tuple[Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
     """
     The term for the $n^{th}$ harmonic of a Fourier expansion can be written in two ways:
 
