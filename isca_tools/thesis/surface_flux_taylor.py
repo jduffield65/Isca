@@ -48,14 +48,60 @@ def get_latent_heat(
     return evap_prefactor * L_v * drag_coef * rho_atm * w_atm * (q_surf - q_atm)
 
 
-def get_sensitivity_lh(temp_surf: Union[float, np.ndarray, xr.DataArray],
-                       temp_diseqb: Union[float, np.ndarray, xr.DataArray],
-                       rh_atm: Union[float, np.ndarray, xr.DataArray],
-                       w_atm: Union[float, np.ndarray, xr.DataArray],
-                       drag_coef: Union[float, np.ndarray, xr.DataArray],
-                       p_surf: Union[float, np.ndarray, xr.DataArray],
-                       sigma_atm: float,
-                       evap_prefactor: float = 1) -> dict:
+def get_sensitivity_lh(
+    temp_surf: Union[float, np.ndarray, xr.DataArray],
+    temp_diseqb: Union[float, np.ndarray, xr.DataArray],
+    rh_atm: Union[float, np.ndarray, xr.DataArray],
+    w_atm: Union[float, np.ndarray, xr.DataArray],
+    drag_coef: Union[float, np.ndarray, xr.DataArray],
+    p_surf: Union[float, np.ndarray, xr.DataArray],
+    sigma_atm: float,
+    evap_prefactor: float = 1,
+) -> dict:
+    """Compute sensitivities of latent heat flux to bulk-exchange parameters.
+
+    Uses the bulk aerodynamic latent heat flux $LH = \\beta L_v C_E \\rho_a U (q_s^* - q_a)$,
+    with $p_a = \\sigma_a p_s$ and $T_a = T_s - T_{dq}$.
+
+    Returns a dictionary containing (i) first-order partial derivatives of $LH$
+    with respect to each input parameter (holding the others fixed) and (ii)
+    selected second-order / mixed nonlinear terms used in a Taylor-series
+    decomposition.
+
+    Args:
+        temp_surf: Surface temperature, $T_s$ (K)
+        temp_diseqb: Surface–air temperature disequilibrium, $T_{dq}$ (K),
+            used in $T_a = T_s - T_{dq}$
+        rh_atm: Near-surface relative humidity, $RH$ (unitless, 0–1)
+        w_atm: Near-surface wind speed, $U$ (m s$^{-1}$)
+        drag_coef: Bulk exchange coefficient, $C_E$ (unitless)
+        p_surf: Surface pressure, $p_s$ (Pa)
+        sigma_atm: Sigma coordinate for the near-surface atmosphere, $\\sigma_a$ (unitless),
+            used to set $p_a = \\sigma_a p_s$
+        evap_prefactor: Evaporation prefactor, $\\beta$ (unitless)
+
+    Returns:
+        sensitivity_factors: Dictionary of sensitivities and nonlinear terms. Values have the same
+            type/shape as the broadcasted inputs (float, NumPy array, or xarray DataArray).
+
+            First-order terms (partials):
+
+            - evap_prefactor: $\\partial LH / \\partial \\beta$
+            - drag_coef: $\\partial LH / \\partial C_E$
+            - w_atm: $\\partial LH / \\partial U$
+            - p_surf: $\\partial LH / \\partial p_s$ (set to 0 here)
+            - rh_atm: $\\partial LH / \\partial RH$
+            - temp_diseqb: $\\partial LH / \\partial T_{dq}$
+            - temp_surf: $\\partial LH / \\partial T_s$
+
+            Nonlinear / interaction terms:
+
+            - nl_temp_surf_square: quadratic term in $T_s$ (includes the $1/2$ factor)
+            - nl_temp_surf_<key>: mixed terms between $T_s$ and each of $\\alpha$, $C_E$, $U$, $p_s$
+            - nl_temp_surf_rh_atm: mixed term between $T_s$ and $RH$
+            - nl_temp_surf_temp_diseqb: mixed term between $T_s$ and $T_{dq}$
+
+    """
     p_atm = p_surf * sigma_atm
     temp_atm = temp_surf - temp_diseqb
     alpha_surf = clausius_clapeyron_factor(temp_surf, p_surf)
