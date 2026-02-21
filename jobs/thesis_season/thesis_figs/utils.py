@@ -58,6 +58,39 @@ exp_dir = lambda x, y=False: f'thesis_season/depth={x}/k=1_const_drag{"_evap=0_1
 
 def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, var_keep: List = var_keep,
             lat_min: float = lat_min, lat_max: float = lat_max) -> xr.Dataset:
+    """Load and preprocess near-surface fields for one or two mixed-layer depths.
+
+    Loads the Isca experiment dataset(s), keeps selected variables, subsets a latitude
+    band, and retains only the lowest model level. Adds coordinates and derived
+    diagnostics used for surface-flux breakdown (e.g., near-surface RH, net surface
+    flux, radiative temperature, and temperature disequilibrium terms).
+    Rename the variables `temp` to `temp_atm`, `t_surf` to `temp_surf`, `ps` to `p_surf`.
+
+    Args:
+        depth: Mixed-layer depth to load, one of 5, 20, or "both".
+        reduced_evap: If True, load the reduced-evaporation version of the 5 m
+            experiment (no effect for 20 m).
+        var_keep: Variables to keep from the raw dataset. Missing variables are
+            removed from this list during loading.
+        lat_min: Minimum latitude (degrees) for subset.
+        lat_max: Maximum latitude (degrees) for subset.
+
+    Returns:
+        ds: An `xarray.Dataset` concatenated along dimension "depth" (length 1 or 2),
+            containing original and derived variables. Key additions include:
+            `p_atm`, `heat_capacity`, `evap_prefactor`, `odp_surf`, `rh_atm`, `lw_sfc`,
+            `flux_net`, `temp_rad`, `temp_diseqb`, and `temp_diseqb_r`.
+
+    Raises:
+        ValueError: If `depth` is not 5, 20, or "both".
+        KeyError: If required namelist entries are missing (some are given defaults).
+
+    Notes:
+        - The "depth" dimension labels experiments (mixed-layer depths), not vertical
+          levels. The vertical selection is done via `pfull=np.inf` (nearest).
+        - `var_keep` is mutated in-place when variables are missing; pass a copy if
+          you want to preserve the original list.
+    """
     # Load dataset
     if depth == 5:
         exp_name = [exp_dir(5, reduced_evap)]
@@ -69,7 +102,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
         raise ValueError('Depth must be either 5 or 20 or "both"')
 
     def _get_p(ds):
-        return ds.ps * ds.hybm
+        return ds.p_surf * ds.hybm
 
     # Get low level sigma level
     namelist = load_namelist(exp_name[0])
@@ -108,8 +141,9 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
     ds['heat_capacity'] = get_heat_capacity(c_p_water, rho_water, ds.depth)
     ds['evap_prefactor'] = xr.DataArray(evap_prefactor, dims="depth", coords={"depth": ds["depth"]})
     ds['hybm'] = ds.hybm.isel(depth=0)
-    ds.attrs['drag_const'] = namelist['surface_flux_nml']['drag_const']  # drag coef is a constant here
-    ds = ds.rename_vars({'temp': 't_atm'})  # as near-surface so rename as atm
+    ds.attrs['drag_coef'] = namelist['surface_flux_nml']['drag_const']  # drag coef is a constant here
+    # Rename temp vars to used in surface flux functions
+    ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf'})
 
     # Get optical depth at surface - assume same for both experiments
     odp_info = {'odp': 1, 'ir_tau_eq': 6, 'ir_tau_pole': 1.5, 'linear_tau': 0.1, 'wv_exponent': 4}  # default vals
@@ -121,17 +155,18 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
                                  k_exponent=odp_info['wv_exponent'])  # optical depth as function of latitude
 
     # Compute variables required for flux breakdown
-    ds['temp_diseqb'] = ds.t_surf - ds.t_atm
-    ds['rh_atm'] = ds.q_atm / sphum_sat(ds.t_atm, _get_p(ds))
+    ds['temp_diseqb'] = ds.temp_surf - ds.temp_atm
+    ds['p_atm'] = _get_p(ds)
+    ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_atm)
     ds['lw_sfc'] = ds.lwup_sfc - ds.lwdn_sfc
     ds['flux_net'] = ds['lw_sfc'] + ds['flux_lhe'] + ds['flux_t']
-    ds['t_rad'] = get_temp_rad(ds.lwdn_sfc, ds.odp_surf)
-    ds['temp_diseqb_r'] = ds.t_atm - ds.t_rad
+    ds['temp_rad'] = get_temp_rad(ds.lwdn_sfc, ds.odp_surf)
+    ds['temp_diseqb_r'] = ds.temp_atm - ds.temp_rad
     return ds
 
 
 def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,
-                          smooth_center=True):
+                          smooth_center=True, keep_attrs: bool = True):
     """Compute annual-mean zonal mean, optionally combining ±latitudes.
 
     This function:
@@ -151,6 +186,7 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
         smooth_n_days: Optional integer window length for time smoothing (in
             number of time steps, e.g. days). If None or <= 1, no smoothing.
         smooth_center: If True, use a centered window for smoothing.
+        keep_attrs: Optional boolean flag for keeping attributes. Defaults to True.
 
     Returns:
         An xarray Dataset or DataArray containing the annual-mean zonal mean.
@@ -183,6 +219,8 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
         # Get rid of time dimension of variables that dont have time dimension initially
         if 'time' not in ds[key].dims:
             ds_av[key] = ds_av[key].isel(time=0)
+    if keep_attrs:
+        ds_av.attrs = ds.attrs
     return ds_av
 
 
