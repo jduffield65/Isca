@@ -163,7 +163,71 @@ def first_non_none_key(d: dict) -> str:
 
 
 def reconstruct_flux(var_dict: dict, func_flux: Callable, func_sensitivity: Callable,
-                     sigma_atm: float, numerical: bool):
+                     sigma_atm: float, numerical: bool) -> Tuple[float, np.ndarray, np.ndarray, dict]:
+    """Reconstruct bulk flux anomalies from a reference state (generic helper).
+
+    This is the general implementation used by `reconstruct_lh` (and can be reused
+    for other bulk fluxes such as sensible heat). It takes a dictionary containing
+    reference scalars (with names ending in `"_ref"`) plus optional mechanism
+    arrays (without `"_ref"`), then reconstructs the flux anomaly relative to the
+    reference either:
+
+    - Numerically: by re-evaluating `func_flux` after substituting one mechanism
+      at a time (linear terms) and two mechanisms at a time (pairwise nonlinear
+      interaction terms)
+    - Analytically: by using sensitivity factors from `func_sensitivity` to build
+      a Taylor-series reconstruction (including any square and cross terms present
+      in the returned sensitivity dictionary)
+
+    The near-surface atmospheric pressure is diagnosed with a sigma level:
+    $p_a = \\sigma_a p_s$.
+
+    Input conventions:
+
+    - Reference values must appear in `var_dict` with the suffix `"_ref"`, e.g.
+      `"temp_surf_ref"`, `"p_surf_ref"`
+    - Mechanism perturbations must appear in `var_dict` without the suffix, e.g.
+      `"temp_surf"`, `"p_surf"`, and can be `None` or a NumPy array
+    - Any mechanism value that is `None` is filled with its reference value,
+      broadcast to the size of the first provided mechanism array. All provided
+      mechanism arrays must have the same `.size`
+
+    Args:
+        var_dict: Dictionary of variables, typically `locals()` from a wrapper
+            such as `reconstruct_lh`. Must include `"<name>_ref"` entries for each
+            mechanism. May include optional mechanism arrays under `"<name>"`.
+        func_flux: Callable that computes the flux. Must accept the reference
+            mechanisms as keyword arguments, and must accept `p_atm` as a keyword
+            argument. Example: `get_latent_heat` or `get_sensible_heat`.
+        func_sensitivity: Callable returning sensitivity factors used for the
+            analytical reconstruction. Must accept the reference mechanisms as
+            keyword arguments and `sigma_atm` as a keyword argument. Example:
+            `get_sensitivity_lh` or `get_sensitivity_sh`.
+        sigma_atm: Sigma coordinate for the near-surface atmosphere, $\\sigma_a$
+            (unitless), used to set $p_a = \\sigma_a p_s$.
+        numerical: If True, compute contributions by explicit re-evaluation of
+            `func_flux`. If False, compute contributions using `func_sensitivity`
+            (Taylor-series reconstruction).
+
+    Returns:
+        flux_ref: Reference flux evaluated at the reference state (units depend on
+            `func_flux`, e.g. W m$^{-2}$).
+        flux_anom_linear: Sum of linear contributions to the flux anomaly (same
+            units as `flux_ref`).
+        flux_anom_nl: Sum of linear plus nonlinear contributions included in the
+            reconstruction (same units as `flux_ref`).
+        info_cont: Dictionary of individual contributions by mechanism and
+            interaction term. Always includes `residual`, defined as the
+            difference between the full flux anomaly computed from `vals` and the
+            reconstructed anomaly.
+
+    Raises:
+        ValueError: If no mechanism arrays are provided (so a broadcast size
+            cannot be inferred), if provided mechanism arrays have inconsistent
+            `.size`, or if the expected key sets do not match in the analytical
+            pathway (`gamma` vs `info_cont`).
+
+    """
     vals_ref = {k.replace('_ref', ''): v for k, v in var_dict.items() if k.endswith("_ref")}
     vals = {k: v for k, v in var_dict.items() if f"{k}" in vals_ref}
 
@@ -214,7 +278,7 @@ def reconstruct_flux(var_dict: dict, func_flux: Callable, func_sensitivity: Call
             raise ValueError(f"gamma has keys:\n{list(gamma.keys())}\ninfo_cont has keys:\n{list(info_cont.keys())}")
     final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
     final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
-    info_cont['residual'] = get_latent_heat(**vals, p_atm=sigma_atm * vals['p_surf']) - flux_ref - final_answer_nl
+    info_cont['residual'] = func_flux(**vals, p_atm=sigma_atm * vals['p_surf']) - flux_ref - final_answer_nl
     return flux_ref, final_answer_linear, final_answer_nl, info_cont
 
 
@@ -294,58 +358,7 @@ def reconstruct_lh(temp_surf_ref: float, temp_diseqb_ref: float,
             not match in the analytical pathway
 
     """
-    vals_ref = {k.replace('_ref', ''): v for k, v in locals().items() if k.endswith("_ref")}
-    vals = {k: v for k, v in locals().items() if f"{k}" in vals_ref}
-
-    # If no val specified, set to ref value
-    key_numpy = first_non_none_key(vals)  # first key of numpy array
-    for key in vals:
-        if vals[key] is None:
-            vals[key] = np.full_like(vals[key_numpy], vals_ref[key])
-        elif vals[key].size != vals[key_numpy].size:
-            raise ValueError(f"Size mismatch: {key} not the same as {key_numpy}.")
-
-    lh_ref = get_latent_heat(**vals_ref, p_atm=sigma_atm * vals_ref['p_surf'])
-    if numerical:
-        info_cont = {}
-        # Linear contribution of each val
-        for key in vals:
-            vals_use = copy.deepcopy(vals_ref)
-            vals_use[key] = vals[key]
-            vals_use['p_atm'] = sigma_atm * vals_use['p_surf']
-            info_cont[key] = get_latent_heat(**vals_use) - lh_ref
-
-        # Get non-linear contributions where only two mechanisms are active - include all permutations
-        for key1, key2 in itertools.combinations(vals, 2):
-            vals_use = copy.deepcopy(vals_ref)
-            vals_use[key1] = vals[key1]
-            vals_use[key2] = vals[key2]
-            vals_use['p_atm'] = sigma_atm * vals_use['p_surf']
-            info_cont[name_nl(key1, key2)] = get_latent_heat(**vals_use) - lh_ref
-            # Subtract the contribution from the linear mechanisms, so only non-linear contribution remains
-            info_cont[name_nl(key1, key2)] -= info_cont[key1] + info_cont[key2]
-    else:
-        gamma = get_sensitivity_lh(**vals_ref, sigma_atm=sigma_atm)
-        vals_anom = {key: vals[key] - vals_ref[key] for key in vals}
-
-        # linear contributions
-        info_cont = {key: gamma[key] * vals_anom[key] for key in vals}
-
-        # Adds Squared contribution of individual mechanisms that are in gamma
-        for key in vals:
-            if name_square(key) in gamma:
-                info_cont[name_square(key)] = gamma[name_square(key)] * vals_anom[key] ** 2
-
-        # Adds a nonlinear combination of mechanisms that are included in gamma
-        for key1, key2 in itertools.combinations(vals, 2):
-            if name_nl(key1, key2) in gamma:
-                info_cont[name_nl(key1, key2)] = gamma[name_nl(key1, key2)] * vals_anom[key1] * vals_anom[key2]
-        if list(gamma.keys()) != list(info_cont.keys()):
-            raise ValueError(f"gamma has keys:\n{list(gamma.keys())}\ninfo_cont has keys:\n{list(info_cont.keys())}")
-    final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
-    final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
-    info_cont['residual'] = get_latent_heat(**vals, p_atm=sigma_atm * vals['p_surf']) - lh_ref - final_answer_nl
-    return lh_ref, final_answer_linear, final_answer_nl, info_cont
+    return reconstruct_flux(locals(), get_latent_heat, get_sensitivity_lh, sigma_atm, numerical)
 
 
 def get_sensible_heat(
@@ -448,7 +461,7 @@ def get_sensitivity_sh(
 
     # Differential of sh wrt each param - same order as input args
     out_dict = {'temp_surf': sh_prefactor * (1 - temp_surf / temp_atm),
-                'temp_diseqb': sh_prefactor / temp_atm,
+                'temp_diseqb': sh_prefactor * temp_surf / temp_atm,
                 'w_atm': sh / w_atm,
                 'drag_coef': sh / drag_coef,
                 'p_surf': sh / p_surf,
@@ -458,7 +471,7 @@ def get_sensitivity_sh(
     out_dict[name_square('temp_diseqb')] = out_dict[name_square('temp_diseqb')] * 0.5  # to match the taylor series coef
 
     # Combination of mechanisms
-    out_dict[name_nl('temp_surf', 'temp_diseqb')] = -2 * out_dict['temp_diseqb'] / temp_atm
+    out_dict[name_nl('temp_surf', 'temp_diseqb')] = sh_prefactor * (1/temp_atm - 2*temp_surf/temp_atm**2)
     for key in ['w_atm', 'drag_coef', 'p_surf']:
         out_dict[name_nl('temp_diseqb', key)] = out_dict[key] * out_dict['temp_diseqb'] / sh
 
@@ -472,55 +485,66 @@ def reconstruct_sh(temp_surf_ref: float, temp_diseqb_ref: float,
                    w_atm: Optional[np.ndarray] = None,
                    drag_coef: Optional[np.ndarray] = None, p_surf: Optional[np.ndarray] = None,
                    numerical: bool = False) -> Tuple[float, np.ndarray, np.ndarray, dict]:
-    vals_ref = {k.replace('_ref', ''): v for k, v in locals().items() if k.endswith("_ref")}
-    vals = {k: v for k, v in locals().items() if f"{k}" in vals_ref}
+    """Reconstruct sensible heat flux anomalies from a reference state.
 
-    # If no val specified, set to ref value
-    key_numpy = first_non_none_key(vals)  # first key of numpy array
-    for key in vals:
-        if vals[key] is None:
-            vals[key] = np.full_like(vals[key_numpy], vals_ref[key])
-        elif vals[key].size != vals[key_numpy].size:
-            raise ValueError(f"Size mismatch: {key} not the same as {key_numpy}.")
+    This function computes a reference sensible heat flux $SH_{ref}$ at a scalar
+    reference state, then reconstructs anomalies relative to that reference either
+    (i) numerically by swapping one (or two) mechanisms at a time into the bulk
+    formula or (ii) analytically using a Taylor expansion based on sensitivities
+    returned by `get_sensitivity_sh`.
 
-    lh_ref = get_latent_heat(**vals_ref, p_atm=sigma_atm * vals_ref['p_surf'])
-    if numerical:
-        info_cont = {}
-        # Linear contribution of each val
-        for key in vals:
-            vals_use = copy.deepcopy(vals_ref)
-            vals_use[key] = vals[key]
-            vals_use['p_atm'] = sigma_atm * vals_use['p_surf']
-            info_cont[key] = get_latent_heat(**vals_use) - lh_ref
+    The near-surface atmospheric pressure is diagnosed with a sigma level:
+    $p_a = \\sigma_a p_s$.
 
-        # Get non-linear contributions where only two mechanisms are active - include all permutations
-        for key1, key2 in itertools.combinations(vals, 2):
-            vals_use = copy.deepcopy(vals_ref)
-            vals_use[key1] = vals[key1]
-            vals_use[key2] = vals[key2]
-            vals_use['p_atm'] = sigma_atm * vals_use['p_surf']
-            info_cont[name_nl(key1, key2)] = get_latent_heat(**vals_use) - lh_ref
-            # Subtract the contribution from the linear mechanisms, so only non-linear contribution remains
-            info_cont[name_nl(key1, key2)] -= info_cont[key1] + info_cont[key2]
-    else:
-        gamma = get_sensitivity_sh(**vals_ref, sigma_atm=sigma_atm)
-        vals_anom = {key: vals[key] - vals_ref[key] for key in vals}
+    The near-surface atmospheric temperature is diagnosed using a surface–air
+    disequilibrium temperature $T_{dq}$:
+    $T_a = T_s - T_{dq}$.
 
-        # linear contributions
-        info_cont = {key: gamma[key] * vals_anom[key] for key in vals}
+    Optional mechanism arrays (e.g. `temp_surf`) are interpreted as alternative
+    states to compare against the reference. If an optional mechanism is not
+    provided, it is filled with the reference value broadcast to the size of the
+    first provided mechanism array.
 
-        # Adds Squared contribution of individual mechanisms that are in gamma
-        for key in vals:
-            if name_square(key) in gamma:
-                info_cont[name_square(key)] = gamma[name_square(key)] * vals_anom[key] ** 2
+    Args:
+        temp_surf_ref: Reference surface temperature, $T_s$ (K)
+        temp_diseqb_ref: Reference disequilibrium temperature, $T_{dq}$ (K)
+        w_atm_ref: Reference near-surface wind speed, $U$ (m s$^{-1}$)
+        drag_coef_ref: Reference bulk transfer coefficient for sensible heat,
+            $C_H$ (unitless)
+        p_surf_ref: Reference surface pressure, $p_s$ (Pa)
+        sigma_atm: Sigma coordinate for the near-surface atmosphere, $\\sigma_a$
+            (unitless), used to compute $p_a = \\sigma_a p_s$
+        temp_surf: Alternative surface temperature $T_s$ (K). If None, uses
+            `temp_surf_ref` broadcast to the working array size
+        temp_diseqb: Alternative disequilibrium temperature $T_{dq}$ (K). If None,
+            uses `temp_diseqb_ref` broadcast to the working array size
+        w_atm: Alternative wind speed $U$ (m s$^{-1}$). If None, uses `w_atm_ref`
+            broadcast to the working array size
+        drag_coef: Alternative bulk transfer coefficient $C_H$ (unitless). If None,
+            uses `drag_coef_ref` broadcast to the working array size
+        p_surf: Alternative surface pressure $p_s$ (Pa). If None, uses `p_surf_ref`
+            broadcast to the working array size
+        numerical: If True, compute contributions by explicitly evaluating
+            `get_sensible_heat` with one- and two-mechanism substitutions relative
+            to the reference. If False, use sensitivities from `get_sensitivity_sh`
+            to build a Taylor-series reconstruction (including selected nonlinear
+            terms if present in `gamma`)
 
-        # Adds a nonlinear combination of mechanisms that are included in gamma
-        for key1, key2 in itertools.combinations(vals, 2):
-            if name_nl(key1, key2) in gamma:
-                info_cont[name_nl(key1, key2)] = gamma[name_nl(key1, key2)] * vals_anom[key1] * vals_anom[key2]
-        if list(gamma.keys()) != list(info_cont.keys()):
-            raise ValueError(f"gamma has keys:\n{list(gamma.keys())}\ninfo_cont has keys:\n{list(info_cont.keys())}")
-    final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
-    final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
-    info_cont['residual'] = get_latent_heat(**vals, p_atm=sigma_atm * vals['p_surf']) - lh_ref - final_answer_nl
-    return lh_ref, final_answer_linear, final_answer_nl, info_cont
+    Returns:
+        sh_ref: Reference sensible heat flux $SH_{ref}$ (W m$^{-2}$)
+        sh_anom_linear: Sum of linear contributions to the sensible heat anomaly
+            (W m$^{-2}$)
+        sh_anom_nl: Sum of linear plus nonlinear contributions included in the
+            reconstruction (W m$^{-2}$)
+        info_cont: Dictionary of individual contributions by mechanism and
+            interaction term. Always includes `residual`, defined as the
+            difference between the full bulk flux anomaly and the reconstructed
+            anomaly
+
+    Raises:
+        ValueError: If provided optional arrays do not all have the same `.size`
+            as the first provided mechanism array, or if the expected key sets do
+            not match in the analytical pathway
+
+    """
+    return reconstruct_flux(locals(), get_sensible_heat, get_sensitivity_sh, sigma_atm, numerical)
