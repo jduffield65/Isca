@@ -563,7 +563,7 @@ def reconstruct_sh(temp_surf_ref: float, temp_diseqb_ref: float,
 
 
 def get_temp_rad(lwdn_surf: Union[float, np.ndarray, xr.DataArray],
-                 opd_surf: Union[float, np.ndarray, xr.DataArray]) -> Union[float, np.ndarray, xr.DataArray]:
+                 odp_surf: Union[float, np.ndarray, xr.DataArray]) -> Union[float, np.ndarray, xr.DataArray]:
     """
     Compute the (effective) radiative temperature T_r associated with the
     *downward* longwave flux at the surface in a
@@ -603,7 +603,7 @@ def get_temp_rad(lwdn_surf: Union[float, np.ndarray, xr.DataArray],
     Args:
         lwdn_surf:
             Downward longwave radiation at the surface, $I_-(τ_s)$ (W m^-2).
-        opd_surf:
+        odp_surf:
             Longwave optical depth at the surface, $τ_s$ (dimensionless).
 
     Returns:
@@ -611,7 +611,7 @@ def get_temp_rad(lwdn_surf: Union[float, np.ndarray, xr.DataArray],
             `temp_rad**4 = lwdn_sfc / [σ (1 - e^{-opd_sfc})]`
     """
     # Returns radiative temperature, T_r, such that LW_down = sigma T_r^4 (1 - e^{-opd})
-    emission_factor = 1 - np.exp(-opd_surf)
+    emission_factor = 1 - np.exp(-odp_surf)
     return (lwdn_surf / emission_factor / Stefan_Boltzmann) ** 0.25
 
 
@@ -619,7 +619,7 @@ def get_lwup_sfc_net(
         temp_surf: Union[float, np.ndarray, xr.DataArray],
         temp_diseqb: Union[float, np.ndarray, xr.DataArray],
         temp_diseqb_r: Union[float, np.ndarray, xr.DataArray],
-        opd_surf: Union[float, np.ndarray, xr.DataArray],
+        odp_surf: Union[float, np.ndarray, xr.DataArray],
 ) -> Union[float, np.ndarray, xr.DataArray]:
     """Compute net upward longwave flux at the surface in a gray-gas model.
 
@@ -651,7 +651,7 @@ def get_lwup_sfc_net(
         temp_surf: Surface temperature, $T_s$ (K)
         temp_diseqb: Surface–air disequilibrium temperature, $T_{dq}$ (K)
         temp_diseqb_r: Additional radiative disequilibrium offset, $T_{dq,r}$ (K)
-        opd_surf: Imposed gray optical depth seen from the surface, $\\tau_{s}$ (unitless)
+        odp_surf: Imposed gray optical depth seen from the surface, $\\tau_{s}$ (unitless)
 
     Returns:
         lwup_surf_net: Net upward longwave flux at the surface, $LW^{\\uparrow}_{net}$
@@ -664,7 +664,7 @@ def get_lwup_sfc_net(
     # Gray-gas emissivity for optical depth tau_sfc: epsilon = 1 - exp(-tau_sfc)
     # Downwelling LW at surface would be sigma * epsilon * T_rad^4
     # Surface upwelling LW is sigma * T_s^4
-    emiss_factor = 1 - np.exp(-opd_surf)
+    emiss_factor = 1 - np.exp(-odp_surf)
     return Stefan_Boltzmann * (temp_surf ** 4 - temp_rad ** 4 * emiss_factor)
 
 
@@ -672,7 +672,7 @@ def get_sensitivity_lw(
         temp_surf: Union[float, np.ndarray, xr.DataArray],
         temp_diseqb: Union[float, np.ndarray, xr.DataArray],
         temp_diseqb_r: Union[float, np.ndarray, xr.DataArray],
-        opd_surf: Union[float, np.ndarray, xr.DataArray],
+        odp_surf: Union[float, np.ndarray, xr.DataArray],
 ) -> dict:
     """Compute sensitivities of net upward surface longwave to gray-gas parameters.
 
@@ -682,7 +682,7 @@ def get_sensitivity_lw(
 
     The effective radiating temperature is diagnosed as $T_{rad} = T_s - T_{dq} - T_{dq,r}$,
     and the gray emissivity factor is $\\epsilon = 1 - e^{-\\tau_s}$, where
-    $\\tau_s$ is the imposed optical depth (`opd_surf`).
+    $\\tau_s$ is the imposed optical depth (`odp_surf`).
 
     The sensitivity factors returned here are intended for use in a Taylor-series
     reconstruction in the same style as `get_sensitivity_sh` (via `name_square`
@@ -694,7 +694,7 @@ def get_sensitivity_lw(
             $T_{rad} = T_s - T_{dq} - T_{dq,r}$
         temp_diseqb_r: Additional radiative disequilibrium offset, $T_{dq,r}$ (K),
             used in $T_{rad} = T_s - T_{dq} - T_{dq,r}$
-        opd_surf: Imposed gray optical depth at the surface, $\\tau_s$ (unitless)
+        odp_surf: Imposed gray optical depth at the surface, $\\tau_s$ (unitless)
 
     Returns:
         sensitivity_factors: Dictionary of sensitivities and nonlinear terms. Values have the same
@@ -705,20 +705,20 @@ def get_sensitivity_lw(
             - temp_surf: $\\partial LW_{net,sfc}^{\\uparrow} / \\partial T_s$
             - temp_diseqb: $\\partial LW_{net,sfc}^{\\uparrow} / \\partial T_{dq}$
             - temp_diseqb_r: $\\partial LW_{net,sfc}^{\\uparrow} / \\partial T_{dq,r}$
-            - opd_surf: $\\partial LW_{net,sfc}^{\\uparrow} / \\partial \\tau_s$
+            - odp_surf: $\\partial LW_{net,sfc}^{\\uparrow} / \\partial \\tau_s$
 
             Nonlinear / interaction terms (as included in `out_dict`):
 
             - nl_temp_surf_square: quadratic term in $T_s$ (includes the $1/2$ factor)
             - nl_temp_diseqb_square: quadratic term in $T_{dq}$ (includes the $1/2$ factor)
             - nl_temp_diseqb_r_square: quadratic term in $T_{dq,r}$ (includes the $1/2$ factor)
-            - nl_opd_surf_square: quadratic term in $\\tau_s$ (includes the $1/2$ factor)
+            - nl_odp_surf_square: quadratic term in $\\tau_s$ (includes the $1/2$ factor)
             - nl_temp_surf_temp_diseqb: mixed term between $T_s$ and $T_{dq}$
             - nl_temp_surf_temp_diseqb_r: mixed term between $T_s$ and $T_{dq,r}$
-            - nl_temp_surf_opd_surf: mixed term between $T_s$ and $\\tau_s$
+            - nl_temp_surf_odp_surf: mixed term between $T_s$ and $\\tau_s$
             - nl_temp_diseqb_temp_diseqb_r: mixed term between $T_{dq}$ and $T_{dq,r}$
-            - nl_temp_diseqb_opd_surf: mixed term between $T_{dq}$ and $\\tau_s$
-            - nl_temp_diseqb_r_opd_surf: mixed term between $T_{dq,r}$ and $\\tau_s$
+            - nl_temp_diseqb_odp_surf: mixed term between $T_{dq}$ and $\\tau_s$
+            - nl_temp_diseqb_r_odp_surf: mixed term between $T_{dq,r}$ and $\\tau_s$
 
     Notes:
         This function assumes the same sign convention as the corresponding flux
@@ -728,13 +728,13 @@ def get_sensitivity_lw(
 
     """
     temp_rad = temp_surf - temp_diseqb - temp_diseqb_r
-    emiss_factor = 1 - np.exp(-opd_surf)
+    emiss_factor = 1 - np.exp(-odp_surf)
 
     # Differential of sh wrt each param - same order as input args
     out_dict = {'temp_surf': 4 * Stefan_Boltzmann * (temp_surf ** 3 - temp_rad ** 3 * emiss_factor),
                 'temp_diseqb': 4 * Stefan_Boltzmann * temp_rad ** 3 * emiss_factor,
                 'temp_diseqb_r': 4 * Stefan_Boltzmann * temp_rad ** 3 * emiss_factor,
-                'opd_surf': -Stefan_Boltzmann * temp_rad ** 4 * np.exp(-opd_surf),
+                'odp_surf': -Stefan_Boltzmann * temp_rad ** 4 * np.exp(-odp_surf),
                 }
 
     # Nonlinear contributions
@@ -743,25 +743,25 @@ def get_sensitivity_lw(
     for key in ['temp_diseqb', 'temp_diseqb_r']:
         out_dict[name_square(key)] = -12 * Stefan_Boltzmann * temp_rad ** 2 * emiss_factor
         out_dict[name_square(key)] = out_dict[name_square(key)] * 0.5  # to match the taylor series coef
-    out_dict[name_square('opd_surf')] = -out_dict['opd_surf']
-    out_dict[name_square('opd_surf')] = out_dict[name_square('opd_surf')] * 0.5     # to match the taylor series coef
+    out_dict[name_square('odp_surf')] = -out_dict['odp_surf']
+    out_dict[name_square('odp_surf')] = out_dict[name_square('odp_surf')] * 0.5     # to match the taylor series coef
 
     # Combination of mechanisms - all possible permutations
     for key in ['temp_diseqb', 'temp_diseqb_r']:
         out_dict[name_nl('temp_surf', key)] = 12*Stefan_Boltzmann * temp_rad ** 2 * emiss_factor
-    out_dict[name_nl('temp_surf', 'opd_surf')] = -4*Stefan_Boltzmann * temp_rad ** 3 * np.exp(-opd_surf)
+    out_dict[name_nl('temp_surf', 'odp_surf')] = -4*Stefan_Boltzmann * temp_rad ** 3 * np.exp(-odp_surf)
     out_dict[name_nl('temp_diseqb', 'temp_diseqb_r')] = out_dict[name_square('temp_diseqb')]*2
     for key in ['temp_diseqb', 'temp_diseqb_r']:
-        out_dict[name_nl(key, 'opd_surf')] = -out_dict[name_nl('temp_surf', 'opd_surf')]
+        out_dict[name_nl(key, 'odp_surf')] = -out_dict[name_nl('temp_surf', 'odp_surf')]
 
     return out_dict
 
 
 def reconstruct_lw(temp_surf_ref: float, temp_diseqb_ref: float,
-                   temp_diseqb_r_ref: float, opd_surf_ref: float,
+                   temp_diseqb_r_ref: float, odp_surf_ref: float,
                    temp_surf: Optional[np.ndarray] = None, temp_diseqb: Optional[np.ndarray] = None,
                    temp_diseqb_r: Optional[np.ndarray] = None,
-                   opd_surf: Optional[np.ndarray] = None,
+                   odp_surf: Optional[np.ndarray] = None,
                    numerical: bool = False) -> Tuple[float, np.ndarray, np.ndarray, dict]:
     """Reconstruct net upward surface longwave anomalies from a reference state.
 
@@ -773,7 +773,7 @@ def reconstruct_lw(temp_surf_ref: float, temp_diseqb_ref: float,
     `get_sensitivity_lw`.
 
     The gray-gas optical depth at the surface is denoted $\\tau_s$ (argument
-    `opd_surf`). The effective radiating temperature used by the gray-gas
+    `odp_surf`). The effective radiating temperature used by the gray-gas
     parameterization is diagnosed via
     $T_{rad} = T_s - T_{dq} - T_{dq,r}$.
 
@@ -787,15 +787,15 @@ def reconstruct_lw(temp_surf_ref: float, temp_diseqb_ref: float,
         temp_diseqb_ref: Reference surface–air disequilibrium temperature, $T_{dq}$ (K)
         temp_diseqb_r_ref: Reference additional radiative disequilibrium offset,
             $T_{dq,r}$ (K)
-        opd_surf_ref: Reference imposed gray optical depth, $\\tau_s$ (unitless)
+        odp_surf_ref: Reference imposed gray optical depth, $\\tau_s$ (unitless)
         temp_surf: Alternative surface temperature $T_s$ (K). If None, uses
             `temp_surf_ref` broadcast to the working array size
         temp_diseqb: Alternative disequilibrium temperature $T_{dq}$ (K). If None,
             uses `temp_diseqb_ref` broadcast to the working array size
         temp_diseqb_r: Alternative radiative disequilibrium offset $T_{dq,r}$ (K).
             If None, uses `temp_diseqb_r_ref` broadcast to the working array size
-        opd_surf: Alternative optical depth $\\tau_s$ (unitless). If None, uses
-            `opd_surf_ref` broadcast to the working array size
+        odp_surf: Alternative optical depth $\\tau_s$ (unitless). If None, uses
+            `odp_surf_ref` broadcast to the working array size
         numerical: If True, compute contributions by explicitly evaluating
             `get_lwup_sfc_net` with one- and two-mechanism substitutions relative
             to the reference. If False, use sensitivities from `get_sensitivity_lw`

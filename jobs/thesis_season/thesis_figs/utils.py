@@ -1,14 +1,21 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from typing import Union, Literal, Optional, Tuple
+from typing import Union, Literal, Optional, Tuple, List
+
+from isca_tools.thesis.surface_flux_taylor import get_temp_rad
 from isca_tools.utils import numerical
+from tqdm.notebook import tqdm
 
 from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic, \
     get_temp_fourier_analytic2
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
+from isca_tools.utils.constants import c_p_water, rho_water
+from isca_tools.utils.moist_physics import sphum_sat
+from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
+from isca_tools import load_namelist, load_dataset
 
 # Plotting info
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
@@ -41,6 +48,86 @@ deg_max = 2  # In fitting go up to maximum of T^2 dependence of surface fluxes
 # Lowest power is last in deg to match polyfit
 deg_vals = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg_max + 1).tolist()[::-1], dims="deg", name="deg")
 day_seconds = 86400
+lat_min = 30
+lat_max = 90
+ax_lims_lat = [lat_min, lat_max]
+var_keep = ['temp', 't_surf', 'swdn_sfc', 'lwup_sfc', 'lwdn_sfc',
+            'flux_lhe', 'flux_t', 'q_surf', 'ps', 'q_surf', 'w_atm', 'q_atm']
+exp_dir = lambda x, y=False: f'thesis_season/depth={x}/k=1_const_drag{"_evap=0_1" if y else ""}'
+
+
+def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, var_keep: List = var_keep,
+            lat_min: float = lat_min, lat_max: float = lat_max) -> xr.Dataset:
+    # Load dataset
+    if depth == 5:
+        exp_name = [exp_dir(5, reduced_evap)]
+    elif depth == 20:
+        exp_name = [exp_dir(20)]
+    elif depth == 'both':
+        exp_name = [exp_dir(5, reduced_evap), exp_dir(20)]
+    else:
+        raise ValueError('Depth must be either 5 or 20 or "both"')
+
+    def _get_p(ds):
+        return ds.ps * ds.hybm
+
+    # Get low level sigma level
+    namelist = load_namelist(exp_name[0])
+    sigma_levels_half = np.asarray(namelist['vert_coordinate_nml']['bk'])
+    sigma_levels_full = np.convolve(sigma_levels_half, np.ones(2) / 2, 'valid')
+
+    n_exp = len(exp_name)
+    # Think best to use one hemisphere as from Roach expect slight difference between hemispheres
+    lat_range = slice(lat_min, lat_max)  # only consider NH and outside deep tropics
+    ds = []
+    evap_prefactor = []
+    for i in tqdm(range(n_exp)):
+        ds_use = load_dataset(exp_name[i], first_month_file=121)
+        try:
+            ds_use = ds_use[var_keep]
+        except KeyError:
+            remove_keys = []
+            for key in var_keep:
+                if key not in ds_use:
+                    print(f'Removing {key} from var_keep')
+                    remove_keys += [key]
+            for key in remove_keys:
+                var_keep.remove(key)
+            ds_use = ds_use[var_keep]
+        ds_use = ds_use.sel(lat=lat_range)
+        ds_use['hybm'] = ds_use.temp.isel(time=0, lat=0, lon=0) * 0 + sigma_levels_full
+        ds_use = ds_use.sel(pfull=np.inf, method='nearest')  # only keep lowest level
+        ds.append(ds_use.load())  # only keep after spin up
+        try:
+            evap_prefactor.append(load_namelist(exp_name[i])['surface_flux_nml']['land_evap_prefactor'])
+        except KeyError:
+            evap_prefactor.append(1)        # default value
+    mixed_layer_depth = [load_namelist(exp_name[i])['mixed_layer_nml']['depth'] for i in range(n_exp)]
+    mixed_layer_depth = xr.DataArray(mixed_layer_depth, dims="depth", name='depth')
+    ds = xr.concat(ds, dim=mixed_layer_depth)
+    ds['heat_capacity'] = get_heat_capacity(c_p_water, rho_water, ds.depth)
+    ds['evap_prefactor'] = xr.DataArray(evap_prefactor, dims="depth", coords={"depth": ds["depth"]})
+    ds['hybm'] = ds.hybm.isel(depth=0)
+    ds.attrs['drag_const'] = namelist['surface_flux_nml']['drag_const']  # drag coef is a constant here
+    ds = ds.rename_vars({'temp': 't_atm'})  # as near-surface so rename as atm
+
+    # Get optical depth at surface - assume same for both experiments
+    odp_info = {'odp': 1, 'ir_tau_eq': 6, 'ir_tau_pole': 1.5, 'linear_tau': 0.1, 'wv_exponent': 4}  # default vals
+    for key in odp_info:  # If provided, update
+        if key in namelist['two_stream_gray_rad_nml']:
+            odp_info[key] = namelist['two_stream_gray_rad_nml'][key]
+    ds['odp_surf'] = opd_lw_gray(ds.lat, kappa=odp_info['odp'], tau_eq=odp_info['ir_tau_eq'],
+                                 tau_pole=odp_info['ir_tau_pole'], frac_linear=odp_info['linear_tau'],
+                                 k_exponent=odp_info['wv_exponent'])  # optical depth as function of latitude
+
+    # Compute variables required for flux breakdown
+    ds['temp_diseqb'] = ds.t_surf - ds.t_atm
+    ds['rh_atm'] = ds.q_atm / sphum_sat(ds.t_atm, _get_p(ds))
+    ds['lw_sfc'] = ds.lwup_sfc - ds.lwdn_sfc
+    ds['flux_net'] = ds['lw_sfc'] + ds['flux_lhe'] + ds['flux_t']
+    ds['t_rad'] = get_temp_rad(ds.lwdn_sfc, ds.odp_surf)
+    ds['temp_diseqb_r'] = ds.t_atm - ds.t_rad
+    return ds
 
 
 def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,
@@ -163,7 +250,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
         deg_vals_use = deg_vals
     else:
         deg_vals_use = xr.DataArray(['phase', 'cos', 'sin'] + np.arange(deg + 1).tolist()[::-1], dims="deg",
-                                      name="deg")
+                                    name="deg")
     if not include_fourier:
         var = var.assign_coords(deg=deg_in_var)
         # Also output the fourier cos and sin coefs but set to zero
@@ -195,8 +282,8 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
     # Not required to be the same order for code to work, but think makes neater
     raise_if_common_dims_not_identical(x, param_coefs, name_y='param_coefs')
 
-    def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coef_cos: Optional[float]=None,
-                       coef_sin: Optional[float]=None):
+    def _polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, coef_cos: Optional[float] = None,
+                       coef_sin: Optional[float] = None):
         # Simple wrapper so takes in 2nd harmonic fourier coefs
         if (coef_cos is None) and (coef_sin is None):
             coefs_fourier_amp = None
@@ -219,12 +306,14 @@ def polyval_phase_xr(param_coefs: xr.DataArray, x: xr.DataArray, include_fourier
 
     if not include_fourier:
         # Remember highest polyfit power first hence [2, 1, 0] after phase
-        var = polyval_phase_wrap(param_coefs.sel(deg=[key for key in param_coefs.deg.values if key not in ['cos', 'sin']]),
-                                 x, None, None)
+        var = polyval_phase_wrap(
+            param_coefs.sel(deg=[key for key in param_coefs.deg.values if key not in ['cos', 'sin']]),
+            x, None, None)
     else:
-        var = polyval_phase_wrap(param_coefs.sel(deg=[key for key in param_coefs.deg.values if key not in ['cos', 'sin']]),
-                                 x, param_coefs.sel(deg='cos'),
-                                 param_coefs.sel(deg='sin'))
+        var = polyval_phase_wrap(
+            param_coefs.sel(deg=[key for key in param_coefs.deg.values if key not in ['cos', 'sin']]),
+            x, param_coefs.sel(deg='cos'),
+            param_coefs.sel(deg='sin'))
     return var
 
 
