@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
+import inspect
 from typing import Union, Literal, Optional, Tuple, List
 
-from isca_tools.thesis.surface_flux_taylor import get_temp_rad
+from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw
 from isca_tools.utils import numerical
 from tqdm.notebook import tqdm
 
@@ -16,6 +17,8 @@ from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 from isca_tools import load_namelist, load_dataset
+from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
+
 
 # Plotting info
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
@@ -101,8 +104,6 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
     else:
         raise ValueError('Depth must be either 5 or 20 or "both"')
 
-    def _get_p(ds):
-        return ds.p_surf * ds.hybm
 
     # Get low level sigma level
     namelist = load_namelist(exp_name[0])
@@ -134,7 +135,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
         try:
             evap_prefactor.append(load_namelist(exp_name[i])['surface_flux_nml']['land_evap_prefactor'])
         except KeyError:
-            evap_prefactor.append(1)        # default value
+            evap_prefactor.append(1)  # default value
     mixed_layer_depth = [load_namelist(exp_name[i])['mixed_layer_nml']['depth'] for i in range(n_exp)]
     mixed_layer_depth = xr.DataArray(mixed_layer_depth, dims="depth", name='depth')
     ds = xr.concat(ds, dim=mixed_layer_depth)
@@ -143,7 +144,8 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
     ds['hybm'] = ds.hybm.isel(depth=0)
     ds.attrs['drag_coef'] = namelist['surface_flux_nml']['drag_const']  # drag coef is a constant here
     # Rename temp vars to used in surface flux functions
-    ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf'})
+    ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf',
+                         'hybm': 'sigma_atm'})
 
     # Get optical depth at surface - assume same for both experiments
     odp_info = {'odp': 1, 'ir_tau_eq': 6, 'ir_tau_pole': 1.5, 'linear_tau': 0.1, 'wv_exponent': 4}  # default vals
@@ -156,7 +158,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
 
     # Compute variables required for flux breakdown
     ds['temp_diseqb'] = ds.temp_surf - ds.temp_atm
-    ds['p_atm'] = _get_p(ds)
+    ds['p_atm'] = ds.p_surf * ds.sigma_atm
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_atm)
     ds['lw_sfc'] = ds.lwup_sfc - ds.lwdn_sfc
     ds['flux_net'] = ds['lw_sfc'] + ds['flux_lhe'] + ds['flux_t']
@@ -471,3 +473,29 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
         out = out / scale
 
     return out
+
+
+def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
+                        flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
+                        numerical: bool = False,
+                        time_dim: str = 'time', ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.Dataset]:
+    reconstruct_flux = {'lh': reconstruct_lh, 'sh': reconstruct_sh, 'lw': reconstruct_lw}[flux_name]
+    arg_names = list(inspect.signature(reconstruct_lh).parameters.keys())
+    arg_names = [key for key in arg_names if key!='numerical']      # treat numerical as extra param
+    input_core_dims = [[] if (('_ref' in arg) or (arg in ['sigma_atm'])) else [time_dim] for arg in
+                       arg_names]
+    output_core_dims = [[], [time_dim], [time_dim], []]
+    reconstruct_flux_wrap = wrap_with_apply_ufunc(reconstruct_flux, input_core_dims=input_core_dims,
+                                                  output_core_dims=output_core_dims)
+
+    if flux_name == 'lh':
+        # Add time dimension to drag and evap, as don't have initially
+        drag_coef = ds.temp_surf*0 + ds_ref.drag_coef
+        evap_prefactor = ds.temp_surf*0 + ds_ref.evap_prefactor
+        flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_diseqb, ds_ref.rh_atm, ds_ref.w_atm, ds_ref.drag_coef,
+                                  ds_ref.p_surf, ds_ref.sigma_atm, ds_ref.evap_prefactor,
+                                  ds.temp_surf, ds.temp_diseqb, ds.rh_atm, ds.w_atm, drag_coef, ds.p_surf,
+                                  evap_prefactor, numerical=numerical)
+        info_cont = xr.Dataset(convert_ds_of_dicts(info_cont, ds.time, 'time'))
+    return flux_ref, flux_anom_linear, flux_anom_nl, info_cont
