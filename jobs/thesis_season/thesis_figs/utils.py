@@ -25,6 +25,8 @@ width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
 # Default parameters
 label_lat = "Latitude [deg]"
 label_error = 'Error [%]'
+label_time = 'Day of year'
+ax_lims_time = [-1, 360]
 leg_handlelength = 1.5
 month_ticks = (np.arange(15, 12 * 30 + 15, 30), ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
 style_map = {
@@ -43,6 +45,13 @@ style_map = {
     "sh": ("C2", ":", "SH$^{\\uparrow}$"),
     "net": ("k", "-", "Sum"),
 }
+
+style_map_var = {'temp_surf': ("C1", "-", "$T_s$", "K"),
+                 'temp_diseqb': ("C3", "-", "$T_{dq}$", "K"),
+                 'temp_diseqb_r': ("C0", "-", "$T_{dq_r}$", "K"),
+                 'rh_atm': ('C0', "-", "$r_a$", "Unitless"),
+                 'w_atm': ('C2', '-', '$U_a$', "ms$^{-1}$"),
+                 'p_surf': ('C4', '-', '$p_s$', "Pa")}
 
 # General info
 smooth_n_days = 50  # default smoothing window in days
@@ -243,7 +252,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                      time_end: Optional[float] = None,
                      deg_phase_calc: int = 10, resample: bool = resample,
                      include_phase: bool = True, include_fourier: bool = False,
-                     integ_method: str = 'spline'):
+                     integ_method: str = 'spline') -> xr. DataArray:
     """
     Applying `polyfit_phase` to xarray.
     Will always return atleast 6 values across `deg` dimension: [phase, cos, sin, 2, 1, 0].
@@ -271,7 +280,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
         integ_method:
 
     Returns:
-
+        poly_coefs: The 6 coefficients found with a `deg` dimension.
     """
     # Not required to be the same order for code to work, but think makes neater
     raise_if_common_dims_not_identical(x, y)
@@ -480,8 +489,8 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
                         numerical: bool = False,
                         time_dim: str = 'time', ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.Dataset]:
     reconstruct_flux = {'lh': reconstruct_lh, 'sh': reconstruct_sh, 'lw': reconstruct_lw}[flux_name]
-    arg_names = list(inspect.signature(reconstruct_lh).parameters.keys())
-    arg_names = [key for key in arg_names if key!='numerical']      # treat numerical as extra param
+    arg_names = list(inspect.signature(reconstruct_flux).parameters.keys())
+    arg_names = [key for key in arg_names if key!='numerical']      # treat numerical as kwarg
     input_core_dims = [[] if (('_ref' in arg) or (arg in ['sigma_atm'])) else [time_dim] for arg in
                        arg_names]
     output_core_dims = [[], [time_dim], [time_dim], []]
@@ -497,5 +506,20 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
                                   ds_ref.p_surf, ds_ref.sigma_atm, ds_ref.evap_prefactor,
                                   ds.temp_surf, ds.temp_diseqb, ds.rh_atm, ds.w_atm, drag_coef, ds.p_surf,
                                   evap_prefactor, numerical=numerical)
-        info_cont = xr.Dataset(convert_ds_of_dicts(info_cont, ds.time, 'time'))
+    elif flux_name == 'sh':
+        # Add time dimension to drag, as don't have initially
+        drag_coef = ds.temp_surf*0 + ds_ref.drag_coef
+        flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_diseqb, ds_ref.w_atm, ds_ref.drag_coef,
+                                  ds_ref.p_surf, ds_ref.sigma_atm, ds.temp_surf, ds.temp_diseqb,
+                                  ds.w_atm, drag_coef, ds.p_surf, numerical=numerical)
+    elif flux_name == 'lw':
+        # Add time dimension to odp_surf, as don't have initially
+        odp_surf = ds.temp_surf*0 + ds_ref.odp_surf
+        flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_diseqb, ds_ref.temp_diseqb_r, ds_ref.odp_surf,
+                                  ds.temp_surf, ds.temp_diseqb, ds.temp_diseqb_r, odp_surf, numerical=numerical)
+    else:
+        raise ValueError(f'Unknown flux_name="{flux_name}". Must be one of "lh", "sh", "lw".')
+    info_cont = xr.Dataset(convert_ds_of_dicts(info_cont, ds.time, 'time'))
     return flux_ref, flux_anom_linear, flux_anom_nl, info_cont

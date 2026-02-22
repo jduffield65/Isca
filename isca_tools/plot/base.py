@@ -239,5 +239,6 @@ def colored_line(x: np.ndarray, y: np.ndarray, c: np.ndarray, ax: plt.Axes, **lc
 
     lc = LineCollection(segments, **default_kwargs)
     lc.set_array(c)  # set the colors of each segment
-
-    return ax.add_collection(lc)
+    ax.add_collection(lc)
+    ax.autoscale_view()         # update axis limits
+    return lc
