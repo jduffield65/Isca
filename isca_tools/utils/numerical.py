@@ -113,12 +113,56 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
     return y_approx + poly_coefs[0] * x_shift + y_residual_fourier
 
 
+import numpy as np
+
+def polyfit_fixed_constant(x: np.ndarray, y: np.ndarray, deg: int, c0: Optional[float]=None,
+                           w: Optional[np.ndarray]=None):
+    """Least-squares polynomial fit with fixed constant term.
+
+    Fits p(x) = a_deg*x**deg + ... + a_1*x + c0, where c0 is fixed.
+
+    Args:
+        x: 1D array of x values.
+        y: 1D array of y values.
+        deg: Polynomial degree (>= 1).
+        c0: Fixed constant term (x**0 coefficient). If `None`, just returns np.polyfit
+        w: Optional 1D weights (same length as x). Interpreted like polyfit's w:
+            minimizes sum((w*(y - p(x)))**2).
+
+    Returns:
+        coef: 1D array of length deg+1 in np.polyfit order (highest power first),
+            with coef[-1] == c0.
+    """
+    if c0 is None:
+        return np.polyfit(x, y, deg, w=w)
+    else:
+        x = np.asarray(x)
+        y = np.asarray(y)
+
+        # Vandermonde with columns [x**deg, ..., x**1, x**0]
+        V = np.vander(x, N=deg + 1, increasing=False)
+
+        # Drop constant column; move fixed constant to RHS
+        A = V[:, :-1]
+        b = y - c0
+
+        if w is not None:
+            w = np.asarray(w)
+            A = A * w[:, None]
+            b = b * w
+
+        coef_rest, *_ = np.linalg.lstsq(A, b, rcond=None)
+        return np.concatenate([coef_rest, [c0]])
+
+
+
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
                   deg: int, time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
                   time_end: Optional[float] = None,
                   deg_phase_calc: int = 10, resample: bool = False,
                   include_phase: bool = True, fourier_harmonics: Optional[Union[int, np.ndarray]] = None,
                   integ_method: str = 'spline',
+                  coef0: Optional[float] = None,
                   pad_coefs_phase: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
@@ -173,6 +217,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             Idea behind this is to account for part of $y$ not directly related to $x$.
         integ_method: How to perform the integration when calculating Fourier coefficients..</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
+        coef0: Option to fix the constant i.e. `deg=0` coefficient to be this value.
         pad_coefs_phase: If `True`, will set `coefs_fourier_phase` to length `fourier_harmonics.max()+1`, with
             the first value as zero. Otherwise will be size `fourier_harmonics.max()`.
 
@@ -196,9 +241,9 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         x_fit = x
         y_fit = y
     if not include_phase:
-        coefs[1:] = np.polyfit(x_fit, y_fit, deg)       # don't do phase stuff so 1st value is 0
+        coefs[1:] = polyfit_fixed_constant(x_fit, y_fit, deg, coef0)       # don't do phase stuff so 1st value is 0
     else:
-        y_best_polyfit = np.polyval(np.polyfit(x_fit, y_fit, deg_phase_calc), x)
+        y_best_polyfit = np.polyval(polyfit_fixed_constant(x_fit, y_fit, deg_phase_calc, coef0), x)
         x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
                          get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
         if resample:
@@ -206,7 +251,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         else:
             x_shift_fit = x_shift
             y_residual_fit = y - y_best_polyfit
-        coefs[[0, -1]] = np.polyfit(x_shift_fit, y_residual_fit, 1)
+        coefs[[0, -1]] = polyfit_fixed_constant(x_shift_fit, y_residual_fit, 1, coef0)
         y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
 
         if fourier_harmonics is not None:
@@ -233,7 +278,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             else:
                 x_fit = x
                 y_no_phase_fit = y_no_phase
-            coefs[1:] += np.polyfit(x_fit, y_no_phase_fit, deg)
+            coefs[1:] += polyfit_fixed_constant(x_fit, y_no_phase_fit, deg, coef0)
 
     if fourier_harmonics is None:
         return coefs

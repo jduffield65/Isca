@@ -252,7 +252,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                      time_end: Optional[float] = None,
                      deg_phase_calc: int = 10, resample: bool = resample,
                      include_phase: bool = True, include_fourier: bool = False,
-                     integ_method: str = 'spline') -> xr. DataArray:
+                     integ_method: str = 'spline', coef0: Optional[float]=None) -> xr. DataArray:
     """
     Applying `polyfit_phase` to xarray.
     Will always return atleast 6 values across `deg` dimension: [phase, cos, sin, 2, 1, 0].
@@ -278,6 +278,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
             because approx very good. No point going to higher order as not analytic anymore with 2 harmonic temperature
             expression.
         integ_method:
+        coef0: Option to fix the constant i.e. `deg=0` coefficient to be this value.
 
     Returns:
         poly_coefs: The 6 coefficients found with a `deg` dimension.
@@ -291,7 +292,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                              deg_phase_calc=deg_phase_calc, resample=resample, include_phase=include_phase,
                              fourier_harmonics=np.atleast_1d(2) if include_fourier else None,
                              # Only find 2nd harmonic coef as that is our approx for
-                             integ_method=integ_method, pad_coefs_phase=True)
+                             integ_method=integ_method, pad_coefs_phase=True, coef0=coef0)
     # Polyfit outputs phase first and then highest poly coef power is first
     deg_in_var = ['phase'] + np.arange(deg + 1)[::-1].tolist()
     if deg <= 2:
