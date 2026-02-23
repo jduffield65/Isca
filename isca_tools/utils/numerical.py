@@ -1,15 +1,15 @@
 import numpy as np
 import scipy.ndimage
 from scipy.interpolate import CubicSpline
-from typing import Optional, Tuple, Union, Callable
+from typing import Optional, Tuple, Union, Callable, List
 from scipy.optimize import root_scalar
 import warnings
 from ..utils.fourier import get_fourier_coef, fourier_series
 
 
-def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: Optional[float]=None,
-                time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
-                time_end: Optional[float] = None) -> np.ndarray:
+def get_var_shift(x: np.ndarray, shift_time: Optional[float] = None, shift_phase: Optional[float] = None,
+                  time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
+                  time_end: Optional[float] = None) -> np.ndarray:
     """
     Returns the periodic variable $x(t-t_{shift})$ where $t$=`time`, and $t_{shift}=$`shift_time`.
     If `shift_phase` is provided, will set `shift_time = shift_phase * period`.
@@ -42,7 +42,8 @@ def get_var_shift(x: np.ndarray, shift_time: Optional[float]=None, shift_phase: 
             raise ValueError(f'Min time={time[ind][0]} is less than time_start={time_start}')
         if time[ind][-1] > time_end:
             raise ValueError(f'Max time={time[ind][-1]} is greater than time_end={time_end}')
-        x_spline_fit = CubicSpline(np.append(time[ind], time_end+time[ind][0]-time_start+1), np.append(x[ind], x[ind][0]),
+        x_spline_fit = CubicSpline(np.append(time[ind], time_end + time[ind][0] - time_start + 1),
+                                   np.append(x[ind], x[ind][0]),
                                    bc_type='periodic')
         period = time_end - time_start + 1
         if shift_phase is not None:
@@ -113,25 +114,74 @@ def polyval_phase(poly_coefs: np.ndarray, x: np.ndarray, time: Optional[np.ndarr
     return y_approx + poly_coefs[0] * x_shift + y_residual_fourier
 
 
-import numpy as np
+# def polyfit_fixed_constant(x: np.ndarray, y: np.ndarray, deg: int, c0: Optional[float] = None,
+#                            w: Optional[np.ndarray] = None):
+#     """Least-squares polynomial fit with fixed constant term.
+#
+#     Fits p(x) = a_deg*x**deg + ... + a_1*x + c0, where c0 is fixed.
+#
+#     Args:
+#         x: 1D array of x values.
+#         y: 1D array of y values.
+#         deg: Polynomial degree (>= 1).
+#         c0: Fixed constant term (x**0 coefficient). If `None`, just returns np.polyfit
+#         w: Optional 1D weights (same length as x). Interpreted like polyfit's w:
+#             minimizes sum((w*(y - p(x)))**2).
+#
+#     Returns:
+#         coef: 1D array of length deg+1 in np.polyfit order (highest power first),
+#             with coef[-1] == c0.
+#     """
+#     if c0 is None:
+#         return np.polyfit(x, y, deg, w=w)
+#     else:
+#         x = np.asarray(x)
+#         y = np.asarray(y)
+#
+#         # Vandermonde with columns [x**deg, ..., x**1, x**0]
+#         V = np.vander(x, N=deg + 1, increasing=False)
+#
+#         # Drop constant column; move fixed constant to RHS
+#         A = V[:, :-1]
+#         b = y - c0
+#
+#         if w is not None:
+#             w = np.asarray(w)
+#             A = A * w[:, None]
+#             b = b * w
+#
+#         coef_rest, *_ = np.linalg.lstsq(A, b, rcond=None)
+#         return np.concatenate([coef_rest, [c0]])
 
-def polyfit_fixed_constant(x: np.ndarray, y: np.ndarray, deg: int, c0: Optional[float]=None,
-                           w: Optional[np.ndarray]=None):
-    """Least-squares polynomial fit with fixed constant term.
 
-    Fits p(x) = a_deg*x**deg + ... + a_1*x + c0, where c0 is fixed.
+def polyfit_fixed_coefs(x: np.ndarray, y: np.ndarray, deg, c0: Optional[List] = None,
+                        w: Optional[np.ndarray] = None, rcond=None) -> np.ndarray:
+    """Least-squares polynomial fit with optional fixed coefficients.
+
+    Fits p(x) = sum_{j=0..deg} coef[j] * x**(deg-j) using least squares,
+    where some coef entries may be fixed.
+
+    This matches np.polyfit coefficient order: coef[0] multiplies x**deg and
+    coef[-1] is the constant term.
 
     Args:
-        x: 1D array of x values.
-        y: 1D array of y values.
-        deg: Polynomial degree (>= 1).
-        c0: Fixed constant term (x**0 coefficient). If `None`, just returns np.polyfit
-        w: Optional 1D weights (same length as x). Interpreted like polyfit's w:
-            minimizes sum((w*(y - p(x)))**2).
+        x: 1D array of x values, shape (n,).
+        y: 1D array of y values, shape (n,).
+        deg: Polynomial degree (>= 0).
+        c0: Optional sequence of length deg+1. Use None for unknown coefficients
+            to be solved; use a number for coefficients to be held fixed.
+            If None, all coefficients are solved (equivalent to np.polyfit).
+        w: Optional 1D weights, shape (n,). Minimizes sum((w*(y - p(x)))**2),
+            same convention as np.polyfit.
+        rcond: Passed to np.linalg.lstsq (default uses numpy's default).
 
     Returns:
-        coef: 1D array of length deg+1 in np.polyfit order (highest power first),
-            with coef[-1] == c0.
+        coef: 1D array of length deg+1, in np.polyfit order.
+
+    Raises:
+        ValueError: If c0 length is not deg+1, or if all coefficients are fixed
+            but they don't match y in a least-squares sense (you still get the
+            coefficients; this is just not "fit").
     """
     if c0 is None:
         return np.polyfit(x, y, deg, w=w)
@@ -139,21 +189,49 @@ def polyfit_fixed_constant(x: np.ndarray, y: np.ndarray, deg: int, c0: Optional[
         x = np.asarray(x)
         y = np.asarray(y)
 
-        # Vandermonde with columns [x**deg, ..., x**1, x**0]
+        if x.ndim != 1 or y.ndim != 1:
+            raise ValueError("x and y must be 1D arrays.")
+        if x.shape[0] != y.shape[0]:
+            raise ValueError("x and y must have the same length.")
+        if deg < 0:
+            raise ValueError("deg must be >= 0.")
+
+        # Vandermonde with columns [x**deg, ..., x**0]
         V = np.vander(x, N=deg + 1, increasing=False)
 
-        # Drop constant column; move fixed constant to RHS
-        A = V[:, :-1]
-        b = y - c0
+        if c0 is None:
+            solved_mask = np.ones(deg + 1, dtype=bool)
+            fixed = np.zeros(deg + 1, dtype=float)
+        else:
+            if len(c0) != deg + 1:
+                raise ValueError(f"c0 must have length deg+1 = {deg + 1}.")
+            solved_mask = np.array([ci is None for ci in c0], dtype=bool)
+            fixed = np.array([0.0 if ci is None else float(ci) for ci in c0], dtype=float)
 
+        # If everything is fixed, nothing to solve: just return fixed coefficients.
+        if not np.any(solved_mask):
+            coef = fixed.copy()
+            return coef
+
+        # Move contribution of fixed coefficients to RHS: y' = y - V_fixed @ fixed_vals
+        V_fixed = V[:, ~solved_mask]
+        V_free = V[:, solved_mask]
+        y_adj = y - V_fixed @ fixed[~solved_mask]
+
+        # Optional weights like np.polyfit: minimize ||w*(y_adj - V_free @ a_free)||^2
         if w is not None:
             w = np.asarray(w)
-            A = A * w[:, None]
-            b = b * w
+            if w.ndim != 1 or w.shape[0] != x.shape[0]:
+                raise ValueError("w must be a 1D array with same length as x.")
+            V_free = V_free * w[:, None]
+            y_adj = y_adj * w
 
-        coef_rest, *_ = np.linalg.lstsq(A, b, rcond=None)
-        return np.concatenate([coef_rest, [c0]])
+        coef_free, *_ = np.linalg.lstsq(V_free, y_adj, rcond=rcond)
 
+        coef = fixed.copy()
+        coef[solved_mask] = coef_free
+
+        return coef
 
 
 def polyfit_phase(x: np.ndarray, y: np.ndarray,
@@ -162,7 +240,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
                   deg_phase_calc: int = 10, resample: bool = False,
                   include_phase: bool = True, fourier_harmonics: Optional[Union[int, np.ndarray]] = None,
                   integ_method: str = 'spline',
-                  coef0: Optional[float] = None,
+                  coef_fix: Optional[List] = None,
                   pad_coefs_phase: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """
     This fits a polynomial `y_approx(x) = p[0] * x**deg + ... + p[deg]` of degree `deg` to points (x, y) as `np.polyfit`
@@ -215,9 +293,10 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             If provide array, only harmonics included in array will be fit, but will return coefficients for
             all up to the max harmonic given, with zeros wherever harmonic not in `fourier_harmonics`.</br>
             Idea behind this is to account for part of $y$ not directly related to $x$.
-        integ_method: How to perform the integration when calculating Fourier coefficients..</br>
+        integ_method: How to perform the integration when calculating Fourier coefficients.</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
-        coef0: Option to fix the constant i.e. `deg=0` coefficient to be this value.
+        coef_fix: Option to fix some coefs in poly_coefs, same order as output with first being phase coef.
+            All coefs in array that are None will be computed.
         pad_coefs_phase: If `True`, will set `coefs_fourier_phase` to length `fourier_harmonics.max()+1`, with
             the first value as zero. Otherwise will be size `fourier_harmonics.max()`.
 
@@ -240,10 +319,18 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
     else:
         x_fit = x
         y_fit = y
-    if not include_phase:
-        coefs[1:] = polyfit_fixed_constant(x_fit, y_fit, deg, coef0)       # don't do phase stuff so 1st value is 0
+    if coef_fix is not None:
+        if len(coef_fix) != deg + 2:
+            raise ValueError(f"coef_fix must have length deg+2={deg + 2} not {len(coef_fix)}.\n"
+                             f"First is phase coef, then the polynomial coefs")
+        coef_fix_phase = coef_fix[0]
+        coef_fix = coef_fix[1:]
     else:
-        y_best_polyfit = np.polyval(polyfit_fixed_constant(x_fit, y_fit, deg_phase_calc, coef0), x)
+        coef_fix_phase = None
+    if not include_phase:
+        coefs[1:] = polyfit_fixed_coefs(x_fit, y_fit, deg, coef_fix)  # don't do phase stuff so 1st value is 0
+    else:
+        y_best_polyfit = np.polyval(np.polyfit(x_fit, y_fit, deg_phase_calc), x)
         x_shift = 0.5 * (get_var_shift(x, shift_phase=0.25, time=time, time_start=time_start, time_end=time_end) -
                          get_var_shift(x, shift_phase=-0.25, time=time, time_start=time_start, time_end=time_end))
         if resample:
@@ -251,8 +338,17 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
         else:
             x_shift_fit = x_shift
             y_residual_fit = y - y_best_polyfit
-        coefs[[0, -1]] = polyfit_fixed_constant(x_shift_fit, y_residual_fit, 1, coef0)
-        y_no_phase = y - polyval_phase(coefs, x, time, time_start, time_end)  # residual after removing phase dependent term
+        if (coef_fix is not None) and (coef_fix[-1] is not None):
+            # Constraint the deg=0 coefficient in this case
+            coefs[[0, -1]] = polyfit_fixed_coefs(x_shift_fit, y_residual_fit, 1,
+                                                 c0=[None, coef_fix[-1]])
+        else:
+            coefs[[0, -1]] = np.polyfit(x_shift_fit, y_residual_fit, 1)
+        if coef_fix_phase is not None:
+            # If supplied coef_phase, then set this here
+            coefs[0] = coef_fix_phase       # fit the
+        y_no_phase = y - polyval_phase(coefs, x, time, time_start,
+                                       time_end)  # residual after removing phase dependent term
 
         if fourier_harmonics is not None:
             time_use = np.arange(x.size) if time is None else time
@@ -260,14 +356,14 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
                 raise ValueError('Can only include Fourier with evenly spaced data')
             if isinstance(fourier_harmonics, int):
                 # if int, use all harmonics up to value indicated but without 0th harmonic
-                fourier_harmonics = np.arange(1, fourier_harmonics+1)
-            coefs_fourier_amp = np.zeros(np.max(fourier_harmonics)+1)
+                fourier_harmonics = np.arange(1, fourier_harmonics + 1)
+            coefs_fourier_amp = np.zeros(np.max(fourier_harmonics) + 1)
             coefs_fourier_phase = np.zeros(np.max(fourier_harmonics))
             for n in fourier_harmonics:
-                if n==0:
+                if n == 0:
                     warnings.warn('Will not fit 0th harmonic as constant will be fit in polynomial')
                 else:
-                    coefs_fourier_amp[n], coefs_fourier_phase[n-1] = \
+                    coefs_fourier_amp[n], coefs_fourier_phase[n - 1] = \
                         get_fourier_coef(time_use, y_no_phase - y_best_polyfit, n, integ_method)
             y_residual_fourier = fourier_series(time_use, coefs_fourier_amp, coefs_fourier_phase)
             y_no_phase = y_no_phase - y_residual_fourier
@@ -278,7 +374,7 @@ def polyfit_phase(x: np.ndarray, y: np.ndarray,
             else:
                 x_fit = x
                 y_no_phase_fit = y_no_phase
-            coefs[1:] += polyfit_fixed_constant(x_fit, y_no_phase_fit, deg, coef0)
+            coefs[1:] += polyfit_fixed_coefs(x_fit, y_no_phase_fit, deg, coef_fix)
 
     if fourier_harmonics is None:
         return coefs
@@ -328,13 +424,13 @@ def resample_data_distance(time: Optional[np.ndarray], x: np.ndarray, y: np.ndar
         coords_dist_calc = np.vstack((x, y))
     dist = np.append(0, np.cumsum(np.sqrt(np.sum(np.diff(coords_dist_calc, axis=1) ** 2, axis=0))))
     x_spline = CubicSpline(np.append(time, [time[-1] + time_spacing]), np.append(x, x[0]),
-                                             bc_type=bc_type)
+                           bc_type=bc_type)
     y_spline = CubicSpline(np.append(time, [time[-1] + time_spacing]), np.append(y, y[0]),
-                                             bc_type=bc_type)
+                           bc_type=bc_type)
     dist_spline = CubicSpline(time, dist)
     dist_return = np.linspace(dist[0], dist[-1], n_return)
     # Adjust first and last values by tiny amount, to ensure that within the range when trying to solve
-    small = 0.0001 * (dist_return[1]-dist_return[0])
+    small = 0.0001 * (dist_return[1] - dist_return[0])
     dist_return[0] += small
     dist_return[-1] -= small
     time_resample = np.zeros(n_return)
@@ -345,7 +441,7 @@ def resample_data_distance(time: Optional[np.ndarray], x: np.ndarray, y: np.ndar
 
 def resample_data(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, x_return: Optional[np.ndarray] = None,
                   n_return: Optional[int] = None, bc_type: str = 'periodic',
-                  extrapolate: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                  extrapolate: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Given that `x[i]` and `y[i]` both occur at time `time[i]`, this resamples data to return values of `y`
     corresponding to `x_return`.
@@ -382,9 +478,9 @@ def resample_data(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, x_re
         time = np.arange(x.size)
     time_spacing = np.median(np.ediff1d(time))
     if 'periodic' in bc_type:
-        x_spline = CubicSpline(np.append(time, [time[-1]+time_spacing]), np.append(x, x[0]),
+        x_spline = CubicSpline(np.append(time, [time[-1] + time_spacing]), np.append(x, x[0]),
                                bc_type=bc_type)
-        y_spline = CubicSpline(np.append(time, [time[-1]+time_spacing]), np.append(y, y[0]),
+        y_spline = CubicSpline(np.append(time, [time[-1] + time_spacing]), np.append(y, y[0]),
                                bc_type=bc_type)
     else:
         x_spline = CubicSpline(time, x, bc_type=bc_type)
@@ -394,7 +490,7 @@ def resample_data(time: Optional[np.ndarray], x: np.ndarray, y: np.ndarray, x_re
     times_return = []
     for i in range(x_return.size):
         times_return += [*x_spline.solve(x_return[i], extrapolate=extrapolate)]
-    times_return = np.asarray(times_return) % time[-1]      # make return times between 0 and time[-1]
+    times_return = np.asarray(times_return) % time[-1]  # make return times between 0 and time[-1]
     return times_return, x_spline(times_return), y_spline(times_return)
 
 
@@ -500,18 +596,19 @@ def get_var_extrema_date(time: np.ndarray, var: np.ndarray, smooth_window: int =
     """
     if smooth_method.lower() == 'spline':
         # Make so last element of arrays equal first as periodic
-        time_smooth = np.append(time, time[-1]+1)[::smooth_window]
+        time_smooth = np.append(time, time[-1] + 1)[::smooth_window]
         var_smooth = np.append(var, var[0])[::smooth_window]
     elif smooth_method.lower() == 'convolve':
         var_smooth = scipy.ndimage.convolve(var, np.ones(smooth_window) / smooth_window, mode='wrap')
         time_smooth = np.append(time, time[-1] + 1)
         var_smooth = np.append(var_smooth, var_smooth[0])
     else:
-        raise  ValueError('smooth_method must be either spline or convolve')
+        raise ValueError('smooth_method must be either spline or convolve')
     # Spline var is the spline replicating var_smooth exactly i.e. spline_var(t) = var_smooth[t] if t in time_smooth
     spline_var = CubicSpline(time_smooth, var_smooth, bc_type='periodic')
     extrema_date = get_extrema_date_from_spline(spline_var, type, thresh_extrema, max_extrema)
     return extrema_date, spline_var
+
 
 def interp_nan(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -552,10 +649,10 @@ def interp_nan(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def hybrid_root_find(
-    residual: Callable,
-    guess: float,
-    search_radius: float,
-    n_bracket_samples: int = 32
+        residual: Callable,
+        guess: float,
+        search_radius: float,
+        n_bracket_samples: int = 32
 ) -> float:
     """Find a root of a 1-D function using a fast secant/brentq hybrid method.
 

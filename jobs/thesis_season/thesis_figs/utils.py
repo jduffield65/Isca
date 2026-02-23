@@ -6,7 +6,7 @@ from typing import Union, Literal, Optional, Tuple, List
 import itertools
 
 from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw, \
-    name_square, name_nl
+    name_square, name_nl, get_latent_heat, get_sensible_heat, get_lwup_sfc_net
 from isca_tools.utils import numerical
 from tqdm.notebook import tqdm
 
@@ -253,7 +253,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                      time_end: Optional[float] = None,
                      deg_phase_calc: int = 10, resample: bool = resample,
                      include_phase: bool = True, include_fourier: bool = False,
-                     integ_method: str = 'spline', coef0: Optional[float] = None) -> xr.DataArray:
+                     integ_method: str = 'spline', coef_fix: Optional[List] = None) -> xr.DataArray:
     """
     Applying `polyfit_phase` to xarray.
     Will always return atleast 6 values across `deg` dimension: [phase, cos, sin, 2, 1, 0].
@@ -279,7 +279,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
             because approx very good. No point going to higher order as not analytic anymore with 2 harmonic temperature
             expression.
         integ_method:
-        coef0: Option to fix the constant i.e. `deg=0` coefficient to be this value.
+        coef_fix: Option to fix some coefficients. Must be size `deg+2`.
 
     Returns:
         poly_coefs: The 6 coefficients found with a `deg` dimension.
@@ -293,7 +293,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                              deg_phase_calc=deg_phase_calc, resample=resample, include_phase=include_phase,
                              fourier_harmonics=np.atleast_1d(2) if include_fourier else None,
                              # Only find 2nd harmonic coef as that is our approx for
-                             integ_method=integ_method, pad_coefs_phase=True, coef0=coef0)
+                             integ_method=integ_method, pad_coefs_phase=True, coef_fix=coef_fix)
     # Polyfit outputs phase first and then highest poly coef power is first
     deg_in_var = ['phase'] + np.arange(deg + 1)[::-1].tolist()
     if deg <= 2:
@@ -486,6 +486,75 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
     return out
 
 
+def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
+             calc: bool = False) -> xr.DataArray:
+    """Return a surface turbulent/radiative flux from a Dataset.
+
+    This helper provides two modes:
+
+    1. `calc=False` (default): return the flux directly from pre-existing fields in
+       `ds` (fast; no recalculation).
+    2. `calc=True`: recompute the flux diagnostically from input variables/parameters
+       using the appropriate flux function. Inputs are pulled from `ds` variables
+       first, and if missing, from `ds.attrs`.
+
+    Args:
+        ds:
+            Input dataset containing either the flux fields directly (when `calc=False`)
+            or the required input variables/attributes for the chosen calculation
+            (when `calc=True`).
+        flux_name:
+            Which flux to return.
+
+            - `'lh'`: latent heat flux (surface) returned directly as `ds.flux_lhe`
+              or computed via `get_latent_heat`.
+            - `'sh'`: sensible heat flux (surface) returned directly as `ds.flux_sh`
+              or computed via `get_sensible_heat`.
+            - `'lw'`: net upward longwave at the surface returned directly as
+              `ds.lwup_sfc - ds.lwdn_sfc` or computed via `get_lwup_sfc_net`.
+        calc:
+            If True, calculate the flux from required inputs using the corresponding
+            flux function. If False, return the precomputed/direct flux expression
+            from `ds`.
+
+    Returns:
+        flux: Flux as an `xr.DataArray`. Dimensions/coords follow the underlying dataset
+            variables used (e.g. typically includes `time`, `lat`, `lon`).
+
+    Raises:
+        KeyError:
+            If `calc=False` and the required direct field(s) are missing from `ds`
+            (e.g. `flux_lhe`, `flux_sh`, `lwup_sfc`, `lwdn_sfc`).
+        ValueError:
+            If `calc=True` and any required argument for the chosen flux function is
+            missing from both `ds` and `ds.attrs`.
+
+    Notes:
+        - For `calc=True`, the required inputs are inferred from the signature of the
+          selected flux function (`get_latent_heat`, `get_sensible_heat`,
+          `get_lwup_sfc_net`). This makes the interface robust to changes in the
+          underlying calculation functions, but it means `ds`/`ds.attrs` must use
+          matching argument names.
+        - For `'lw'` in direct mode, the returned value is computed on the fly as
+          `ds.lwup_sfc - ds.lwdn_sfc`, so it does not require an explicit stored
+          "net" variable.
+    """
+    if calc:
+        flux_func = {'lh': get_latent_heat, 'sh': get_sensible_heat, 'lw': get_lwup_sfc_net}[flux_name]
+        arg_names = list(inspect.signature(flux_func).parameters.keys())
+        var = {}
+        for key in arg_names:
+            if key in ds:
+                var[key] = ds[key]
+            elif key in ds.attrs:
+                var[key] = ds.attrs[key]
+            else:
+                raise ValueError(f'ds does not contain the variable "{key}"')
+        return flux_func(**var)
+    else:
+        return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw': ds.lwup_sfc-ds.lwdn_sfc}[flux_name]
+
+
 def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
                         flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
                         numerical: bool = False,
@@ -637,6 +706,9 @@ def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
     var_ref = xr.Dataset(var_ref)
 
     if get_nl:
+        # Constrained fitting for nl terms to keep const coef as zero
+        coef_fix = [None for _ in range(deg+2)]
+        coef_fix[-1] = 0        # enforce const (deg=0) of 0
         # Square mechanism
         for key in ds:
             if (key == key_use) or (time_dim not in ds[key].dims):
@@ -647,7 +719,7 @@ def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
             params[name_square(key)] = polyfit_phase_xr(x, (ds[key] - var_ref[key]) ** 2, deg=deg,
                                                         include_phase=include_phase,
                                                         include_fourier=include_fourier,
-                                                        coef0=0)
+                                                        coef_fix=coef_fix)
             var_empirical[name_square(key)] = polyval_phase_xr(params[name_square(key)], x)
             error[name_square(key)] = get_error((ds[key] - var_ref[key]) ** 2, var_empirical[name_square(key)],
                                                 error_kind, error_norm, time_dim, error_norm_dim)
@@ -659,7 +731,7 @@ def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
             var = (ds[var1] - var_ref[var1]) * (ds[var2] - var_ref[var2])
             params[name_nl(var1, var2)] = polyfit_phase_xr(x, var,
                                                            deg=deg, include_phase=include_phase,
-                                                           include_fourier=include_fourier, coef0=0)
+                                                           include_fourier=include_fourier, coef_fix=coef_fix)
             var_empirical[name_nl(var1, var2)] = polyval_phase_xr(params[name_nl(var1, var2)], x)
             error[name_nl(var1, var2)] = get_error(var, var_empirical[name_nl(var1, var2)],
                                                    error_kind, error_norm, time_dim, error_norm_dim)
