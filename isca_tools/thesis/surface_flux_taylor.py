@@ -140,7 +140,7 @@ def get_sensitivity_lh(
     # Mechanism combinations
     out_dict[name_nl('temp_surf', 'temp_diseqb')] = -lh / temp_atm ** 2 + out_dict['temp_surf'] / temp_atm + \
                                                     lh_prefactor * q_atm * alpha_atm * (alpha_atm - 2 / temp_atm)
-    out_dict[name_nl('temp_surf', 'rh_atm')] = -lh_prefactor * alpha_atm * q_atm_sat
+    out_dict[name_nl('temp_surf', 'rh_atm')] = lh_prefactor * (1/temp_atm - alpha_atm) * q_atm_sat
     for key in ['w_atm', 'drag_coef', 'p_surf', 'evap_prefactor']:
         out_dict[name_nl('temp_surf', key)] = out_dict[key] * out_dict['temp_surf'] / lh
     return out_dict

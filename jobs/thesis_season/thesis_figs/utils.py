@@ -6,7 +6,8 @@ from typing import Union, Literal, Optional, Tuple, List
 import itertools
 
 from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw, \
-    name_square, name_nl, get_latent_heat, get_sensible_heat, get_lwup_sfc_net
+    name_square, name_nl, get_latent_heat, get_sensible_heat, get_lwup_sfc_net, get_sensitivity_lh, \
+    get_sensitivity_sh, get_sensitivity_lw
 from isca_tools.utils import numerical
 from tqdm.notebook import tqdm
 
@@ -48,12 +49,14 @@ style_map = {
 }
 
 # Order reflects the order of vars in get_sensitivity - important for nonlinear combinations
-style_map_var = {'temp_surf': ("C1", "-", "$T_s$", "K"),
-                 'temp_diseqb': ("C3", "-", "$T_{dq}$", "K"),
-                 'rh_atm': ('C0', "-", "$r_a$", "Unitless"),
-                 'w_atm': ('C2', '-', '$U_a$', "ms$^{-1}$"),
+style_map_var = {'temp_surf': ("C3", "-", "$T_s$", "K"),
+                 'temp_diseqb': ("C1", "-", "$T_{dq}$", "K"),
+                 'rh_atm': ('C2', "-", "$r_a$", "Unitless"),
+                 'w_atm': ('C0', '-', '$U_a$', "ms$^{-1}$"),
                  'p_surf': ('C4', '-', '$p_s$', "Pa"),
-                 'temp_diseqb_r': ("C0", "-", "$T_{dq_r}$", "K")}
+                 'temp_diseqb_r': ("C4", "-", "$T_{dqr}$", "K")}
+
+style_map_var_nl = {name_nl('temp_surf', 'w_atm'): ("C0", '--', '$T_sU_a$')}
 
 # General info
 smooth_n_days = 50  # default smoothing window in days
@@ -465,7 +468,7 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
     Raises:
         ValueError: If `kind` is not one of {"mean", "median", "max"}.
     """
-    raise_if_common_dims_not_identical(x, x_approx, name_y='x_approx')
+    # raise_if_common_dims_not_identical(x, x_approx, name_y='x_approx')
     err = np.abs(x - x_approx)
 
     if kind == "mean":
@@ -553,6 +556,38 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
         return flux_func(**var)
     else:
         return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw': ds.lwup_sfc-ds.lwdn_sfc}[flux_name]
+
+
+def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw']='lh') -> xr.Dataset:
+    """
+    Return flux sensitivity (Taylor-series coefficients) for a chosen flux decomposition.
+
+    This is a thin wrapper that selects the appropriate sensitivity routine
+    (`get_sensitivity_lh`, `get_sensitivity_sh`, or `get_sensitivity_lw`), gathers
+    its required inputs from `ds` variables (or `ds.attrs`), and returns the
+    resulting coefficients as an `xr.Dataset`.
+
+    Args:
+        ds: Dataset containing the required inputs as variables and/or attributes.
+        flux_name: Flux decomposition to use: `'lh'`, `'sh'`, or `'lw'`.
+
+    Returns:
+        Dataset of Taylor-series coefficients returned by the selected sensitivity function.
+
+    Raises:
+        ValueError: If any required input is missing from both `ds` and `ds.attrs`.
+    """
+    func_use = {'lh': get_sensitivity_lh, 'sh': get_sensitivity_sh, 'lw': get_sensitivity_lw}[flux_name]
+    arg_names = inspect.signature(func_use).parameters.keys()
+    var = {}
+    for key in arg_names:
+        if key in ds:
+            var[key] = ds[key]
+        elif key in ds.attrs:
+            var[key] = ds.attrs[key]
+        else:
+            raise ValueError(f'ds does not contain the variable "{key}"')
+    return xr.Dataset(func_use(**var))
 
 
 def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
@@ -695,7 +730,7 @@ def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
                                        include_phase=include_phase, include_fourier=include_fourier)
         var_empirical[key] = polyval_phase_xr(params[key], x)
         error[key] = get_error(ds[key], var_empirical[key], error_kind, error_norm, time_dim, error_norm_dim)
-        var_ref[key] = params[key].sel(deg='0')
+        var_ref[key] = params[key].sel(deg='0', drop=True)
 
     # Reference state is where all empirical params are zero and temp_surf=temp_surf_av; equivalent to deg=0 value here.
     var_ref[key_use] = ds[key_use].mean(dim=time_dim)

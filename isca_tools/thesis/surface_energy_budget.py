@@ -348,10 +348,10 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
         var = var / (2*np.pi*f*heat_capacity)
     elif (sw_fourier_amp1 is not None) and (sw_fourier_amp2 is not None) and (lambda_const is not None):
         # lambda_sq
-        var = var * sw_fourier_amp1**2 / (2 * lambda_const ** 2 * sw_fourier_amp2)
+        var = var * sw_fourier_amp1**2 / (2 * lambda_const ** 2 * np.abs(sw_fourier_amp2))
     elif sw_fourier_amp2 is not None:
         # lambda_cos and lambda_sin
-        var = var/sw_fourier_amp2
+        var = var/np.abs(sw_fourier_amp2)
     else:
         raise ValueError("Combination of parameters provided not correct for any parameter")
     return var
@@ -473,10 +473,10 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
     # 2nd Harmonic - not exact if lambda_sq!=0, as approx T^2 given by first harmonic squared only
     if n_harmonics == 2:
         # Put empirical params in dimensionless form
-        lambda_cos_dim = get_param_dimensionless(lambda_cos, sw_fourier_amp2=sw_fourier_amp[2])
-        lambda_sin_dim = get_param_dimensionless(lambda_sin, sw_fourier_amp2=sw_fourier_amp[2])
+        lambda_cos_dim = get_param_dimensionless(lambda_cos, sw_fourier_amp2=sw_fourier_amp[2]) * np.sign(sw_fourier_amp[2])
+        lambda_sin_dim = get_param_dimensionless(lambda_sin, sw_fourier_amp2=sw_fourier_amp[2]) * np.sign(sw_fourier_amp[2])
         lambda_sq_dim = get_param_dimensionless(lambda_sq, sw_fourier_amp1=sw_fourier_amp[1],
-                                                sw_fourier_amp2=sw_fourier_amp[2], lambda_const=lambda_const)
+                                                sw_fourier_amp2=sw_fourier_amp[2], lambda_const=lambda_const) * np.sign(sw_fourier_amp[2])
 
         # Combine to form other dimensionless factors
         alpha_1 = lambda_sq_dim / (1 - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
