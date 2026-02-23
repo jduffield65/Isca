@@ -3,8 +3,10 @@ import numpy as np
 import xarray as xr
 import inspect
 from typing import Union, Literal, Optional, Tuple, List
+import itertools
 
-from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw
+from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw, \
+    name_square, name_nl
 from isca_tools.utils import numerical
 from tqdm.notebook import tqdm
 
@@ -18,7 +20,6 @@ from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
-
 
 # Plotting info
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
@@ -46,12 +47,13 @@ style_map = {
     "net": ("k", "-", "Sum"),
 }
 
+# Order reflects the order of vars in get_sensitivity - important for nonlinear combinations
 style_map_var = {'temp_surf': ("C1", "-", "$T_s$", "K"),
                  'temp_diseqb': ("C3", "-", "$T_{dq}$", "K"),
-                 'temp_diseqb_r': ("C0", "-", "$T_{dq_r}$", "K"),
                  'rh_atm': ('C0', "-", "$r_a$", "Unitless"),
                  'w_atm': ('C2', '-', '$U_a$', "ms$^{-1}$"),
-                 'p_surf': ('C4', '-', '$p_s$', "Pa")}
+                 'p_surf': ('C4', '-', '$p_s$', "Pa"),
+                 'temp_diseqb_r': ("C0", "-", "$T_{dq_r}$", "K")}
 
 # General info
 smooth_n_days = 50  # default smoothing window in days
@@ -112,7 +114,6 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
         exp_name = [exp_dir(5, reduced_evap), exp_dir(20)]
     else:
         raise ValueError('Depth must be either 5 or 20 or "both"')
-
 
     # Get low level sigma level
     namelist = load_namelist(exp_name[0])
@@ -252,7 +253,7 @@ def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
                      time_end: Optional[float] = None,
                      deg_phase_calc: int = 10, resample: bool = resample,
                      include_phase: bool = True, include_fourier: bool = False,
-                     integ_method: str = 'spline', coef0: Optional[float]=None) -> xr. DataArray:
+                     integ_method: str = 'spline', coef0: Optional[float] = None) -> xr.DataArray:
     """
     Applying `polyfit_phase` to xarray.
     Will always return atleast 6 values across `deg` dimension: [phase, cos, sin, 2, 1, 0].
@@ -491,7 +492,7 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
                         time_dim: str = 'time', ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.Dataset]:
     reconstruct_flux = {'lh': reconstruct_lh, 'sh': reconstruct_sh, 'lw': reconstruct_lw}[flux_name]
     arg_names = list(inspect.signature(reconstruct_flux).parameters.keys())
-    arg_names = [key for key in arg_names if key!='numerical']      # treat numerical as kwarg
+    arg_names = [key for key in arg_names if key != 'numerical']  # treat numerical as kwarg
     input_core_dims = [[] if (('_ref' in arg) or (arg in ['sigma_atm'])) else [time_dim] for arg in
                        arg_names]
     output_core_dims = [[], [time_dim], [time_dim], []]
@@ -500,8 +501,8 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
 
     if flux_name == 'lh':
         # Add time dimension to drag and evap, as don't have initially
-        drag_coef = ds.temp_surf*0 + ds_ref.drag_coef
-        evap_prefactor = ds.temp_surf*0 + ds_ref.evap_prefactor
+        drag_coef = ds.temp_surf * 0 + ds_ref.drag_coef
+        evap_prefactor = ds.temp_surf * 0 + ds_ref.evap_prefactor
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
             reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_diseqb, ds_ref.rh_atm, ds_ref.w_atm, ds_ref.drag_coef,
                                   ds_ref.p_surf, ds_ref.sigma_atm, ds_ref.evap_prefactor,
@@ -509,14 +510,14 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
                                   evap_prefactor, numerical=numerical)
     elif flux_name == 'sh':
         # Add time dimension to drag, as don't have initially
-        drag_coef = ds.temp_surf*0 + ds_ref.drag_coef
+        drag_coef = ds.temp_surf * 0 + ds_ref.drag_coef
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
             reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_diseqb, ds_ref.w_atm, ds_ref.drag_coef,
                                   ds_ref.p_surf, ds_ref.sigma_atm, ds.temp_surf, ds.temp_diseqb,
                                   ds.w_atm, drag_coef, ds.p_surf, numerical=numerical)
     elif flux_name == 'lw':
         # Add time dimension to odp_surf, as don't have initially
-        odp_surf = ds.temp_surf*0 + ds_ref.odp_surf
+        odp_surf = ds.temp_surf * 0 + ds_ref.odp_surf
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
             reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_diseqb, ds_ref.temp_diseqb_r, ds_ref.odp_surf,
                                   ds.temp_surf, ds.temp_diseqb, ds.temp_diseqb_r, odp_surf, numerical=numerical)
@@ -524,3 +525,145 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
         raise ValueError(f'Unknown flux_name="{flux_name}". Must be one of "lh", "sh", "lw".')
     info_cont = xr.Dataset(convert_ds_of_dicts(info_cont, ds.time, 'time'))
     return flux_ref, flux_anom_linear, flux_anom_nl, info_cont
+
+
+def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
+                          time_dim: str = 'time', deg=2,
+                          include_phase=True, include_fourier=True,
+                          get_nl: bool = True,
+                          error_kind: Literal['mean', 'median', 'max'] = "mean",
+                          error_norm: bool = True,
+                          error_norm_dim: Optional[Union[str, list]] = 'lat'
+                          ) -> Tuple[xr.Dataset, xr.Dataset, xr.Dataset, xr.Dataset]:
+    """Fit an empirical relationship between a reference driver and all time-varying variables in `ds`.
+
+    This routine builds an empirical (polynomial-in-amplitude) model for each variable's
+    *anomaly* as a function of a chosen driver variable (by default, surface temperature).
+    The driver is centered by removing its time mean, and each target variable is regressed
+    onto this centered driver using `polyfit_phase_xr`. The fitted parameters are then used
+    to reconstruct an "empirical" version of each variable via `polyval_phase_xr`, and an
+    error metric is computed between the true and empirical fields.
+
+    Optionally, it also fits non-linear "mechanism" terms:
+    - Square terms for each variable: $(X - \\bar{X})^2$
+    - Pairwise product terms between variables: $(X_1 - \\bar{X}_1)(X_2 - \\bar{X}_2)$
+    where the reference state is taken from the fitted degree-0 coefficient (and for the
+    driver, from its time mean).
+
+    Args:
+        ds:
+            Dataset containing the driver and the variables to be fitted.
+            Variables to be fitted must include `time_dim` in their dimensions.
+        key_use:
+            Name of the driver variable used as the predictor (default `'temp_surf'`).
+            The predictor used in fitting is
+            `x = ds[key_use] - ds[key_use].mean(dim=time_dim)`.
+        time_dim:
+            Name of the time dimension (default `'time'`).
+        deg:
+            Polynomial degree used in `polyfit_phase_xr` (default `2`).
+            This is passed through to `polyfit_phase_xr` and controls the number of
+            fitted coefficients/terms.
+        include_phase:
+            Passed to `polyfit_phase_xr`/`polyval_phase_xr`. Intended for fits that
+            separate in-phase and out-of-phase (or similar) components.
+        include_fourier:
+            Passed to `polyfit_phase_xr`/`polyval_phase_xr`. Intended for augmenting
+            the fit with Fourier components (e.g., seasonal harmonics).
+        get_nl:
+            If True, additionally fit non-linear mechanism terms (squares and pairwise
+            products) using the same predictor `x`.
+        error_kind:
+            Summary statistic used by `get_error` to reduce the mismatch over `time_dim`.
+            One of `'mean'`, `'median'`, or `'max'`.
+        error_norm:
+            Whether `get_error` returns a normalized error (implementation defined in
+            `get_error`).
+        error_norm_dim:
+            Dimension(s) used for normalization inside `get_error` (implementation defined
+            in `get_error`).
+
+    Returns:
+        var_ref:
+            Dataset of reference (baseline) states for each variable.
+            For fitted variables, this is taken as the degree-0 coefficient from the fit
+            (`params[key].sel(deg='0')`); for the driver (`key_use`) it is the time mean;
+            and for variables without `time_dim` it is copied directly from `ds`.
+        params:
+            Dataset of fitted parameters for each variable produced by `polyfit_phase_xr`.
+            Includes additional keys for non-linear mechanisms when `get_nl=True`:
+            `name_square(key)` and `name_nl(var1, var2)`.
+        var_empirical:
+            Dataset of empirical reconstructions for each fitted variable (and mechanism term),
+            evaluated at the full time series of the driver anomaly `x`.
+        error:
+            Dataset of per-variable error metrics comparing truth and empirical reconstructions,
+            computed with `get_error`.
+
+    Notes:
+        - Variables are only fitted if they are not `key_use` and they include `time_dim`
+          in their dimensions.
+        - The list/order of variables used in the pairwise non-linear fits is controlled by
+          `style_map_var` (assumed to be defined externally); combinations are computed with
+          `itertools.combinations(style_map_var, 2)`.
+        - For non-linear mechanism fits, the constant coefficient is forced to zero
+          (`coef0=0`) to match a Taylor-series-style interpretation around the reference state.
+
+    """
+    # Check has expected keys
+    if not all(key in ds for key in style_map_var):
+        print(f"Not all keys in {list(style_map_var.keys())} are present in the dataset.")
+
+    params = {}
+    var_ref = {}
+    var_empirical = {}
+    error = {}
+    x = ds[key_use] - ds[key_use].mean(dim=time_dim)
+    for key in ds:
+        if (key == key_use) or (time_dim not in ds[key].dims):
+            continue
+        params[key] = polyfit_phase_xr(x, ds[key], deg=deg,
+                                       include_phase=include_phase, include_fourier=include_fourier)
+        var_empirical[key] = polyval_phase_xr(params[key], x)
+        error[key] = get_error(ds[key], var_empirical[key], error_kind, error_norm, time_dim, error_norm_dim)
+        var_ref[key] = params[key].sel(deg='0')
+
+    # Reference state is where all empirical params are zero and temp_surf=temp_surf_av; equivalent to deg=0 value here.
+    var_ref[key_use] = ds[key_use].mean(dim=time_dim)
+    # Add variables in ds with no time dimension
+    for key in ds:
+        if time_dim not in ds[key].dims:
+            var_ref[key] = ds[key]
+    var_ref = xr.Dataset(var_ref)
+
+    if get_nl:
+        # Square mechanism
+        for key in ds:
+            if (key == key_use) or (time_dim not in ds[key].dims):
+                continue
+            # Do fitting for square cont separately - more complicated that just squaring the individual params
+            # Force const to be 0, as expected from taylor series point of view
+            # Note that not using ds_av but the deg=0 coef found which is ds_empirical_ref
+            params[name_square(key)] = polyfit_phase_xr(x, (ds[key] - var_ref[key]) ** 2, deg=deg,
+                                                        include_phase=include_phase,
+                                                        include_fourier=include_fourier,
+                                                        coef0=0)
+            var_empirical[name_square(key)] = polyval_phase_xr(params[name_square(key)], x)
+            error[name_square(key)] = get_error((ds[key] - var_ref[key]) ** 2, var_empirical[name_square(key)],
+                                                error_kind, error_norm, time_dim, error_norm_dim)
+
+        # Combination of mechanisms
+        # Order important hence use style_map_var
+        for var1, var2 in itertools.combinations(style_map_var, 2):
+            # Force const to be 0, as expected from taylor series point of view
+            var = (ds[var1] - var_ref[var1]) * (ds[var2] - var_ref[var2])
+            params[name_nl(var1, var2)] = polyfit_phase_xr(x, var,
+                                                           deg=deg, include_phase=include_phase,
+                                                           include_fourier=include_fourier, coef0=0)
+            var_empirical[name_nl(var1, var2)] = polyval_phase_xr(params[name_nl(var1, var2)], x)
+            error[name_nl(var1, var2)] = get_error(var, var_empirical[name_nl(var1, var2)],
+                                                   error_kind, error_norm, time_dim, error_norm_dim)
+    params = xr.Dataset(params)
+    var_empirical = xr.Dataset(var_empirical)
+    error = xr.Dataset(error)
+    return var_ref, params, var_empirical, error
