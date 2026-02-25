@@ -65,7 +65,7 @@ def fourier_series_deriv(time: np.ndarray, coefs_amp: Union[np.ndarray, List[flo
 
 
 def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
-                     integ_method: str = 'spline') -> [Union[float, Tuple[float, float]]]:
+                     integ_method: str = 'spline', pos_amp: bool = False) -> [Union[float, Tuple[float, float]]]:
     """
     This calculates the analytic solution for the amplitude and phase coefficients for the `n`th harmonic
     [🔗](https://www.bragitoff.com/2021/05/fourier-series-coefficients-and-visualization-python-program/)
@@ -80,6 +80,9 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
             Otherwise, will return an amplitude and phase coefficient.
         integ_method: How to perform the integration.</br>
             If `spline`, will fit a spline and then integrate the spline, otherwise will use `scipy.integrate.simpson`.
+        pos_amp: If `True`, amplitude coefficient will always be positive with `phase_coef` in $[-\pi, \pi]$,
+            Otherwise will choose the sign of `amp_coef` to minimize the magnitude of `phase_coef`
+            i.e., keep `phase_coef` in range between $[-\pi/2, \pi/2]$.
     Returns:
         `amp_coef`: The amplitude fourier coefficient $F_n$.
         `phase_coef`: The phase fourier coefficient $\\Phi_n$. Will not return if $n=0$.
@@ -111,9 +114,8 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
             cos_coef = 2/period * scipy.integrate.simpson(var * np.cos(2*n*np.pi*time/period), time)
             sin_coef = 2/period * scipy.integrate.simpson(var * np.sin(2*n*np.pi*time/period), time)
         # constants for Acos(t-phi) form
-        phase_coef = np.arctan(sin_coef/cos_coef)
-        amp_coef = cos_coef / np.cos(phase_coef)
-        return amp_coef, phase_coef
+        # use arctan2 not arctan as more robust (quadrant aware), always keeps amp positive
+        return coef_conversion(cos_coef=cos_coef, sin_coef=sin_coef, pos_amp=pos_amp)
 
 
 def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
@@ -159,7 +161,8 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
 def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
                     phase_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
                     cos_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
-                    sin_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None
+                    sin_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
+                    pos_amp: bool = False
                     ) -> Tuple[Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
     """
     The term for the $n^{th}$ harmonic of a Fourier expansion can be written in two ways:
@@ -179,6 +182,9 @@ def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] =
             $F_{n, cos}$ coefficients. If provided, will return $F_{n}$ and $\Phi_n$.
         sin_coef: `float [n_coefs]`</br>
             $F_{n, sin}$ coefficients. If provided, will return $F_{n}$ and $\Phi_n$.
+        pos_amp: If pos_amp=True: amp_coef >= 0, phase in ($[-\pi, \pi]$ (via atan2).
+            If pos_amp=False: allow signed amp_coef and shift phase by +/-pi so that
+            phase is constrained to $[-\pi/2, \pi/2]$ (minimize |phase|).
 
     Returns:
         coef1: `float [n_coefs]`</br>
@@ -187,16 +193,21 @@ def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] =
             Either $\Phi_n$ or $F_{n, sin}$ depending on input.
     """
     if amp_coef is not None:
+        # amp/phase -> cos/sin (sign convention is already encoded in amp/phase)
         cos_coef = amp_coef * np.cos(phase_coef)
         sin_coef = amp_coef * np.sin(phase_coef)
         return  cos_coef, sin_coef
     else:
-        if cos_coef == 0:
-            phase_coef = np.pi/2
-            amp_coef = sin_coef
-        else:
-            phase_coef = np.arctan(sin_coef/cos_coef)
-            amp_coef = cos_coef / np.cos(phase_coef)
+        phase_coef = np.arctan2(sin_coef, cos_coef)     # robust quadrant-aware phase
+        amp_coef = np.sqrt(sin_coef**2 + cos_coef**2)   # nonnegative amplitude
+        if not pos_amp:
+            # Flip sign to keep phase in [-pi/2, pi/2]
+            # (works for scalars, numpy arrays, and xarray DataArray via broadcasting)
+            over = phase_coef > (0.5 * np.pi)
+            under = phase_coef < (-0.5 * np.pi)
+
+            phase_coef = phase_coef - np.pi * over + np.pi * under
+            amp_coef = amp_coef * (1.0 - 2.0 * (over | under))
         return amp_coef, phase_coef
 
 # These functions find the fourier fit numerically

@@ -215,6 +215,7 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
     if smooth_n_days is not None and smooth_n_days > 1:
         ds = ds.rolling(time=int(smooth_n_days), center=smooth_center).mean()
     ds_av = annual_mean(ds).mean(dim='lon')
+    # ds_av = annual_mean(ds.mean(dim='lon'))           # order does not matter, I checked gives same result
 
     if combine_abs_lat:
         if lat_name not in ds_av.dims:
