@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 import inspect
-from typing import Union, Literal, Optional, Tuple, List
+from typing import Union, Literal, Optional, Tuple, List, Callable
 import itertools
 
 from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw, \
@@ -445,10 +445,13 @@ def update_ds_extrema(ds: xr.Dataset, time: xr.DataArray, temp: xr.DataArray, fi
         ds = update_dim_slice(ds, 'fit_method', fit_method, var[i], key)
     return ds
 
+def get_weights(ds: Union[xr.DataArray, xr.Dataset]) -> xr.DataArray:
+    return np.cos(np.deg2rad(ds.lat))
 
 def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'median', 'max'] = "mean",
               norm: bool = True, dim: Union[str, list] = "time",
-              norm_dim: Optional[Union[str, list]] = 'lat') -> xr.DataArray:
+              norm_dim: Optional[Union[str, list]] = 'lat',
+              norm_weight: Optional[Union[Callable, xr.DataArray]] = None) -> xr.DataArray:
     """Compute an absolute-error summary between two DataArrays.
 
     Args:
@@ -461,6 +464,8 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
         dim: Dimension name(s) to reduce over. Defaults to "time".
         norm_dim: Dimension name(s) to average normalizing factor over.
             By default, `norm_dim=lat` so that have a single normalization factor for each mixed layer depth.
+        norm_weight: Weighting for normalization over `norm_dim`. If function, only argument must be `x`.
+            By default will do area weighted average if `norm_dim` is latitude.
 
     Returns:
         DataArray of the reduced absolute error (and optionally normalized), with
@@ -484,7 +489,14 @@ def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'me
     if norm:
         scale = (x.max(dim=dim) - x.min(dim=dim)) / 100  # /100 so turn to percentage
         if norm_dim is not None:
-            scale = scale.mean(dim=norm_dim)
+            if norm_weight is None:
+                scale = scale.mean(dim=norm_dim)
+            else:
+                if isinstance(norm_weight, Callable):
+                    norm_weight_use = norm_weight(x)
+                else:
+                    norm_weight_use = norm_weight
+                scale = scale.weighted(norm_weight_use).mean(dim=norm_dim)
         out = out / scale
 
     return out

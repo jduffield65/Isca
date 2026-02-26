@@ -918,3 +918,58 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
     else:
         temp_fourier = fourier.fourier_series(time, temp_fourier_amp, temp_fourier_phase)
     return temp_fourier, temp_fourier_amp, temp_fourier_phase, sw_fourier_amp, sw_fourier_phase
+
+
+def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
+                          coef_phase: Union[float, np.ndarray, xr.DataArray],
+                          to_time: bool = True
+                          ) -> Tuple[Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
+    """
+    Method to convert between interpretation of phase empirical coefficients. If `to_time=True`, expect
+    input to be $\lambda$ and $\lambda_{ph}$, and will return
+    $\lambda_{mod}$, and $2\pi ft_{ph}$. If `to_time=False`, expect the opposite.
+
+    Conversion performed according to:
+
+    \\begin{align}
+        \lambda &= \lambda_{\\text{mod}}\cos(2 \pi ft_{\\text{ph}})
+        \\\\
+        \lambda_{\\text{ph}} &= \lambda_{\\text{mod}}\sin(2 \pi ft_{\\text{ph}})
+    \end{align}
+
+    Args:
+        coef_linear:
+            Cosine/linear-amplitude coefficient associated with the in-phase component.
+            If ``to_time=True`` this is interpreted as \(\lambda\); if ``to_time=False`` this is
+            interpreted as \(\lambda_{\mathrm{mod}}\).
+            Can be a scalar, ``numpy.ndarray``, or ``xarray.DataArray``.
+        coef_phase:
+            Phase-related coefficient.
+            If ``to_time=True`` this is interpreted as \(\lambda_{\mathrm{ph}}\) (sine coefficient);
+            if ``to_time=False`` this is interpreted as the phase angle \(2\pi f t_{\mathrm{ph}}\)
+            (radians) used inside \(\cos(\cdot)\) / \(\sin(\cdot)\).
+            Can be a scalar, ``numpy.ndarray``, or ``xarray.DataArray``.
+        to_time:
+            Direction of conversion.
+            If ``True``, convert \((\lambda,\lambda_{\mathrm{ph}})\\rightarrow
+            (\lambda_{\mathrm{mod}},2\pi f t_{\mathrm{ph}})\).
+            If ``False``, convert \((\lambda_{\mathrm{mod}},2\pi f t_{\mathrm{ph}})
+            \\rightarrow (\lambda,\lambda_{\mathrm{ph}})\).
+
+    Returns:
+        coef_linear_out:
+            Output amplitude coefficient, same container type as inputs.
+            Interpreted as \(\lambda_{\mathrm{mod}}\) if ``to_time=True``; otherwise \(\lambda\).
+        coef_phase_out:
+            Output phase quantity, same container type as inputs.
+            Interpreted as \(2\pi f t_{\mathrm{ph}}\) (radians) if ``to_time=True``; otherwise
+            \(\lambda_{\mathrm{ph}}\).
+    """
+    if to_time:
+        coef_linear_out, coef_phase_out = fourier.coef_conversion(sin_coef=coef_phase, cos_coef=coef_linear)
+        # if freq is not None:
+        #     coef_phase_out = coef_phase_out / (2 * np.pi * freq)  # convert to seconds
+    else:
+        coef_linear_out = coef_linear * np.cos(coef_phase)
+        coef_phase_out = coef_linear * np.sign(coef_phase)
+    return coef_linear_out, coef_phase_out
