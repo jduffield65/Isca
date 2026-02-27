@@ -922,7 +922,10 @@ def get_temp_fourier(time: np.ndarray, swdn: np.ndarray, heat_capacity: float,
 
 def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
                           coef_phase: Union[float, np.ndarray, xr.DataArray],
-                          to_time: bool = True
+                          to_time: bool = True,
+                          pos_amp: bool = False,
+                          neg_amp: bool = False,
+                          take_linear_sign: bool = True
                           ) -> Tuple[Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
     """
     Method to convert between interpretation of phase empirical coefficients. If `to_time=True`, expect
@@ -955,6 +958,15 @@ def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
             (\lambda_{\mathrm{mod}},2\pi f t_{\mathrm{ph}})\).
             If ``False``, convert \((\lambda_{\mathrm{mod}},2\pi f t_{\mathrm{ph}})
             \\rightarrow (\lambda,\lambda_{\mathrm{ph}})\).
+        pos_amp:
+            Only makes a difference if `to_time=True`.</br>
+            If pos_amp=True: amp_coef >= 0, phase in ($[-pi, pi]$ (via atan2).
+            If pos_amp=False: allow signed amp_coef and shift phase by +/-pi so that phase
+            is constrained to $[-pi/2, pi/2]$ (minimize |phase|).
+        neg_amp: Force amplitude to be negative.
+        take_linear_sign:
+            Only makes a difference if `to_time=True`.</br>
+            If `True`, will make coef_linear_out the same sign as coef_linear.
 
     Returns:
         coef_linear_out:
@@ -966,7 +978,9 @@ def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
             \(\lambda_{\mathrm{ph}}\).
     """
     if to_time:
-        coef_linear_out, coef_phase_out = fourier.coef_conversion(sin_coef=coef_phase, cos_coef=coef_linear)
+        coef_linear_out, coef_phase_out = fourier.coef_conversion(sin_coef=coef_phase, cos_coef=coef_linear,
+                                                                  pos_amp=pos_amp, take_cos_sign=take_linear_sign,
+                                                                  neg_amp=neg_amp)
         # if freq is not None:
         #     coef_phase_out = coef_phase_out / (2 * np.pi * freq)  # convert to seconds
     else:

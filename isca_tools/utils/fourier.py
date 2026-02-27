@@ -162,7 +162,9 @@ def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] =
                     phase_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
                     cos_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
                     sin_coef: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
-                    pos_amp: bool = False
+                    pos_amp: bool = False,
+                    neg_amp: bool = False,
+                    take_cos_sign: bool = False
                     ) -> Tuple[Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
     """
     The term for the $n^{th}$ harmonic of a Fourier expansion can be written in two ways:
@@ -185,6 +187,9 @@ def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] =
         pos_amp: If pos_amp=True: amp_coef >= 0, phase in ($[-\pi, \pi]$ (via atan2).
             If pos_amp=False: allow signed amp_coef and shift phase by +/-pi so that
             phase is constrained to $[-\pi/2, \pi/2]$ (minimize |phase|).
+        neg_amp: Force amplitude to be negative.
+        take_cos_sign:
+            Will make amp_coef take sign of provided cos_coef.
 
     Returns:
         coef1: `float [n_coefs]`</br>
@@ -200,7 +205,25 @@ def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] =
     else:
         phase_coef = np.arctan2(sin_coef, cos_coef)     # robust quadrant-aware phase
         amp_coef = np.sqrt(sin_coef**2 + cos_coef**2)   # nonnegative amplitude
-        if not pos_amp:
+        if take_cos_sign:
+            # make amplitude signed to match cos_coef
+            sgn = np.where(cos_coef < 0, -1.0, 1.0)
+            amp_coef = amp_coef * sgn
+
+            # compensate phase where we flipped the sign
+            phase_coef = phase_coef + (sgn < 0) * np.pi
+
+            # optional: wrap to [-pi, pi)
+            phase_coef = (phase_coef + np.pi) % (2 * np.pi) - np.pi
+        elif neg_amp:
+            amp_coef = -amp_coef  # force negative amplitude
+
+            # keep the same modeled signal by shifting phase by pi
+            phase_coef = phase_coef + np.pi
+
+            # optional: wrap back to [-pi, pi)
+            phase_coef = (phase_coef + np.pi) % (2 * np.pi) - np.pi
+        elif not pos_amp:
             # Flip sign to keep phase in [-pi/2, pi/2]
             # (works for scalars, numpy arrays, and xarray DataArray via broadcasting)
             over = phase_coef > (0.5 * np.pi)
