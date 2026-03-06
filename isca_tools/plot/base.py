@@ -242,3 +242,46 @@ def colored_line(x: np.ndarray, y: np.ndarray, c: np.ndarray, ax: plt.Axes, **lc
     ax.add_collection(lc)
     ax.autoscale_view()         # update axis limits
     return lc
+
+def line_masked_lw(
+    ax: plt.Axes,
+    x: np.ndarray,
+    y: np.ndarray,
+    mask: np.ndarray,
+    lw_main: float=2.0,
+    lw_masked: float=0.5,
+    color: str="k",
+):
+    """Plot a line with segment-wise linewidth set by a mask.
+
+    Args:
+        ax: Matplotlib axes to plot on.
+        x: 1D x coordinates.
+        y: 1D y coordinates.
+        mask: Boolean array controlling thin segments. This should have
+            length ``len(x) - 1`` so it applies to line segments.
+        lw_main: Linewidth for unmasked segments.
+        lw_masked: Linewidth for masked segments.
+        color: Line color.
+
+    Returns:
+        LineCollection added to the axes.
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    mask = np.asarray(mask, dtype=bool)
+
+    points = np.column_stack([x, y])
+    segments = np.stack([points[:-1], points[1:]], axis=1)
+
+    linewidths = np.where(mask, lw_masked, lw_main)
+
+    lc = LineCollection(
+        segments,
+        colors=color,
+        linewidths=linewidths,
+        capstyle="round",
+    )
+    ax.add_collection(lc)
+    ax.autoscale()
+    return lc
