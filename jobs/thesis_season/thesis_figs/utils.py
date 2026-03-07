@@ -53,7 +53,7 @@ style_map_var = {'temp_surf': ("C3", "-", "$T_s$", "K"),
                  'temp_diseqb': ("C1", "-", "$T_{dq}$", "K"),
                  'rh_atm': ('C2', "-", "$r_a$", "Unitless"),
                  'w_atm': ('C0', '-', '$U_a$', "ms$^{-1}$"),
-                 'p_surf': ('C4', '-', '$p_s$', "Pa"),
+                 'p_surf': ('C5', '-', '$p_s$', "Pa"),
                  'temp_diseqb_r': ("C4", "-", "$T_{dqr}$", "K")}
 
 style_map_var_nl = {name_nl('temp_surf', 'w_atm'): ("C0", '--', '$T_sU_a$')}
