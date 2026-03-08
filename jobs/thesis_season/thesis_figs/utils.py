@@ -39,8 +39,8 @@ style_map = {
     "direct5": ("C3", "-", "Direct"),
     "linear": ("C0", ":", "Linear"),
     "linear_phase": ("C0", "--", "Linear-phase"),
-    "square_phase": ("C1", "-.", "Square-phase"),
-    "square_phase+": ("C1", "-", "Square-phase+"),
+    "square_phase": ("C0", "-.", "Square-phase"),
+    "square_phase+": ("C0", "-", "Square-phase+"),
     "poly10_phase+": ("C2", "-", "Poly10-phase+"),
     "lw": ("C1", "-", "$\\text{LW}^{\\uparrow}_{\\text{net}}$"),
     "lh": ("C0", ":", "LH$^{\\uparrow}$"),
@@ -56,7 +56,8 @@ style_map_var = {'temp_surf': ("C3", "-", "$T_s$", "K"),
                  'p_surf': ('C5', '-', '$p_s$', "Pa"),
                  'temp_diseqb_r': ("C4", "-", "$T_{dqr}$", "K")}
 
-style_map_var_nl = {name_nl('temp_surf', 'w_atm'): ("C0", '--', '$T_sU_a$')}
+style_map_var_nl = {name_nl('temp_surf', 'w_atm'): ("C0", '--', '$T_sU_a$'),
+                    name_square('temp_surf'): ("C3", "-", "$T_s$", "K")}
 
 # General info
 smooth_n_days = 50  # default smoothing window in days
