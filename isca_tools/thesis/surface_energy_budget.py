@@ -310,7 +310,6 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
                             heat_capacity: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
                             n_year_days: Optional[int]=None,
                             sw_fourier_amp1: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
-                            sw_fourier_amp2: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
                             lambda_const: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
                             day_seconds: float = 86400
                             ) -> Union[float, np.ndarray, xr.DataArray]:
@@ -320,10 +319,10 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
 
     * If provide `heat_capacity`, $C$, and `n_year_days`, $\mathcal{T}$, then will assume `var` is $\lambda$ or
     $\lambda_{phase}$. Will return $\lambda' = \\frac{\lambda}{2\pi fC}$ where $f=1/\mathcal{T}$.
-    * If provide `sw_fourier_amp1`, $F_1$, `sw_fourier_amp2`, $F_2$, and `lambda_const`, $\lambda$, then will
-    assume `var` is $\lambda_{sq}$. Will return $\lambda_{sq}' = \\frac{\lambda_{sq}F_1^2}{2\lambda^2F_2}$.
-    * If provide `sw_fourier_amp2`, $F_2$, only then will assume `var` is $\Lambda_{cos}$ or $\Lambda_{sin}$:
-    $\Lambda_{cos}' = \Lambda_{cos}/F_2$.
+    * If provide `sw_fourier_amp1`, $F_1$ and `lambda_const`, $\lambda$, then will
+    assume `var` is $\lambda_{sq}$. Will return $\lambda_{sq}' = \\frac{\lambda_{sq}F_1}{2\lambda^2}$.
+    * If provide `sw_fourier_amp1`, $F_2$, only then will assume `var` is $\Lambda_{cos}$ or $\Lambda_{sin}$:
+    $\Lambda_{cos}' = \Lambda_{cos}/F_1$.
 
     Args:
         var: Parameter to make dimensionless.
@@ -332,7 +331,6 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
             [`get_heat_capacity`](../utils/radiation.md#isca_tools.utils.radiation.get_heat_capacity).
         n_year_days: Number of days in the year.
         sw_fourier_amp1: The first harmonic amplitude Fourier coefficient for shortwave radiation, $F_1$.
-        sw_fourier_amp2: The second harmonic amplitude Fourier coefficients for shortwave radiation, $F_2$.
         lambda_const: The linear constant $\lambda$ used in the approximation for
             $\Gamma^{\\uparrow}. In normal form with units of Wm$^{-2}$K$^{-1}$.
         day_seconds: Duration of a day in seconds.
@@ -346,12 +344,12 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
         # lambda_phase or lambda_const
         f = 1/(n_year_days * day_seconds)
         var = var / (2*np.pi*f*heat_capacity)
-    elif (sw_fourier_amp1 is not None) and (sw_fourier_amp2 is not None) and (lambda_const is not None):
+    elif (sw_fourier_amp1 is not None) and (lambda_const is not None):
         # lambda_sq
-        var = var * sw_fourier_amp1**2 / (2 * lambda_const ** 2 * np.abs(sw_fourier_amp2))
-    elif sw_fourier_amp2 is not None:
+        var = var / (2 * lambda_const ** 2) * sw_fourier_amp1
+    elif lambda_const is None:
         # lambda_cos and lambda_sin
-        var = var/np.abs(sw_fourier_amp2)
+        var = var/sw_fourier_amp1
     else:
         raise ValueError("Combination of parameters provided not correct for any parameter")
     return var
@@ -407,11 +405,12 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
 
     where we use the following dimensionless parameters:
 
-    * $\Lambda_{cos}' = \Lambda_{cos}/F_2$
-    * $\Lambda_{sin}' = \Lambda_{sin}/F_2$
-    * $\lambda_{sq}' = \\frac{\lambda_{sq}F_1^2}{2\lambda^2F_2}$
-    * $\\alpha_1 = \\frac{\lambda_{sq}'}{1-\Lambda_{cos}'}\\frac{1-\\tan^2(\phi_1)}{(1+\\tan^2(\phi_1))^2}$
-    * $\\alpha_2 = \\frac{\Lambda_{sin}'}{1-\Lambda_{cos}'} + \\frac{2\lambda_{sq}'}{1-\Lambda_{cos}'}\\frac{\\tan(\phi_1)}{(1+\\tan^2(\phi_1))^2}$
+    * $\Lambda_{cos}' = \Lambda_{cos}/F_1$
+    * $\Lambda_{sin}' = \Lambda_{sin}/F_1$
+    * $\lambda_{sq}' = \\frac{\lambda_{sq}F_1}{2\lambda^2}$
+    * $\\alpha_1 = \\frac{\lambda_{sq}'}{\\frac{F_2}{F_1}-\Lambda_{cos}'}\\frac{1-\\tan^2(\phi_1)}{(1+\\tan^2(\phi_1))^2}$
+    * $\\alpha_2 = \\frac{\Lambda_{sin}'}{\\frac{F_2}{F_1}-\Lambda_{cos}'} +
+        \\frac{2\lambda_{sq}'}{\\frac{F_2}{F_1}-\Lambda_{cos}'}\\frac{\\tan(\phi_1)}{(1+\\tan^2(\phi_1))^2}$
 
     Args:
         time: `float [n_time]`</br>
@@ -472,23 +471,24 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
 
     # 2nd Harmonic - not exact if lambda_sq!=0, as approx T^2 given by first harmonic squared only
     if n_harmonics == 2:
+        sw_amp_ratio = sw_fourier_amp[2]/sw_fourier_amp[1]
         # Put empirical params in dimensionless form
-        lambda_cos_dim = get_param_dimensionless(lambda_cos, sw_fourier_amp2=sw_fourier_amp[2]) * np.sign(sw_fourier_amp[2])
-        lambda_sin_dim = get_param_dimensionless(lambda_sin, sw_fourier_amp2=sw_fourier_amp[2]) * np.sign(sw_fourier_amp[2])
+        lambda_cos_dim = get_param_dimensionless(lambda_cos, sw_fourier_amp1=sw_fourier_amp[1])
+        lambda_sin_dim = get_param_dimensionless(lambda_sin, sw_fourier_amp1=sw_fourier_amp[1])
         lambda_sq_dim = get_param_dimensionless(lambda_sq, sw_fourier_amp1=sw_fourier_amp[1],
-                                                sw_fourier_amp2=sw_fourier_amp[2], lambda_const=lambda_const) * np.sign(sw_fourier_amp[2])
+                                                lambda_const=lambda_const)
 
         # Combine to form other dimensionless factors
-        alpha_1 = lambda_sq_dim / (1 - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
-        alpha_2 = lambda_sin_dim / (1 - lambda_cos_dim) + 2 * lambda_sq_dim / (1 - lambda_cos_dim) * tan_phase1 / (
+        alpha_1 = lambda_sq_dim / (sw_amp_ratio - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
+        alpha_2 = lambda_sin_dim / (sw_amp_ratio - lambda_cos_dim) + 2 * lambda_sq_dim / (sw_amp_ratio - lambda_cos_dim) * tan_phase1 / (
                 1 + tan_phase1 ** 2) ** 2
         phase_mod_factor = (1 - 1 / 2 / x * alpha_2 / (1 - alpha_1)) / (1 + 2 * x * (alpha_2 / (1 - alpha_1)))
-        amp_mod_factor = (1 - lambda_cos_dim) * (1 - alpha_1)
+        amp_mod_factor = (sw_amp_ratio - lambda_cos_dim) * (1 - alpha_1)
 
         # Combine usual phase and amp factors with modification factors
         tan_phase2 = 2 * x * phase_mod_factor
         temp_fourier_phase[2] = np.arctan(tan_phase2)
-        temp_fourier_amp[2] = sw_fourier_amp[2] / lambda_const * np.sqrt(1 + tan_phase2 ** 2) / (
+        temp_fourier_amp[2] = sw_fourier_amp[1] / lambda_const * np.sqrt(1 + tan_phase2 ** 2) / (
                     1 + 2 * x * tan_phase2) * amp_mod_factor
 
         # sw_amp2_eff = sw_fourier_amp[2]-lambda_cos
