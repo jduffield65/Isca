@@ -566,7 +566,8 @@ Union[float, np.ndarray]]:
 
 
 def get_temp_extrema_numerical(time: np.ndarray, temp: np.ndarray, smooth_window: int = 1,
-                               smooth_method: str = 'convolve') -> Tuple[float, float, float, float]:
+                               smooth_method: str = 'convolve',
+                               order: Literal['time', 'min', 'max'] = 'time') -> Tuple[float, float, float, float]:
     """
     Given the temperature `temp`, this will return the times and amplitudes of the maxima and minima. The extrema
     will be returned in time order i.e. if minima occurs first, it will be returned first.
@@ -581,12 +582,14 @@ def get_temp_extrema_numerical(time: np.ndarray, temp: np.ndarray, smooth_window
         smooth_method: `convolve` or `spline`</br>
             If `convolve`, will smooth via convolution with window of length `smooth_window`.
             If `spline`, will fit a spline using every `smooth_window` values of `time`.
+        order: If `time`, will return extrema in time order. If `min`, will return `min` first.
+            If `max` will return `max` first.
 
     Returns:
-        time_extrema1: Time in days of extrema to occur first
-        time_extrema2: Time in days of extrema to occur last
-        amp_extrema1: Absolute amplitude of extrema to occur first
-        amp_extrema2: Absolute amplitude of extrema to occur last
+        time_extrema1: Time in days of extrema to occur first (if `order='time'`)
+        time_extrema2: Time in days of extrema to occur last (if `order='time'`)
+        amp_extrema1: Absolute amplitude of extrema to occur first (if `order='time'`)
+        amp_extrema2: Absolute amplitude of extrema to occur last (if `order='time'`)
     """
     time_extrema = {}
     amp_extrema = {}
@@ -597,10 +600,15 @@ def get_temp_extrema_numerical(time: np.ndarray, temp: np.ndarray, smooth_window
         time_extrema[key] = var_use[0]
         amp_extrema[key] = np.abs(spline_use(time_extrema[key]))
     # Put output in time order
-    if time_extrema['min'] <= time_extrema['max']:
+    if order == 'min':
         return time_extrema['min'], time_extrema['max'], amp_extrema['min'], amp_extrema['max']
-    else:
+    elif order == 'max':
         return time_extrema['max'], time_extrema['min'], amp_extrema['max'], amp_extrema['min']
+    elif order == 'time':
+        if time_extrema['min'] <= time_extrema['max']:
+            return time_extrema['min'], time_extrema['max'], amp_extrema['min'], amp_extrema['max']
+        else:
+            return time_extrema['max'], time_extrema['min'], amp_extrema['max'], amp_extrema['min']
 
 
 def gamma_linear_approx(time: np.ndarray, temp: np.ndarray,
