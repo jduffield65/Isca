@@ -1,10 +1,14 @@
 import numpy as np
+
+from .surface_flux_taylor import name_nl
 from ..utils import fourier, numerical
 from scipy import optimize
 from scipy.interpolate import CubicSpline
 import warnings
 from typing import Optional, Tuple, Union, Literal
 import xarray as xr
+import itertools
+import copy
 
 
 def get_temp_fourier_numerical(time: np.ndarray, temp_anom: np.ndarray, gamma: np.ndarray,
@@ -307,10 +311,10 @@ def get_temp_fourier_analytic(time: np.ndarray, swdn_sfc: np.ndarray, heat_capac
 
 
 def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
-                            heat_capacity: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
-                            n_year_days: Optional[int]=None,
-                            sw_fourier_amp1: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
-                            lambda_const: Optional[Union[float, np.ndarray, xr.DataArray]]=None,
+                            heat_capacity: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
+                            n_year_days: Optional[int] = None,
+                            sw_fourier_amp1: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
+                            lambda_const: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
                             day_seconds: float = 86400
                             ) -> Union[float, np.ndarray, xr.DataArray]:
     """
@@ -342,14 +346,14 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
     # But in southern hemisphere, may be different with sw_fourier_amp2
     if (heat_capacity is not None) and (n_year_days is not None):
         # lambda_phase or lambda_const
-        f = 1/(n_year_days * day_seconds)
-        var = var / (2*np.pi*f*heat_capacity)
+        f = 1 / (n_year_days * day_seconds)
+        var = var / (2 * np.pi * f * heat_capacity)
     elif (sw_fourier_amp1 is not None) and (lambda_const is not None):
         # lambda_sq
         var = var / (2 * lambda_const ** 2) * sw_fourier_amp1
     elif lambda_const is None:
         # lambda_cos and lambda_sin
-        var = var/sw_fourier_amp1
+        var = var / sw_fourier_amp1
     else:
         raise ValueError("Combination of parameters provided not correct for any parameter")
     return var
@@ -471,7 +475,7 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
 
     # 2nd Harmonic - not exact if lambda_sq!=0, as approx T^2 given by first harmonic squared only
     if n_harmonics == 2:
-        sw_amp_ratio = sw_fourier_amp[2]/sw_fourier_amp[1]
+        sw_amp_ratio = sw_fourier_amp[2] / sw_fourier_amp[1]
         # Put empirical params in dimensionless form
         lambda_cos_dim = get_param_dimensionless(lambda_cos, sw_fourier_amp1=sw_fourier_amp[1])
         lambda_sin_dim = get_param_dimensionless(lambda_sin, sw_fourier_amp1=sw_fourier_amp[1])
@@ -480,8 +484,9 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
 
         # Combine to form other dimensionless factors
         alpha_1 = lambda_sq_dim / (sw_amp_ratio - lambda_cos_dim) * (1 - tan_phase1 ** 2) / (1 + tan_phase1 ** 2) ** 2
-        alpha_2 = lambda_sin_dim / (sw_amp_ratio - lambda_cos_dim) + 2 * lambda_sq_dim / (sw_amp_ratio - lambda_cos_dim) * tan_phase1 / (
-                1 + tan_phase1 ** 2) ** 2
+        alpha_2 = lambda_sin_dim / (sw_amp_ratio - lambda_cos_dim) + 2 * lambda_sq_dim / (
+                sw_amp_ratio - lambda_cos_dim) * tan_phase1 / (
+                          1 + tan_phase1 ** 2) ** 2
         phase_mod_factor = (1 - 1 / 2 / x * alpha_2 / (1 - alpha_1)) / (1 + 2 * x * (alpha_2 / (1 - alpha_1)))
         amp_mod_factor = (sw_amp_ratio - lambda_cos_dim) * (1 - alpha_1)
 
@@ -489,7 +494,7 @@ def get_temp_fourier_analytic2(time: np.ndarray, swdn_sfc: np.ndarray, heat_capa
         tan_phase2 = 2 * x * phase_mod_factor
         temp_fourier_phase[2] = np.arctan(tan_phase2)
         temp_fourier_amp[2] = sw_fourier_amp[1] / lambda_const * np.sqrt(1 + tan_phase2 ** 2) / (
-                    1 + 2 * x * tan_phase2) * amp_mod_factor
+                1 + 2 * x * tan_phase2) * amp_mod_factor
 
         # sw_amp2_eff = sw_fourier_amp[2]-lambda_cos
         # lambda_sin_eff = lambda_sin/sw_amp2_eff
@@ -995,3 +1000,91 @@ def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
         coef_linear_out = coef_linear * np.cos(coef_phase)
         coef_phase_out = coef_linear * np.sign(coef_phase)
     return coef_linear_out, coef_phase_out
+
+
+def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float, lambda_const: float,
+                            lambda_phase: float = 0, lambda_sq: float = 0, lambda_cos: float = 0,
+                            lambda_sin: float = 0, extrema_ind: Literal[1, 2] = 1,
+                            n_year_days: int = 360,
+                            day_seconds: float = 86400, numerical: bool = False) -> Tuple[float, float, dict, dict]:
+    f = 1 / (n_year_days * day_seconds)
+    x = float(2 * np.pi * f * heat_capacity / lambda_const)
+    # Get dimensionless parameters
+    param = {'phase': get_param_dimensionless(lambda_phase, heat_capacity=heat_capacity, n_year_days=n_year_days),
+             'square': get_param_dimensionless(lambda_sq, sw_fourier_amp1=sw_amp1, lambda_const=lambda_const),
+             'cos': get_param_dimensionless(lambda_cos, sw_fourier_amp1=sw_amp1),
+             'sin': get_param_dimensionless(lambda_sin, sw_fourier_amp1=sw_amp1),
+             'sw': sw_amp2 / sw_amp1}
+    x1 = x * (1 - param['phase'])
+
+    prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
+    coef = {'sw': prefactor * 4 * x * (x * (1 - param['phase']) ** 2 - param['phase']),
+            'square': prefactor * 4 * x,
+            'sin': prefactor * ((3 - param['phase']) * (1 + param['phase']) * x + 1)}
+    coef['cos'] = -coef['sw']
+    if extrema_ind == 1:
+        for key in coef:
+            coef[key] *= -1  # first harmonic, all coefficients take negative value
+    prefactor_nl = 16 * x / (1 + x1 ** 2) / (1 + 4 * x ** 2) ** 2
+    coef['nl_sw'] = prefactor_nl * ((3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1) * (
+            (1 - param['phase']) * x ** 2 - param['phase'])
+    coef['nl_square'] = -prefactor_nl
+    coef['nl_cos'] = coef['nl_sw']
+    coef[name_nl('sw', 'cos')] = -2*coef['nl_sw']
+
+    info_cont = {}
+    if not numerical:
+        for key in coef:
+            if key == name_nl('sw', 'cos'):
+                info_cont[key] = coef[key] * param['sw'] * param['cos']
+            elif 'nl' in key:
+                info_cont[key] = coef[key] * param[key.replace('nl_', '')] ** 2
+            else:
+                info_cont[key] = coef[key] * param[key]
+    else:
+        def get_y_extrema(param_sw=0, param_square=0, param_cos=0, param_sin=0):
+            # Solve dT/dt=0 explicitly
+            a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)
+            if extrema_ind == 1:
+                a_1 *= -1       # set negative for first extrema
+            sw_mod = param_sw - param_cos
+            # Use linear versions of a2 and a3 to stop issues with dividing by zero
+            # Also incredibly good approximation
+            prefactor = sw_amp1 / lambda_const / (1 + x1 ** 2) / (1 + 4 * x ** 2)
+            a_2 = prefactor * (
+                    sw_mod * (4 * x1 * x - x1 ** 2 + 1) - param_sin * 2 * (
+                        x * x1 ** 2 + x1 - x) - param_square)
+            a_3 = -2 * prefactor * (
+                    sw_mod * 2 * (x1 - x + x * x1 ** 2) + param_sin * (
+                    4 * x * x1 - x1 ** 2 + 1) + param_square * 2 * x)
+            dT_dt_func = lambda y: (a_1 * y - 4 * a_2 * y * np.sqrt(
+                1 - y ** 2) + a_3 * (1 - 2 * y ** 2))
+            y_extrema = optimize.least_squares(dT_dt_func, 0, bounds=(-1, 1))['x'][0]
+            return y_extrema
+
+        param_ref = {'param_sw': 0, 'param_square': 0, 'param_cos': 0, 'param_sin': 0}
+        for key in param_ref:
+            key_short = key.replace('param_', '')
+            # Initialize all variables as zero
+            param_use = copy.deepcopy(param_ref)
+            param_use[key] = param[key_short]
+            info_cont[key_short] = get_y_extrema(**param_use)
+        # Adds a nonlinear combination of mechanisms
+        # Get non-linear contributions where only two mechanisms are active - include all permutations
+        for key1, key2 in itertools.combinations(param_ref, 2):
+            key1_short = key1.replace('param_', '')
+            key2_short = key2.replace('param_', '')
+            param_use = copy.deepcopy(param_ref)
+            param_use[key1] = param[key1_short]
+            param_use[key2] = param[key2_short]
+            info_cont[name_nl(key1_short, key2_short)] = get_y_extrema(**param_use)
+            # Subtract the contribution from the linear mechanisms, so only non-linear contribution remains
+            info_cont[name_nl(key1_short, key2_short)] -= info_cont[key1_short] + info_cont[key2_short]
+
+
+    final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
+    final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
+    if numerical:
+        info_cont['nl_residual'] = get_y_extrema(param['sw'], param['square'], param['cos'], param['sin']
+                                                 ) - final_answer_nl
+    return final_answer_linear, final_answer_nl, info_cont, coef
