@@ -1018,7 +1018,7 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
     x1 = x * (1 - param['phase'])
 
     prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
-    coef = {'sw': prefactor * 4 * x * (x * (1 - param['phase']) ** 2 - param['phase']),
+    coef = {'sw': prefactor * 4 * x * (x**2 * (1 - param['phase']) ** 2 - param['phase']),
             'square': prefactor * 4 * x,
             'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x + 1)}
     coef['cos'] = -coef['sw']
