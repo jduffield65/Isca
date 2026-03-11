@@ -1111,7 +1111,8 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                             lambda_phase: float = 0, lambda_sq: float = 0, lambda_cos: float = 0,
                             lambda_sin: float = 0, extrema_ind: Literal[1, 2] = 1,
                             n_year_days: int = 360,
-                            day_seconds: float = 86400, numerical: bool = False) -> Tuple[float, float, dict, dict]:
+                            day_seconds: float = 86400, numerical: bool = False,
+                            approx_level: Optional[Literal['linear', 'linear_phase']] = None) -> Tuple[float, float, dict, dict]:
     f = 1 / (n_year_days * day_seconds)
     x = float(2 * np.pi * f * heat_capacity / lambda_const)
     # Get dimensionless parameters
@@ -1151,31 +1152,27 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                 info_cont[key] = coef[key] * param[key]
     else:
         def get_y_extrema(param_sw=0, param_square=0, param_cos=0, param_sin=0):
+            a_1, a_2, a_3 = get_temp_shift_params(heat_capacity, sw_amp1, param_sw*sw_amp1, lambda_const, lambda_phase,
+                                                  param_square, param_cos, param_sin, n_year_days=n_year_days,
+                                                  day_seconds=day_seconds, approx_level=approx_level)
             # Solve dT/dt=0 explicitly
-            a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)
             if extrema_ind == 1:
                 a_1 *= -1  # set negative for first extrema
-            sw_mod = param_sw - param_cos
-            # Use linear versions of a2 and a3 to stop issues with dividing by zero
-            # Also incredibly good approximation
-            prefactor = sw_amp1 / lambda_const / (1 + x1 ** 2) / (1 + 4 * x ** 2)
-            a_2 = prefactor * (
-                    sw_mod * (4 * x1 * x - x1 ** 2 + 1) - param_sin * 2 * (
-                    x * x1 ** 2 + x1 - x) - param_square)
-            a_3 = -2 * prefactor * (
-                    sw_mod * 2 * (x1 - x + x * x1 ** 2) + param_sin * (
-                    4 * x * x1 - x1 ** 2 + 1) + param_square * 2 * x)
             dT_dt_func = lambda y: (a_1 * y - 4 * a_2 * y * np.sqrt(
                 1 - y ** 2) + a_3 * (1 - 2 * y ** 2))
             y_extrema = optimize.least_squares(dT_dt_func, 0, bounds=(-1, 1))['x'][0]
             return y_extrema
 
         param_ref = {'param_sw': 0, 'param_square': 0, 'param_cos': 0, 'param_sin': 0}
+        if approx_level is None:
+            param_ref['param_sw'] = 1e-10       # cannot be exactly zero in exact case
+        param_with_dim = {'sw': sw_amp2 / sw_amp1, 'square': lambda_sq, 'cos': lambda_cos,
+                          'sin': lambda_sin}        # parameters with dimensions
         for key in param_ref:
             key_short = key.replace('param_', '')
             # Initialize all variables as zero
             param_use = copy.deepcopy(param_ref)
-            param_use[key] = param[key_short]
+            param_use[key] = param_with_dim[key_short]
             info_cont[key_short] = get_y_extrema(**param_use)
         # Adds a nonlinear combination of mechanisms
         # Get non-linear contributions where only two mechanisms are active - include all permutations
@@ -1183,8 +1180,8 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             key1_short = key1.replace('param_', '')
             key2_short = key2.replace('param_', '')
             param_use = copy.deepcopy(param_ref)
-            param_use[key1] = param[key1_short]
-            param_use[key2] = param[key2_short]
+            param_use[key1] = param_with_dim[key1_short]
+            param_use[key2] = param_with_dim[key2_short]
             info_cont[name_nl(key1_short, key2_short)] = get_y_extrema(**param_use)
             # Subtract the contribution from the linear mechanisms, so only non-linear contribution remains
             info_cont[name_nl(key1_short, key2_short)] -= info_cont[key1_short] + info_cont[key2_short]
