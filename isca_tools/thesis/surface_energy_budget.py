@@ -1072,7 +1072,7 @@ Union[np.ndarray, xr.DataArray, float]]:
     x1 = x * (1 - lambda_ph)
     sw_amp_ratio = sw_amp2 / sw_amp1
     sw_amp_ratio_mod = sw_amp_ratio - lambda_cos
-    a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)     # never approximate a1
+    a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)
 
     if approx_level is None:
         if sw_amp_ratio_mod == 0:
@@ -1096,6 +1096,8 @@ Union[np.ndarray, xr.DataArray, float]]:
     elif approx_level == 'linear_phase':
         prefactor = sw_amp1 / lambda_const / (1 + x ** 2) / (1 + 4 * x ** 2)
         lambda_ph_mod = lambda_ph / (1 + x ** 2)
+        # Approx 1/a_1 and then invert as 1/a_1 used elsewhere
+        a_1 = 1 / (lambda_const / sw_amp1 * np.sqrt(1 + x ** 2) * (1 - x ** 2 * lambda_ph_mod))
         a_2 = prefactor * ((3 * x ** 2 + 1 + 4 * x ** 4 * lambda_ph_mod) * sw_amp_ratio_mod -
                            2 * x * (x ** 2 - (3 * x ** 2 + 1) * lambda_ph_mod) * lambda_sin -
                            (1 + 2 * x ** 2 * lambda_ph_mod) * lambda_sq)
