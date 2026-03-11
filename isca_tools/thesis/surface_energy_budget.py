@@ -1035,11 +1035,14 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
     if extrema_ind == 1:
         for key in coef:
             coef[key] *= -1  # first harmonic, all coefficients take negative value
-    prefactor_nl = 16 * x / (1 + x1 ** 2) / (1 + 4 * x ** 2) ** 2
-    coef['nl_sw'] = prefactor_nl * ((3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1) * (
+    prefactor_nl = 16 / (1 + x1 ** 2) / (1 + 4 * x ** 2) ** 2
+    coef['nl_sw'] = prefactor_nl * x * ((3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1) * (
             (1 - param['phase']) * x ** 2 - param['phase'])
-    coef['nl_square'] = -prefactor_nl
+    coef['nl_square'] = -prefactor_nl * x
     coef['nl_cos'] = coef['nl_sw']
+    # coef['nl_sin'] = -prefactor_nl * (x*x1**2 + x1 - x) * (4*x*x1 - x1**2 + 1)
+    coef['nl_sin'] = -prefactor_nl * x * ((1-param['phase'])**2*x**2 - param['phase']) * (
+            (3+param['phase'])*(1-param['phase'])*x**2 + 1)
     coef[name_nl('sw', 'cos')] = -2*coef['nl_sw']
 
     info_cont = {}
