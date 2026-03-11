@@ -1012,6 +1012,101 @@ def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
     return coef_linear_out, coef_phase_out
 
 
+def get_temp_shift_params(heat_capacity: Union[np.ndarray, xr.DataArray, float],
+                          sw_amp1: Union[np.ndarray, xr.DataArray, float],
+                          sw_amp2: Union[np.ndarray, xr.DataArray, float],
+                          lambda_const: Union[np.ndarray, xr.DataArray, float],
+                          lambda_phase: Union[np.ndarray, xr.DataArray, float],
+                          lambda_sq: Union[np.ndarray, xr.DataArray, float],
+                          lambda_cos: Union[np.ndarray, xr.DataArray, float],
+                          lambda_sin: Union[np.ndarray, xr.DataArray, float],
+                          n_year_days: int = 360,
+                          day_seconds: float = 86400,
+                          approx_level: Optional[Literal['linear', 'linear_phase']] = None
+                          ) -> Tuple[Union[np.ndarray, xr.DataArray, float], Union[np.ndarray, xr.DataArray, float],
+Union[np.ndarray, xr.DataArray, float]]:
+    """
+    If shifting the solution to `get_temp_fourier_analytic2` with two harmonics in time from $T_s(t)$ to
+    $T_s(t_1+\Delta)$ where $t_1$ is the extrema of the first harmonic, this returns the values of $a_1$, $a_2$,
+    and $a_3$ such that:
+
+    $$
+    T_s(\Delta) - \overline{T}_s = \pm a_1 \sqrt{1-y^2} + a_2 (1-2y^2) + a_3 y \sqrt{1-y^2}
+    $$
+    where $y=\sin(2\pi f\Delta)$.
+
+    Args:
+        heat_capacity:
+        sw_amp1:
+        sw_amp2:
+        lambda_const:
+        lambda_phase:
+        lambda_sq:
+        lambda_cos:
+        lambda_sin:
+        n_year_days:
+        day_seconds:
+        approx_level: Three options:
+
+            * `None` - will return the exact values. Will produce an error if $S_2 = \Lambda_{\cos}=0$, which
+            does not happen with the other approximations.
+            * `linear` - $a_2$ and $a_3$ will be in the form $\sum_{\chi} \gamma(\lambda, C, S_1, \lambda_{ph}')\chi$
+            with $\chi \in \{\\frac{S_2}{S_1}, \lambda_{sq}', \Lambda_{\cos}', \Lambda_{\sin}'\}$. Not exact but
+            very good approximation.
+            * `linear_phase` - $a_2$ and $a_3$ will be in the form $\sum_{\chi} \gamma(\lambda, C, S_1)
+            (1+\gamma_2(\lambda, C)\lambda_{ph}')\chi$ i.e., will extract the $\lambda_{ph}'$ dependence.
+
+    Returns:
+        a_1: The parameter $a_1$
+        a_2: The parameter $a_2$
+        a_3: The parameter $a_3$
+    """
+    f = 1 / (n_year_days * day_seconds)
+    x = 2 * np.pi * f * heat_capacity / lambda_const
+    # Make params dimensionless
+    lambda_cos = get_param_dimensionless(lambda_cos, sw_fourier_amp1=sw_amp1)
+    lambda_sin = get_param_dimensionless(lambda_sin, sw_fourier_amp1=sw_amp1)
+    lambda_sq = get_param_dimensionless(lambda_sq, sw_fourier_amp1=sw_amp1, lambda_const=lambda_const)
+    lambda_ph = get_param_dimensionless(lambda_phase, heat_capacity=heat_capacity, n_year_days=n_year_days)
+
+    x1 = x * (1 - lambda_ph)
+    sw_amp_ratio = sw_amp2 / sw_amp1
+    sw_amp_ratio_mod = sw_amp_ratio - lambda_cos
+    a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x ** 2)
+
+    if approx_level is None:
+        if sw_amp_ratio_mod == 0:
+            raise ValueError('Exact solution not possible with sw_amp2 and lambda_cos both zero')
+        # Get alpha_1 and alpha_2 to compute x2 - copied from `get_temp_fourier_analytic2` function
+        alpha_1 = lambda_sq / sw_amp_ratio_mod * (1 - x1 ** 2) / (1 + x1 ** 2) ** 2
+        alpha_2 = lambda_sin / sw_amp_ratio_mod + 2 * lambda_sq / sw_amp_ratio_mod * x1 / (1 + x1 ** 2) ** 2
+        phase_mod_factor = (1 - 1 / 2 / x * alpha_2 / (1 - alpha_1)) / (1 + 2 * x * (alpha_2 / (1 - alpha_1)))
+        # Combine usual phase and amp factors with modification factors
+        x2 = 2 * x * phase_mod_factor
+        prefactor = sw_amp1 / lambda_const / (1 + x1 ** 2) / (1 + 2 * x * x2) * sw_amp_ratio_mod * (1 - alpha_1)
+        a_2 = prefactor * (1 - x1 ** 2 + 2 * x1 * x2)
+        a_3 = -2 * prefactor * (2 * x1 - x2 + x1 ** 2 * x2)
+    elif approx_level == 'linear':
+        prefactor = sw_amp1 / lambda_const / (1 + x1 ** 2) / (1 + 4 * x ** 2)
+        a_2 = prefactor * (
+                sw_amp_ratio_mod * (4 * x1 * x - x1 ** 2 + 1) - lambda_sin * 2 * (x * x1 ** 2 + x1 - x) - lambda_sq)
+        a_3 = -2 * prefactor * (
+                sw_amp_ratio_mod * 2 * (x1 - x + x * x1 ** 2) + lambda_sin * (
+                4 * x * x1 - x1 ** 2 + 1) + lambda_sq * 2 * x)
+    elif approx_level == 'linear_phase':
+        prefactor = sw_amp1 / lambda_const / (1 + x ** 2) / (1 + 4 * x ** 2)
+        lambda_ph_mod = lambda_ph / (1 + x ** 2)
+        a_2 = prefactor * ((3 * x ** 2 + 1 + 4 * x ** 4 * lambda_ph_mod) * sw_amp_ratio_mod -
+                           2 * x * (x ** 2 - (3 * x ** 2 + 1) * lambda_ph_mod) * lambda_sin -
+                           (1 + 2 * x ** 2 * lambda_ph_mod) * lambda_sq)
+        a_3 = -2*prefactor * ((2*x**3 - 2*x*(3*x**2+1)*lambda_ph_mod)*sw_amp_ratio_mod +
+                              (3*x**2 + 1 + 4*x**4*lambda_ph_mod)*lambda_sin +
+                              2*x*(1 + 2 * x ** 2 * lambda_ph_mod) *  lambda_sq)
+    else:
+        raise ValueError(f"Unknown approx_level: {approx_level}")
+    return a_1, a_2, a_3
+
+
 def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float, lambda_const: float,
                             lambda_phase: float = 0, lambda_sq: float = 0, lambda_cos: float = 0,
                             lambda_sin: float = 0, extrema_ind: Literal[1, 2] = 1,
@@ -1028,9 +1123,9 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
     x1 = x * (1 - param['phase'])
 
     prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
-    coef = {'sw': prefactor * 4 * x * (x**2 * (1 - param['phase']) ** 2 - param['phase']),
+    coef = {'sw': prefactor * 4 * x * (x ** 2 * (1 - param['phase']) ** 2 - param['phase']),
             'square': prefactor * 4 * x,
-            'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x**2 + 1)}
+            'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x ** 2 + 1)}
     coef['cos'] = -coef['sw']
     if extrema_ind == 1:
         for key in coef:
@@ -1041,9 +1136,9 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
     coef['nl_square'] = -prefactor_nl * x
     coef['nl_cos'] = coef['nl_sw']
     # coef['nl_sin'] = -prefactor_nl * (x*x1**2 + x1 - x) * (4*x*x1 - x1**2 + 1)
-    coef['nl_sin'] = -prefactor_nl * x * ((1-param['phase'])**2*x**2 - param['phase']) * (
-            (3+param['phase'])*(1-param['phase'])*x**2 + 1)
-    coef[name_nl('sw', 'cos')] = -2*coef['nl_sw']
+    coef['nl_sin'] = -prefactor_nl * x * ((1 - param['phase']) ** 2 * x ** 2 - param['phase']) * (
+            (3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1)
+    coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
 
     info_cont = {}
     if not numerical:
@@ -1059,14 +1154,14 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             # Solve dT/dt=0 explicitly
             a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)
             if extrema_ind == 1:
-                a_1 *= -1       # set negative for first extrema
+                a_1 *= -1  # set negative for first extrema
             sw_mod = param_sw - param_cos
             # Use linear versions of a2 and a3 to stop issues with dividing by zero
             # Also incredibly good approximation
             prefactor = sw_amp1 / lambda_const / (1 + x1 ** 2) / (1 + 4 * x ** 2)
             a_2 = prefactor * (
                     sw_mod * (4 * x1 * x - x1 ** 2 + 1) - param_sin * 2 * (
-                        x * x1 ** 2 + x1 - x) - param_square)
+                    x * x1 ** 2 + x1 - x) - param_square)
             a_3 = -2 * prefactor * (
                     sw_mod * 2 * (x1 - x + x * x1 ** 2) + param_sin * (
                     4 * x * x1 - x1 ** 2 + 1) + param_square * 2 * x)
@@ -1093,7 +1188,6 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             info_cont[name_nl(key1_short, key2_short)] = get_y_extrema(**param_use)
             # Subtract the contribution from the linear mechanisms, so only non-linear contribution remains
             info_cont[name_nl(key1_short, key2_short)] -= info_cont[key1_short] + info_cont[key2_short]
-
 
     final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
     final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
