@@ -315,7 +315,7 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
                             n_year_days: Optional[int] = None,
                             sw_fourier_amp1: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
                             lambda_const: Optional[Union[float, np.ndarray, xr.DataArray]] = None,
-                            day_seconds: float = 86400
+                            day_seconds: float = 86400, invert: bool = False
                             ) -> Union[float, np.ndarray, xr.DataArray]:
     """
     Returns dimensionless versions of empirical fitting parameter, without changing the sign.
@@ -338,6 +338,7 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
         lambda_const: The linear constant $\lambda$ used in the approximation for
             $\Gamma^{\\uparrow}. In normal form with units of Wm$^{-2}$K$^{-1}$.
         day_seconds: Duration of a day in seconds.
+        invert: If `True`, will return the parameter with dimensions given the dimensionless version.
 
     Returns:
         var_dim: Dimensionless version of `var`.
@@ -347,13 +348,22 @@ def get_param_dimensionless(var: Union[float, np.ndarray, xr.DataArray],
     if (heat_capacity is not None) and (n_year_days is not None):
         # lambda_phase or lambda_const
         f = 1 / (n_year_days * day_seconds)
-        var = var / (2 * np.pi * f * heat_capacity)
+        if not invert:
+            var = var / (2 * np.pi * f * heat_capacity)
+        else:
+            var = var * (2 * np.pi * f * heat_capacity)
     elif (sw_fourier_amp1 is not None) and (lambda_const is not None):
         # lambda_sq
-        var = var / (2 * lambda_const ** 2) * sw_fourier_amp1
+        if not invert:
+            var = var / (2 * lambda_const ** 2) * sw_fourier_amp1
+        else:
+            var = var * (2 * lambda_const ** 2) / sw_fourier_amp1
     elif lambda_const is None:
         # lambda_cos and lambda_sin
-        var = var / sw_fourier_amp1
+        if not invert:
+            var = var / sw_fourier_amp1
+        else:
+            var = var * sw_fourier_amp1
     else:
         raise ValueError("Combination of parameters provided not correct for any parameter")
     return var
@@ -1020,7 +1030,7 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
     prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
     coef = {'sw': prefactor * 4 * x * (x**2 * (1 - param['phase']) ** 2 - param['phase']),
             'square': prefactor * 4 * x,
-            'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x + 1)}
+            'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x**2 + 1)}
     coef['cos'] = -coef['sw']
     if extrema_ind == 1:
         for key in coef:
