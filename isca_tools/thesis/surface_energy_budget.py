@@ -1072,7 +1072,7 @@ Union[np.ndarray, xr.DataArray, float]]:
     x1 = x * (1 - lambda_ph)
     sw_amp_ratio = sw_amp2 / sw_amp1
     sw_amp_ratio_mod = sw_amp_ratio - lambda_cos
-    a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x ** 2)
+    a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)     # never approximate a1
 
     if approx_level is None:
         if sw_amp_ratio_mod == 0:
@@ -1189,6 +1189,6 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
     final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
     final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
     if numerical:
-        info_cont['nl_residual'] = get_y_extrema(param['sw'], param['square'], param['cos'], param['sin']
-                                                 ) - final_answer_nl
+        info_cont['nl_residual'] = get_y_extrema(param_with_dim['sw'], param_with_dim['square'], param_with_dim['cos'],
+                                                 param_with_dim['sin']) - final_answer_nl
     return final_answer_linear, final_answer_nl, info_cont, coef
