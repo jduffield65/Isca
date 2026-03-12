@@ -1036,16 +1036,30 @@ Union[np.ndarray, xr.DataArray, float]]:
     where $y=\sin(2\pi f\Delta)$.
 
     Args:
-        heat_capacity:
+        heat_capacity: $C$, the surface heat capacity, in units of $JK^{-1}m^{-2}$.
+            Typically obtained from a mixed-layer depth via `get_heat_capacity`.
         sw_amp1:
+            $F_1$, the amplitude of the first harmonic of downward shortwave radiation at the surface,
+            i.e. the $n=1$ Fourier coefficient of $SW^{\downarrow}$ in units of $Wm^{-2}$.
         sw_amp2:
+            $F_2$, the amplitude of the second harmonic of downward shortwave radiation at the surface,
+            i.e. the $n=2$ Fourier coefficient of $SW^{\downarrow}$ in units of $Wm^{-2}$.
         lambda_const:
+            The linear constant $\lambda$ used in the approximation for
+            $\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.
         lambda_phase:
+            The constant $\lambda_{phase}$ multiplying the phase-lag term
+            $\\tfrac{1}{2}\lambda_{phase}(T(t-\mathcal{T}/4) - T(t+\mathcal{T}/4))$ in $\Gamma^{\\uparrow}$.
         lambda_sq:
+            The constant $\lambda_{sq}$ multiplying the quadratic term $-\\lambda_{sq}T'^2$ in $\Gamma^{\\uparrow}$.
         lambda_cos:
+            The constant $\Lambda_{cos}$ multiplying the $\cos(4\pi t/\mathcal{T})$ term in $\\Gamma^{\\uparrow}$.
         lambda_sin:
+            The constant $\Lambda_{sin}$ multiplying the $\sin(4\pi t/\mathcal{T})$ term in $\Gamma^{\\uparrow}$.
         n_year_days:
+            Number of days in one period $\mathcal{T}$ (e.g. 360), used to define the annual frequency $f=1/\mathcal{T}$.
         day_seconds:
+            Duration of one day in seconds, used to convert from days to seconds when defining $f$.
         approx_level: Three options:
 
             * `None` - will return the exact values. Will produce an error if $S_2 = \Lambda_{\cos}=0$, which
@@ -1057,9 +1071,9 @@ Union[np.ndarray, xr.DataArray, float]]:
             (1+\gamma_2(\lambda, C)\lambda_{ph}')\chi$ i.e., will extract the $\lambda_{ph}'$ dependence.
 
     Returns:
-        a_1: The parameter $a_1$
-        a_2: The parameter $a_2$
-        a_3: The parameter $a_3$
+        a_1: The parameter $a_1$ controlling the leading-order dependence on $\sqrt{1-y^2}$.
+        a_2: The parameter $a_2$ controlling the $(1-2y^2)$ contribution.
+        a_3: The parameter $a_3$ controlling the $y\sqrt{1-y^2}$ contribution.
     """
     f = 1 / (n_year_days * day_seconds)
     x = 2 * np.pi * f * heat_capacity / lambda_const
@@ -1117,6 +1131,91 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                             approx_level: Optional[Literal['linear', 'linear_phase']] = None,
                             coef_nl_phase: bool = False) -> Tuple[
     float, float, dict, dict, float, float, dict, dict]:
+    """
+    Find the phase shift and amplitude of the extrema of the analytical temperature solution
+    relative to the first-harmonic extremum, i.e. solve for points where $\\partial T/\\partial\\Delta = 0$.
+
+    This function uses the shifted representation
+    $T_s(\\Delta) - \\overline{T}_s = \\pm a_1 \\sqrt{1-y^2} + a_2 (1-2y^2) + a_3 y \\sqrt{1-y^2}$
+    with $y = \\sin(2\\pi f \\Delta)$, and decomposes the contribution of each empirical
+    parameter to the timing and amplitude of the extrema. Depending on the options, it either
+    uses analytic coefficients or computes them numerically by solving $\\partial T/\\partial\\Delta = 0$.
+
+    Args:
+        heat_capacity:
+            $C$, the surface heat capacity in units of $JK^{-1}m^{-2}$.
+        sw_amp1:
+            $F_1$, the amplitude of the first harmonic of downward shortwave radiation at the surface
+            (the $n=1$ Fourier coefficient of $SW^{\\downarrow}$), in units of $Wm^{-2}$.
+        sw_amp2:
+            $F_2$, the amplitude of the second harmonic of downward shortwave radiation at the surface
+            (the $n=2$ Fourier coefficient of $SW^{\\downarrow}$), in units of $Wm^{-2}$.
+        lambda_const:
+            The linear constant $\\lambda$ used in the approximation for
+            $\\Gamma^{\\uparrow} = LW^{\\uparrow} - LW^{\\downarrow} + LH^{\\uparrow} + SH^{\\uparrow}$.
+        lambda_phase:
+            The constant $\\lambda_{phase}$ multiplying the phase-lag term
+            $\\tfrac{1}{2}\\lambda_{phase}(T(t-\\mathcal{T}/4) - T(t+\\mathcal{T}/4))$ in $\\Gamma^{\\uparrow}$.
+        lambda_sq:
+            The constant $\\lambda_{sq}$ multiplying the quadratic term $-\\lambda_{sq}T'^2$ in $\\Gamma^{\\uparrow}$.
+        lambda_cos:
+            The constant $\\Lambda_{cos}$ multiplying the $\\cos(4\\pi t/\\mathcal{T})$ term in $\\Gamma^{\\uparrow}$.
+        lambda_sin:
+            The constant $\\Lambda_{sin}$ multiplying the $\\sin(4\\pi t/\\mathcal{T})$ term in $\\Gamma^{\\uparrow}$.
+        extrema_ind:
+            Index of the extremum to diagnose. Use `1` for the first extremum (e.g. maximum) and
+            `2` for the second extremum (e.g. minimum) relative to the first-harmonic solution.
+        n_year_days:
+            Number of days in one period $\\mathcal{T}$ (e.g. 360), used to define the annual frequency $f=1/\\mathcal{T}$.
+        day_seconds:
+            Duration of one day in seconds, used to convert from days to seconds when defining $f$.
+        numerical:
+            If `False`, use analytic expressions for the coefficients controlling the timing and amplitude
+            of the extrema as functions of the dimensionless parameters.
+            If `True`, compute these contributions numerically by explicitly solving $\\partial T/\\partial\\Delta = 0$.
+        approx_level:
+            Approximation level passed through to `get_temp_shift_params` when computing the extrema
+            numerically.
+
+            * `None` - use the exact expressions for $a_1$, $a_2$, and $a_3$ (where defined).
+            * `linear` - use the linear approximation in the small dimensionless parameters
+              $\\{S_2/S_1, \\lambda_{sq}', \\Lambda_{cos}', \\Lambda_{sin}'\\}$.
+            * `linear_phase` - as `linear`, but with the $\\lambda_{phase}'$ dependence factored out.
+        coef_nl_phase:
+            If `True`, compute timing and amplitude coefficients for each mechanism by differentiating
+            $a_1$, $a_2$, and $a_3$ with respect to the dimensional parameters using `get_temp_shift_params`,
+            and construct both linear and nonlinear (quadratic) phase contributions explicitly.
+            If `False`, use pre-derived analytic expressions for these coefficients.
+
+    Returns:
+        final_answer_linear:
+            The linear-order contribution to the dimensionless extremum shift $y$ (or equivalently phase shift)
+            obtained by summing all single-parameter contributions.
+        final_answer_nl:
+            The total dimensionless extremum shift $y$ including both linear and nonlinear cross-terms.
+        info_cont:
+            Dictionary containing the individual contributions of each mechanism to the extremum timing.
+            Keys include e.g. `'sw'`, `'square'`, `'cos'`, `'sin'` for linear terms and
+            `'nl_sw'`, `'nl_square'`, `'nl_cos'`, `'nl_sin'`, as well as mixed terms such as
+            `name_nl('sw', 'cos')` when cross-mechanism nonlinearities are included.
+        coef:
+            Dictionary of analytic coefficients that multiply the dimensionless parameters in `info_cont`.
+            These describe how each mechanism changes the extremum timing per unit of the corresponding
+            dimensionless parameter.
+        final_answer_linear_amp:
+            The linear-order multiplicative factor for the extremum amplitude relative to the reference case,
+            i.e. $T_{ext}/T_{ext,0}$ including only linear contributions.
+        final_answer_nl_amp:
+            The total multiplicative factor for the extremum amplitude relative to the reference case,
+            including both linear and nonlinear contributions.
+        info_cont_amp:
+            Dictionary containing the individual contributions of each mechanism to the extremum amplitude factor,
+            analogous to `info_cont` but for amplitude rather than timing.
+        coef_amp:
+            Dictionary of analytic coefficients that multiply the dimensionless parameters in `info_cont_amp`.
+            These describe how each mechanism changes the extremum amplitude per unit of the corresponding
+            dimensionless parameter.
+    """
     f = 1 / (n_year_days * day_seconds)
     x = float(2 * np.pi * f * heat_capacity / lambda_const)
     # Get dimensionless parameters

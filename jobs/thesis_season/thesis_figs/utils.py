@@ -12,7 +12,7 @@ from isca_tools.utils import numerical
 from tqdm.notebook import tqdm
 
 from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic, \
-    get_temp_fourier_analytic2
+    get_temp_fourier_analytic2, get_temp_extrema_theory
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
 from isca_tools.utils.constants import c_p_water, rho_water
@@ -248,9 +248,6 @@ fourier_series_xr = wrap_with_apply_ufunc(fourier.fourier_series,
                                           input_core_dims=[['time'], ['harmonic'], ['harmonic']],
                                           output_core_dims=[['time']])
 
-get_temp_extrema_numerical_xr = wrap_with_apply_ufunc(get_temp_extrema_numerical, input_core_dims=[['time'], ['time']],
-                                                      output_core_dims=[[], [], [], []])
-
 
 # Might need to do different version when include fourier coefs, as more outputs
 def polyfit_phase_xr(x: xr.DataArray, y: xr.DataArray,
@@ -446,8 +443,10 @@ def update_ds_extrema(ds: xr.Dataset, time: xr.DataArray, temp: xr.DataArray, fi
         ds = update_dim_slice(ds, 'fit_method', fit_method, var[i], key)
     return ds
 
+
 def get_weights(ds: Union[xr.DataArray, xr.Dataset]) -> xr.DataArray:
     return np.cos(np.deg2rad(ds.lat))
+
 
 def get_error(x: xr.DataArray, x_approx: xr.DataArray, kind: Literal['mean', 'median', 'max'] = "mean",
               norm: bool = True, dim: Union[str, list] = "time",
@@ -569,10 +568,10 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
                 raise ValueError(f'ds does not contain the variable "{key}"')
         return flux_func(**var)
     else:
-        return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw': ds.lwup_sfc-ds.lwdn_sfc}[flux_name]
+        return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw': ds.lwup_sfc - ds.lwdn_sfc}[flux_name]
 
 
-def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw']='lh') -> xr.Dataset:
+def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh') -> xr.Dataset:
     """
     Return flux sensitivity (Taylor-series coefficients) for a chosen flux decomposition.
 
@@ -756,8 +755,8 @@ def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
 
     if get_nl:
         # Constrained fitting for nl terms to keep const coef as zero
-        coef_fix = [None for _ in range(deg+2)]
-        coef_fix[-1] = 0        # enforce const (deg=0) of 0
+        coef_fix = [None for _ in range(deg + 2)]
+        coef_fix[-1] = 0  # enforce const (deg=0) of 0
         # Square mechanism
         for key in ds:
             if (key == key_use) or (time_dim not in ds[key].dims):
@@ -788,3 +787,121 @@ def get_empirical_var_fit(ds: xr.Dataset, key_use: str = 'temp_surf',
     var_empirical = xr.Dataset(var_empirical)
     error = xr.Dataset(error)
     return var_ref, params, var_empirical, error
+
+
+### Extrema Stuff
+
+get_temp_extrema_numerical_xr = wrap_with_apply_ufunc(get_temp_extrema_numerical, input_core_dims=[['time'], ['time']],
+                                                      output_core_dims=[[], [], [], []])
+
+
+def get_temp_extrema_theory_xr(sw_amp: xr.DataArray, heat_capacity: xr.DataArray,
+                               param_coefs: xr.DataArray, numerical: bool = False,
+                               n_year_days: int = 360
+                               ) -> Tuple[xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset,
+xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset]:
+    """
+    Xarray wrapper for `get_temp_extrema_theory` that computes the timing and amplitude of temperature extrema
+    from harmonic shortwave forcing and fitted feedback parameters on arbitrary xarray dimensions.
+
+    This function operates on gridpoint-wise inputs produced by `fourier_series_xr` and `polyfit_phase_xr`,
+    calls `get_temp_extrema_theory` via `apply_ufunc`, and then concatenates the results for the first and
+    second extrema (e.g. max and min) along a new `type` dimension of length two.
+
+    Args:
+        sw_amp:
+            Amplitude of the shortwave Fourier series, output of `fourier_series_xr` with a `harmonic`
+            dimension. Must contain exactly three entries `[0, 1, 2]` corresponding to the mean and the
+            first two harmonics of $SW^{\\downarrow}$; only harmonics 1 and 2 are used.
+        heat_capacity:
+            Surface heat capacity $C$ as an xarray DataArray, broadcastable to `sw_amp` over all
+            non-`harmonic` dimensions. Units are typically $JK^{-1}m^{-2}$.
+        param_coefs:
+            Polynomial-fit coefficients for the feedback parameters, output of `polyfit_phase_xr` with a
+            `deg` dimension. Expected degrees are `1`, `phase`, `2`, `cos`, and `sin`, which are mapped to
+            the dimensional parameters $\\lambda$, $\\lambda_{phase}$, $\\lambda_{sq}$, $\\Lambda_{cos}$,
+            and $\\Lambda_{sin}$ respectively.
+        numerical:
+            If `False`, `get_temp_extrema_theory` is called in analytic mode to use pre-derived expressions
+            for the timing and amplitude coefficients of the extrema. If `True`, the extrema are obtained
+            numerically by solving $\\partial T/\\partial\\Delta = 0$ at each gridpoint.
+        n_year_days:
+            Number of days in one period $\\mathcal{T}$ (e.g. 360), used to define the annual frequency
+            $f = 1/\\mathcal{T}$ inside `get_temp_extrema_theory`.
+
+    Returns:
+        phase_linear:
+            DataArray with dimension `type` plus the non-core dimensions of `sw_amp`, containing the linear-order
+            contribution to the dimensionless extremum shift $y$ (or phase shift) for each extremum type
+            (`'max'`/`'min'`, order determined by the sign of the first harmonic).
+        phase_nl:
+            DataArray with the same dimensions as `phase_linear`, containing the total dimensionless extremum
+            shift including both linear and nonlinear contributions.
+        cont_phase:
+            Dataset with dimension `type` plus the non-core dimensions of `sw_amp`, holding the decomposition
+            of extremum timing into contributions from individual mechanisms and their nonlinear combinations.
+            Variable names mirror the keys returned in `info_cont` by `get_temp_extrema_theory`
+            (e.g. `sw`, `square`, `cos`, `sin`, `nl_sw`, `nl_square`, `nl_cos`, `nl_sin`, and mixed terms).
+        coef_phase:
+            Dataset with the same dimensions as `cont_phase`, containing the analytic timing coefficients
+            that multiply the dimensionless parameters, corresponding to the `coef` dictionary from
+            `get_temp_extrema_theory`.
+        amp_linear:
+            DataArray with dimension `type` plus the non-core dimensions of `sw_amp`, containing the linear-order
+            multiplicative factor for extremum amplitude relative to the reference case, i.e. $T_{ext}/T_{ext,0}$
+            including only linear contributions.
+        amp_nl:
+            DataArray with the same dimensions as `amp_linear`, containing the total multiplicative factor
+            for extremum amplitude including nonlinear terms.
+        cont_amp:
+            Dataset with dimension `type` plus the non-core dimensions of `sw_amp`, holding the decomposition
+            of extremum amplitude factors into contributions from each mechanism and their nonlinear
+            combinations. Variable names mirror `info_cont_amp` from `get_temp_extrema_theory`.
+        coef_amp:
+            Dataset with the same dimensions as `cont_amp`, containing the analytic amplitude coefficients
+            corresponding to the `coef_amp` dictionary from `get_temp_extrema_theory`.
+    """
+    if not np.array_equal(sw_amp.harmonic, np.arange(3)):
+        raise ValueError('sw_amp.harmonic must be [0, 1, 2] not {}'.format(sw_amp.harmonic))
+    sw_amp1_sign = np.unique(np.sign(sw_amp.sel(harmonic=1)))
+    if sw_amp1_sign.size != 1:
+        raise ValueError('More than one sign of sw_amp.sel(harmonic=1) provided.')
+    type = xr.DataArray(['min', 'max'] if sw_amp1_sign[0] == -1 else ['max', 'min'],
+                        name='type', dims='type')       # Northern Hemisphere - minima occurs first
+    _get_temp_extrema_theory = wrap_with_apply_ufunc(get_temp_extrema_theory,
+                                                     input_core_dims=[[]] * 8,
+                                                     output_core_dims=[[]] * 8)
+    phase_linear = []
+    phase_nl = []
+    cont_phase = []
+    coef_phase = []
+    amp_linear = []
+    amp_nl = []
+    cont_amp = []
+    coef_amp = []
+    for i in range(2):
+        var = _get_temp_extrema_theory(heat_capacity, sw_amp.sel(harmonic=1), sw_amp.sel(harmonic=2),
+                                       param_coefs.sel(deg='1'), param_coefs.sel(deg='phase'), param_coefs.sel(deg='2'),
+                                       param_coefs.sel(deg='cos'), param_coefs.sel(deg='sin'), numerical=numerical,
+                                       n_year_days=n_year_days, extrema_ind=i+1)
+        phase_linear.append(var[0])
+        phase_nl.append(var[1])
+        cont_phase.append(xr.Dataset(convert_ds_of_dicts(var[2], [0], 'dim_name')
+                            ).isel(dim_name=0, drop=True))
+        coef_phase.append(xr.Dataset(convert_ds_of_dicts(var[3], [0], 'dim_name')
+                            ).isel(dim_name=0, drop=True))
+        amp_linear.append(var[4])
+        amp_nl.append(var[5])
+        cont_amp.append(xr.Dataset(convert_ds_of_dicts(var[6], [0], 'dim_name')
+                            ).isel(dim_name=0, drop=True))
+        coef_amp.append(xr.Dataset(convert_ds_of_dicts(var[7], [0], 'dim_name')
+                            ).isel(dim_name=0, drop=True))
+    phase_linear = xr.concat(phase_linear, dim=type)
+    phase_nl = xr.concat(phase_nl, dim=type)
+    cont_phase = xr.concat(cont_phase, dim=type)
+    coef_phase = xr.concat(coef_phase, dim=type)
+    amp_linear = xr.concat(amp_linear, dim=type)
+    amp_nl = xr.concat(amp_nl, dim=type)
+    cont_amp = xr.concat(cont_amp, dim=type)
+    coef_amp = xr.concat(coef_amp, dim=type)
+    return phase_linear, phase_nl, cont_phase, coef_phase, amp_linear, amp_nl, cont_amp, coef_amp
