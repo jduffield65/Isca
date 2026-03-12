@@ -1139,10 +1139,11 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                 param_use[param_name] = get_param_dimensionless(1, sw_fourier_amp1=sw_amp1, invert=True)
             else:
                 raise ValueError(f"Unknown parameter: {param_name}")
-            # Use linear_phase here as interested in algebra step in expanding out lambda_ph terms
+            # Use linear here as to compare to other function in extrema_sanity_check notebook
+            # makes fairly significant difference if use linear_phase but None and linear are basically the same
             a_1, a_2, a_3 = get_temp_shift_params(heat_capacity, sw_amp1, lambda_const=lambda_const,
-                                                  lambda_phase=lambda_phase, n_year_days=n_year_days,
-                                                  day_seconds=day_seconds, approx_level='linear_phase',
+                                                  lambda_phase=lambda_phase, lambda_cos=0, n_year_days=n_year_days,
+                                                  day_seconds=day_seconds, approx_level='linear',
                                                   **param_use)
             coef_linear = a_3/a_1
             if extrema_ind == 2:
@@ -1155,7 +1156,7 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             coef[key] = var[0]
             coef[f'nl_{key}'] = var[1]
         coef['cos'] = -coef['sw']
-        coef['nl_cos'] = coef['sw']
+        coef['nl_cos'] = coef['nl_sw']
         coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
     else:
         # Linear Coefficients
@@ -1164,9 +1165,9 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
         # prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
         # coef = {'sw': prefactor * 4 * x * (x ** 2 * (1 - param['phase']) ** 2 - param['phase']),
         #         'square': prefactor * 4 * x,
-        #         'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x ** 2 + 1)}
+        #         'sin': 2 * prefactor * (4*x*x1-x1**2+1)}
         # coef['cos'] = -coef['sw']
-        
+
         lambda_ph_mod = param['phase'] / (1 + x ** 2)
         prefactor = 1 / np.sqrt(1 + x ** 2) / (1 + 4 * x ** 2)
         coef = {'sw': prefactor * 4 * x * (x ** 2 - (x ** 4 + 3 * x ** 2 + 1) * lambda_ph_mod),
