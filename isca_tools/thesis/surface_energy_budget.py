@@ -1116,7 +1116,7 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                             day_seconds: float = 86400, numerical: bool = False,
                             approx_level: Optional[Literal['linear', 'linear_phase']] = None,
                             coef_nl_phase: bool = False) -> Tuple[
-    float, float, dict, dict]:
+    float, float, dict, dict, float, float, dict, dict]:
     f = 1 / (n_year_days * day_seconds)
     x = float(2 * np.pi * f * heat_capacity / lambda_const)
     # Get dimensionless parameters
@@ -1131,7 +1131,7 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             param_use = {'sw_amp2': 0, 'lambda_sq': 0, 'lambda_sin': 0}
             # set dimensionless param to 1 so da/dparam so derivative is equal to a
             if param_name == 'sw_amp2':
-                param_use[param_name] = sw_amp1     # so ratio is equal to 1
+                param_use[param_name] = sw_amp1  # so ratio is equal to 1
             elif param_name == 'lambda_sq':
                 param_use[param_name] = get_param_dimensionless(1, sw_fourier_amp1=sw_amp1,
                                                                 lambda_const=lambda_const, invert=True)
@@ -1145,68 +1145,69 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                                                   lambda_phase=lambda_phase, lambda_cos=0, n_year_days=n_year_days,
                                                   day_seconds=day_seconds, approx_level='linear',
                                                   **param_use)
-            coef_linear = a_3/a_1
+            coef_linear = a_3 / a_1
+            coef_amp_linear = a_2 / a_1
             if extrema_ind == 2:
                 coef_linear *= -1
-            coef_square = -4/a_1**2 * a_2 * a_3
-            return coef_linear, coef_square
+                coef_amp_linear *= -1
+            coef_square = -4 / a_1 ** 2 * a_2 * a_3
+            coef_amp_square = 0.5 * coef_linear ** 2
+            return coef_linear, coef_square, coef_amp_linear, coef_amp_square
+
         coef = {}
+        coef_amp = {}
         for key, arg in [('sw', 'sw_amp2'), ('square', 'lambda_sq'), ('sin', 'lambda_sin')]:
             var = get_coef_from_a(arg)
             coef[key] = var[0]
             coef[f'nl_{key}'] = var[1]
-        coef['cos'] = -coef['sw']
-        coef['nl_cos'] = coef['nl_sw']
-        coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
-    else:
-        # Linear Coefficients
-        # Old not separating out lambda_phase
-        # x1 = x * (1 - param['phase'])
-        # prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
-        # coef = {'sw': prefactor * 4 * x * (x ** 2 * (1 - param['phase']) ** 2 - param['phase']),
-        #         'square': prefactor * 4 * x,
-        #         'sin': 2 * prefactor * (4*x*x1-x1**2+1)}
-        # coef['cos'] = -coef['sw']
+            coef_amp[key] = var[2]
+            coef_amp[f'nl_{key}'] = var[3]
 
+    else:
+        # timing
         lambda_ph_mod = param['phase'] / (1 + x ** 2)
         prefactor = 1 / np.sqrt(1 + x ** 2) / (1 + 4 * x ** 2)
         coef = {'sw': prefactor * 4 * x * (x ** 2 - (x ** 4 + 3 * x ** 2 + 1) * lambda_ph_mod),
                 'square': prefactor * 4 * x * (1 + x ** 2 * lambda_ph_mod),
                 'sin': prefactor * 2 * (3 * x ** 2 + 1 + x ** 2 * (x ** 2 - 1) * lambda_ph_mod)}
-        coef['cos'] = -coef['sw']
         if extrema_ind == 1:
             for key in coef:
                 coef[key] *= -1  # first harmonic, all coefficients take negative value
-
-        # Squared coefficients
-        # Old not separating out lambda_phase
-        # prefactor_nl = 16 / (1 + x1 ** 2) / (1 + 4 * x ** 2) ** 2
-        # coef['nl_sw'] = prefactor_nl * x * ((3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1) * (
-        #         (1 - param['phase']) * x ** 2 - param['phase'])
-        # coef['nl_square'] = -prefactor_nl * x
-        # coef['nl_cos'] = coef['nl_sw']
-        # # coef['nl_sin'] = -prefactor_nl * (x*x1**2 + x1 - x) * (4*x*x1 - x1**2 + 1)
-        # coef['nl_sin'] = -prefactor_nl * x * ((1 - param['phase']) ** 2 * x ** 2 - param['phase']) * (
-        #         (3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1)
-        # coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
+                # Compute coef_amp from coef hence don't change sign
 
         prefactor_nl = 16 * x / (1 + x ** 2) / (1 + 4 * x ** 2) ** 2
         coef['nl_sw'] = prefactor_nl * (
                 x ** 2 * (3 * x ** 2 + 1) - (2 * x ** 6 + 11 * x ** 4 + 6 * x ** 2 + 1) * lambda_ph_mod)
         coef['nl_square'] = -prefactor_nl * (1 + 2 * x ** 2 * lambda_ph_mod)
         coef['nl_sin'] = -coef['nl_sw']
-        coef['nl_cos'] = coef['nl_sw']
-        coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
+        # Amplitude
+        coef_amp = {'sw': -0.5 * coef['sin'], 'square': coef['square'] / (4 * x), 'sin': 0.5 * coef['sw'],
+                    'nl_sw': 0.5 * prefactor_nl * x ** 3 * (
+                            x ** 2 - 2 * (x ** 4 + 3 * x ** 2 + 1) * lambda_ph_mod),
+                    'nl_square': -0.5 * x * coef['nl_square'],
+                    'nl_sin': prefactor_nl / 8 / x * (3 * x ** 2 + 1) * (
+                            3 * x ** 2 + 1 + 2 * x ** 2 * (x ** 2 - 1) * lambda_ph_mod)}
+
+    coef['cos'] = -coef['sw']
+    coef['nl_cos'] = coef['nl_sw']
+    coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
+    coef_amp['cos'] = -coef_amp['sw']
+    coef_amp['nl_cos'] = coef_amp['nl_sw']
+    coef_amp[name_nl('sw', 'cos')] = -2 * coef_amp['nl_sw']
 
     info_cont = {}
+    info_cont_amp = {}
     if not numerical:
         for key in coef:
             if key == name_nl('sw', 'cos'):
                 info_cont[key] = coef[key] * param['sw'] * param['cos']
+                info_cont_amp[key] = coef_amp[key] * param['sw'] * param['cos']
             elif 'nl' in key:
                 info_cont[key] = coef[key] * param[key.replace('nl_', '')] ** 2
+                info_cont_amp[key] = coef_amp[key] * param[key.replace('nl_', '')] ** 2
             else:
                 info_cont[key] = coef[key] * param[key]
+                info_cont_amp[key] = coef_amp[key] * param[key]
     else:
         def get_y_extrema(param_sw=0, param_square=0, param_cos=0, param_sin=0):
             a_1, a_2, a_3 = get_temp_shift_params(heat_capacity, sw_amp1, param_sw * sw_amp1, lambda_const,
@@ -1214,12 +1215,13 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                                                   param_square, param_cos, param_sin, n_year_days=n_year_days,
                                                   day_seconds=day_seconds, approx_level=approx_level)
             # Solve dT/dt=0 explicitly
-            if extrema_ind == 1:
+            if extrema_ind == 2:
                 a_1 *= -1  # set negative for first extrema
-            dT_dt_func = lambda y: (a_1 * y - 4 * a_2 * y * np.sqrt(
+            dT_dt_func = lambda y: (-a_1 * y - 4 * a_2 * y * np.sqrt(
                 1 - y ** 2) + a_3 * (1 - 2 * y ** 2))
+            T_func = lambda y: a_1 * np.sqrt(1 - y ** 2) + a_2 * (1 - 2 * y ** 2) + a_3 * y * np.sqrt(1 - y ** 2)
             y_extrema = optimize.least_squares(dT_dt_func, 0, bounds=(-1, 1))['x'][0]
-            return y_extrema
+            return y_extrema, T_func(y_extrema) / a_1
 
         param_ref = {'param_sw': 0, 'param_square': 0, 'param_cos': 0, 'param_sin': 0}
         if approx_level is None:
@@ -1231,7 +1233,8 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             # Initialize all variables as zero
             param_use = copy.deepcopy(param_ref)
             param_use[key] = param_with_dim[key_short]
-            info_cont[key_short] = get_y_extrema(**param_use)
+            info_cont[key_short], info_cont_amp[key_short] = get_y_extrema(**param_use)
+            info_cont_amp[key_short] -= 1
         # Adds a nonlinear combination of mechanisms
         # Get non-linear contributions where only two mechanisms are active - include all permutations
         for key1, key2 in itertools.combinations(param_ref, 2):
@@ -1240,13 +1243,20 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
             param_use = copy.deepcopy(param_ref)
             param_use[key1] = param_with_dim[key1_short]
             param_use[key2] = param_with_dim[key2_short]
-            info_cont[name_nl(key1_short, key2_short)] = get_y_extrema(**param_use)
+            info_cont[name_nl(key1_short, key2_short)], info_cont_amp[name_nl(key1_short, key2_short)] = get_y_extrema(
+                **param_use)
             # Subtract the contribution from the linear mechanisms, so only non-linear contribution remains
             info_cont[name_nl(key1_short, key2_short)] -= info_cont[key1_short] + info_cont[key2_short]
+            info_cont_amp[name_nl(key1_short, key2_short)] -= info_cont_amp[key1_short] + info_cont_amp[key2_short] + 1
 
     final_answer_linear = np.asarray(sum([info_cont[key] for key in info_cont if 'nl' not in key]))
     final_answer_nl = np.asarray(sum([info_cont[key] for key in info_cont]))
+    final_answer_linear_amp = 1 + np.asarray(sum([info_cont_amp[key] for key in info_cont_amp if 'nl' not in key]))
+    final_answer_nl_amp = 1 + np.asarray(sum([info_cont_amp[key] for key in info_cont_amp]))
     if numerical:
-        info_cont['nl_residual'] = get_y_extrema(param_with_dim['sw'], param_with_dim['square'], param_with_dim['cos'],
-                                                 param_with_dim['sin']) - final_answer_nl
-    return final_answer_linear, final_answer_nl, info_cont, coef
+        var = get_y_extrema(param_with_dim['sw'], param_with_dim['square'], param_with_dim['cos'],
+                            param_with_dim['sin'])
+        info_cont['nl_residual'] = var[0] - final_answer_nl
+        info_cont_amp['nl_residual'] = var[1] - final_answer_nl_amp
+    return final_answer_linear, final_answer_nl, info_cont, coef, final_answer_linear_amp, final_answer_nl_amp, \
+        info_cont_amp, coef_amp
