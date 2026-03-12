@@ -12,7 +12,7 @@ from isca_tools.utils import numerical
 from tqdm.notebook import tqdm
 
 from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, get_temp_fourier_analytic, \
-    get_temp_fourier_analytic2, get_temp_extrema_theory
+    get_temp_fourier_analytic2, get_temp_extrema_theory, get_param_dimensionless, get_temp_shift_params
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
 from isca_tools.utils.constants import c_p_water, rho_water
@@ -905,3 +905,27 @@ xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset]:
     cont_amp = xr.concat(cont_amp, dim=type)
     coef_amp = xr.concat(coef_amp, dim=type)
     return phase_linear, phase_nl, cont_phase, coef_phase, amp_linear, amp_nl, cont_amp, coef_amp
+
+
+def get_phase_amp_relative_harmonic1(time: xr.DataArray, temp_anom: xr.DataArray, sw_amp1: xr.DataArray,
+                                     heat_capacity: xr.DataArray, lambda_const: xr.DataArray,
+                                     lambda_phase: xr.DataArray, extrema_type: Literal['min', 'max']='min',
+                                     day_seconds=86400, n_year_days=360):
+    # Returns y=sin(2\pi f\Delta) where \Delta=t_extrema - t_extrema_1 and A=T_extrema/T_extrema_1
+    # I.e. the time and amplitude of extrema relative to first harmonic
+    f = 1/(n_year_days * day_seconds)
+    x = 2*np.pi*f*heat_capacity/lambda_const
+    lambda_phase_dim = get_param_dimensionless(lambda_phase, heat_capacity=heat_capacity, n_year_days=n_year_days)
+    x1 = x * (1-lambda_phase_dim)
+    time_harmonic1 = np.arctan(x1) / (2 * np.pi * f)
+    if np.max(sw_amp1) > 0:
+        raise ValueError('sw_amp1>0 so Southern Hemisphere but this only works for Northern')
+    if extrema_type == 'max':
+        time_harmonic1 = time_harmonic1 + 1/(2*f)
+    time_shift = time * day_seconds - time_harmonic1
+    y = np.sin(2*np.pi*f*time_shift)
+    sw_amp2 = 10        # can be anything, not used
+    temp_harmonic1 = get_temp_shift_params(heat_capacity, sw_amp1, sw_amp2, lambda_const, lambda_phase,
+                                          0, 0, 0, n_year_days, day_seconds)[0]
+    amp_harmonic1 = np.abs(temp_anom/temp_harmonic1)
+    return y, amp_harmonic1

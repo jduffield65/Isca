@@ -1011,6 +1011,14 @@ def phase_coef_conversion(coef_linear: Union[float, np.ndarray, xr.DataArray],
         coef_phase_out = coef_linear * np.sign(coef_phase)
     return coef_linear_out, coef_phase_out
 
+def _all_zero(x) -> bool:
+    """Return True if x is (numerically) zero everywhere."""
+    if isinstance(x, xr.DataArray):
+        return bool(((x == 0) | np.isclose(x, 0)).all())
+    elif isinstance(x, np.ndarray):
+        return bool(np.all((x == 0) | np.isclose(x, 0)))
+    else:  # scalar
+        return bool((x == 0) or np.isclose(x, 0))
 
 def get_temp_shift_params(heat_capacity: Union[np.ndarray, xr.DataArray, float],
                           sw_amp1: Union[np.ndarray, xr.DataArray, float],
@@ -1089,7 +1097,7 @@ Union[np.ndarray, xr.DataArray, float]]:
     a_1 = sw_amp1 / lambda_const / np.sqrt(1 + x1 ** 2)
 
     if approx_level is None:
-        if sw_amp_ratio_mod == 0:
+        if _all_zero(sw_amp_ratio_mod):
             raise ValueError('Exact solution not possible with sw_amp2 and lambda_cos both zero')
         # Get alpha_1 and alpha_2 to compute x2 - copied from `get_temp_fourier_analytic2` function
         alpha_1 = lambda_sq / sw_amp_ratio_mod * (1 - x1 ** 2) / (1 + x1 ** 2) ** 2
