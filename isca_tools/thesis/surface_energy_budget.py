@@ -1101,9 +1101,9 @@ Union[np.ndarray, xr.DataArray, float]]:
         a_2 = prefactor * ((3 * x ** 2 + 1 + 4 * x ** 4 * lambda_ph_mod) * sw_amp_ratio_mod -
                            2 * x * (x ** 2 - (3 * x ** 2 + 1) * lambda_ph_mod) * lambda_sin -
                            (1 + 2 * x ** 2 * lambda_ph_mod) * lambda_sq)
-        a_3 = -2*prefactor * ((2*x**3 - 2*x*(3*x**2+1)*lambda_ph_mod)*sw_amp_ratio_mod +
-                              (3*x**2 + 1 + 4*x**4*lambda_ph_mod)*lambda_sin +
-                              2*x*(1 + 2 * x ** 2 * lambda_ph_mod) *  lambda_sq)
+        a_3 = -2 * prefactor * ((2 * x ** 3 - 2 * x * (3 * x ** 2 + 1) * lambda_ph_mod) * sw_amp_ratio_mod +
+                                (3 * x ** 2 + 1 + 4 * x ** 4 * lambda_ph_mod) * lambda_sin +
+                                2 * x * (1 + 2 * x ** 2 * lambda_ph_mod) * lambda_sq)
     else:
         raise ValueError(f"Unknown approx_level: {approx_level}")
     return a_1, a_2, a_3
@@ -1114,7 +1114,9 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                             lambda_sin: float = 0, extrema_ind: Literal[1, 2] = 1,
                             n_year_days: int = 360,
                             day_seconds: float = 86400, numerical: bool = False,
-                            approx_level: Optional[Literal['linear', 'linear_phase']] = None) -> Tuple[float, float, dict, dict]:
+                            approx_level: Optional[Literal['linear', 'linear_phase']] = None,
+                            coef_nl_phase: bool = False) -> Tuple[
+    float, float, dict, dict]:
     f = 1 / (n_year_days * day_seconds)
     x = float(2 * np.pi * f * heat_capacity / lambda_const)
     # Get dimensionless parameters
@@ -1123,25 +1125,77 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
              'cos': get_param_dimensionless(lambda_cos, sw_fourier_amp1=sw_amp1),
              'sin': get_param_dimensionless(lambda_sin, sw_fourier_amp1=sw_amp1),
              'sw': sw_amp2 / sw_amp1}
-    x1 = x * (1 - param['phase'])
 
-    prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
-    coef = {'sw': prefactor * 4 * x * (x ** 2 * (1 - param['phase']) ** 2 - param['phase']),
-            'square': prefactor * 4 * x,
-            'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x ** 2 + 1)}
-    coef['cos'] = -coef['sw']
-    if extrema_ind == 1:
-        for key in coef:
-            coef[key] *= -1  # first harmonic, all coefficients take negative value
-    prefactor_nl = 16 / (1 + x1 ** 2) / (1 + 4 * x ** 2) ** 2
-    coef['nl_sw'] = prefactor_nl * x * ((3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1) * (
-            (1 - param['phase']) * x ** 2 - param['phase'])
-    coef['nl_square'] = -prefactor_nl * x
-    coef['nl_cos'] = coef['nl_sw']
-    # coef['nl_sin'] = -prefactor_nl * (x*x1**2 + x1 - x) * (4*x*x1 - x1**2 + 1)
-    coef['nl_sin'] = -prefactor_nl * x * ((1 - param['phase']) ** 2 * x ** 2 - param['phase']) * (
-            (3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1)
-    coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
+    if coef_nl_phase:
+        def get_coef_from_a(param_name: Literal['sw_amp2', 'lambda_sq', 'lambda_sin']):
+            param_use = {'sw_amp2': 0, 'lambda_sq': 0, 'lambda_sin': 0}
+            # set dimensionless param to 1 so da/dparam so derivative is equal to a
+            if param_name == 'sw_amp2':
+                param_use[param_name] = sw_amp1     # so ratio is equal to 1
+            elif param_name == 'lambda_sq':
+                param_use[param_name] = get_param_dimensionless(1, sw_fourier_amp1=sw_amp1,
+                                                                lambda_const=lambda_const, invert=True)
+            elif param_name == 'lambda_sin':
+                param_use[param_name] = get_param_dimensionless(1, sw_fourier_amp1=sw_amp1, invert=True)
+            else:
+                raise ValueError(f"Unknown parameter: {param_name}")
+            # Use linear_phase here as interested in algebra step in expanding out lambda_ph terms
+            a_1, a_2, a_3 = get_temp_shift_params(heat_capacity, sw_amp1, lambda_const=lambda_const,
+                                                  lambda_phase=lambda_phase, n_year_days=n_year_days,
+                                                  day_seconds=day_seconds, approx_level='linear_phase',
+                                                  **param_use)
+            coef_linear = a_3/a_1
+            if extrema_ind == 2:
+                coef_linear *= -1
+            coef_square = -4/a_1**2 * a_2 * a_3
+            return coef_linear, coef_square
+        coef = {}
+        for key, arg in [('sw', 'sw_amp2'), ('square', 'lambda_sq'), ('sin', 'lambda_sin')]:
+            var = get_coef_from_a(arg)
+            coef[key] = var[0]
+            coef[f'nl_{key}'] = var[1]
+        coef['cos'] = -coef['sw']
+        coef['nl_cos'] = coef['sw']
+        coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
+    else:
+        # Linear Coefficients
+        # Old not separating out lambda_phase
+        # x1 = x * (1 - param['phase'])
+        # prefactor = 1 / np.sqrt(1 + x1 ** 2) / (1 + 4 * x ** 2)
+        # coef = {'sw': prefactor * 4 * x * (x ** 2 * (1 - param['phase']) ** 2 - param['phase']),
+        #         'square': prefactor * 4 * x,
+        #         'sin': 2 * prefactor * ((3 - param['phase']) * (1 + param['phase']) * x ** 2 + 1)}
+        # coef['cos'] = -coef['sw']
+        
+        lambda_ph_mod = param['phase'] / (1 + x ** 2)
+        prefactor = 1 / np.sqrt(1 + x ** 2) / (1 + 4 * x ** 2)
+        coef = {'sw': prefactor * 4 * x * (x ** 2 - (x ** 4 + 3 * x ** 2 + 1) * lambda_ph_mod),
+                'square': prefactor * 4 * x * (1 + x ** 2 * lambda_ph_mod),
+                'sin': prefactor * 2 * (3 * x ** 2 + 1 + x ** 2 * (x ** 2 - 1) * lambda_ph_mod)}
+        coef['cos'] = -coef['sw']
+        if extrema_ind == 1:
+            for key in coef:
+                coef[key] *= -1  # first harmonic, all coefficients take negative value
+
+        # Squared coefficients
+        # Old not separating out lambda_phase
+        # prefactor_nl = 16 / (1 + x1 ** 2) / (1 + 4 * x ** 2) ** 2
+        # coef['nl_sw'] = prefactor_nl * x * ((3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1) * (
+        #         (1 - param['phase']) * x ** 2 - param['phase'])
+        # coef['nl_square'] = -prefactor_nl * x
+        # coef['nl_cos'] = coef['nl_sw']
+        # # coef['nl_sin'] = -prefactor_nl * (x*x1**2 + x1 - x) * (4*x*x1 - x1**2 + 1)
+        # coef['nl_sin'] = -prefactor_nl * x * ((1 - param['phase']) ** 2 * x ** 2 - param['phase']) * (
+        #         (3 + param['phase']) * (1 - param['phase']) * x ** 2 + 1)
+        # coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
+
+        prefactor_nl = 16 * x / (1 + x ** 2) / (1 + 4 * x ** 2) ** 2
+        coef['nl_sw'] = prefactor_nl * (
+                x ** 2 * (3 * x ** 2 + 1) - (2 * x ** 6 + 11 * x ** 4 + 6 * x ** 2 + 1) * lambda_ph_mod)
+        coef['nl_square'] = -prefactor_nl * (1 + 2 * x ** 2 * lambda_ph_mod)
+        coef['nl_sin'] = -coef['nl_sw']
+        coef['nl_cos'] = coef['nl_sw']
+        coef[name_nl('sw', 'cos')] = -2 * coef['nl_sw']
 
     info_cont = {}
     if not numerical:
@@ -1154,7 +1208,8 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
                 info_cont[key] = coef[key] * param[key]
     else:
         def get_y_extrema(param_sw=0, param_square=0, param_cos=0, param_sin=0):
-            a_1, a_2, a_3 = get_temp_shift_params(heat_capacity, sw_amp1, param_sw*sw_amp1, lambda_const, lambda_phase,
+            a_1, a_2, a_3 = get_temp_shift_params(heat_capacity, sw_amp1, param_sw * sw_amp1, lambda_const,
+                                                  lambda_phase,
                                                   param_square, param_cos, param_sin, n_year_days=n_year_days,
                                                   day_seconds=day_seconds, approx_level=approx_level)
             # Solve dT/dt=0 explicitly
@@ -1167,9 +1222,9 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
 
         param_ref = {'param_sw': 0, 'param_square': 0, 'param_cos': 0, 'param_sin': 0}
         if approx_level is None:
-            param_ref['param_sw'] = 1e-10       # cannot be exactly zero in exact case
+            param_ref['param_sw'] = 1e-10  # cannot be exactly zero in exact case
         param_with_dim = {'sw': sw_amp2 / sw_amp1, 'square': lambda_sq, 'cos': lambda_cos,
-                          'sin': lambda_sin}        # parameters with dimensions
+                          'sin': lambda_sin}  # parameters with dimensions
         for key in param_ref:
             key_short = key.replace('param_', '')
             # Initialize all variables as zero
