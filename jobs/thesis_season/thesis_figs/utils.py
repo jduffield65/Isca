@@ -798,8 +798,7 @@ get_temp_extrema_numerical_xr = wrap_with_apply_ufunc(get_temp_extrema_numerical
 def get_temp_extrema_theory_xr(sw_amp: xr.DataArray, heat_capacity: xr.DataArray,
                                param_coefs: xr.DataArray, numerical: bool = False,
                                n_year_days: int = 360
-                               ) -> Tuple[xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset,
-xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset]:
+                               ) -> Tuple[xr.DataArray, xr.Dataset, xr.Dataset]:
     """
     Xarray wrapper for `get_temp_extrema_theory` that computes the timing and amplitude of temperature extrema
     from harmonic shortwave forcing and fitted feedback parameters on arbitrary xarray dimensions.
@@ -830,36 +829,23 @@ xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset]:
             $f = 1/\\mathcal{T}$ inside `get_temp_extrema_theory`.
 
     Returns:
-        phase_linear:
-            DataArray with dimension `type` plus the non-core dimensions of `sw_amp`, containing the linear-order
-            contribution to the dimensionless extremum shift $y$ (or phase shift) for each extremum type
-            (`'max'`/`'min'`, order determined by the sign of the first harmonic).
-        phase_nl:
-            DataArray with the same dimensions as `phase_linear`, containing the total dimensionless extremum
-            shift including both linear and nonlinear contributions.
-        cont_phase:
-            Dataset with dimension `type` plus the non-core dimensions of `sw_amp`, holding the decomposition
-            of extremum timing into contributions from individual mechanisms and their nonlinear combinations.
-            Variable names mirror the keys returned in `info_cont` by `get_temp_extrema_theory`
-            (e.g. `sw`, `square`, `cos`, `sin`, `nl_sw`, `nl_square`, `nl_cos`, `nl_sin`, and mixed terms).
-        coef_phase:
-            Dataset with the same dimensions as `cont_phase`, containing the analytic timing coefficients
-            that multiply the dimensionless parameters, corresponding to the `coef` dictionary from
-            `get_temp_extrema_theory`.
-        amp_linear:
-            DataArray with dimension `type` plus the non-core dimensions of `sw_amp`, containing the linear-order
-            multiplicative factor for extremum amplitude relative to the reference case, i.e. $T_{ext}/T_{ext,0}$
-            including only linear contributions.
-        amp_nl:
-            DataArray with the same dimensions as `amp_linear`, containing the total multiplicative factor
-            for extremum amplitude including nonlinear terms.
-        cont_amp:
-            Dataset with dimension `type` plus the non-core dimensions of `sw_amp`, holding the decomposition
-            of extremum amplitude factors into contributions from each mechanism and their nonlinear
-            combinations. Variable names mirror `info_cont_amp` from `get_temp_extrema_theory`.
-        coef_amp:
-            Dataset with the same dimensions as `cont_amp`, containing the analytic amplitude coefficients
-            corresponding to the `coef_amp` dictionary from `get_temp_extrema_theory`.
+        answer:
+            DataArray with dimensions `approx`, `metric`, and `type` plus the non-core dimensions of `sw_amp`.
+            The `approx` coordinate labels the approximation level:
+            for `numerical=False`, it contains two slices,
+            `approx='linear'` for the linear-order contribution and `approx='nl'` for the total
+            (linear + nonlinear) contribution; for `numerical=True`, it additionally includes
+            `approx=None`, which holds the numerically evaluated “exact” extrema
+            (i.e. including the residual nonlinear contribution stored in `cont['nl_residual']`).
+        cont:
+            Dataset with dimensions `metric` and `type` plus the non-core dimensions of `sw_amp`, holding the
+            decomposition of both extremum timing and amplitude into contributions from individual mechanisms
+            and their nonlinear combinations. For `metric='phase'`, variables mirror `info_cont` from
+            `get_temp_extrema_theory`; for `metric='amplitude'`, variables mirror `info_cont_amp`.
+        coef:
+            Dataset with the same dimensions as `cont`, containing the analytic coefficients that multiply
+            the dimensionless parameters in `cont`. For `metric='phase'`, variables correspond to the `coef`
+            dictionary from `get_temp_extrema_theory`; for `metric='amplitude'`, they correspond to `coef_amp`.
     """
     if not np.array_equal(sw_amp.harmonic, np.arange(3)):
         raise ValueError('sw_amp.harmonic must be [0, 1, 2] not {}'.format(sw_amp.harmonic))
@@ -904,28 +890,112 @@ xr.DataArray, xr.DataArray, xr.Dataset, xr.Dataset]:
     amp_nl = xr.concat(amp_nl, dim=type)
     cont_amp = xr.concat(cont_amp, dim=type)
     coef_amp = xr.concat(coef_amp, dim=type)
-    return phase_linear, phase_nl, cont_phase, coef_phase, amp_linear, amp_nl, cont_amp, coef_amp
+
+    # Concatenate phase and amplitude together
+    metric = xr.DataArray(['phase', 'amplitude'],
+                          name='metric', dims='metric')
+    answer_linear = xr.concat([phase_linear, amp_linear], dim=metric)
+    answer_nl = xr.concat([phase_nl, amp_nl], dim=metric)
+    cont = xr.concat([cont_phase, cont_amp], dim=metric)
+    coef = xr.concat([coef_phase, coef_amp], dim=metric)
+
+    # Concat answer in approx_level dimension
+    if numerical:
+        approx_lev = xr.DataArray(['linear', 'nl', None],
+                                  name='approx', dims='approx')
+        answer_exact = answer_nl + cont['nl_residual']
+        answer = xr.concat([answer_linear, answer_nl, answer_exact], dim=approx_lev)
+    else:
+        approx_lev = xr.DataArray(['linear', 'nl'], name='approx', dims='approx')
+        answer = xr.concat([answer_linear, answer_nl], dim=approx_lev)
+    return answer, cont, coef
 
 
 def get_phase_amp_relative_harmonic1(time: xr.DataArray, temp_anom: xr.DataArray, sw_amp1: xr.DataArray,
-                                     heat_capacity: xr.DataArray, lambda_const: xr.DataArray,
-                                     lambda_phase: xr.DataArray, extrema_type: Literal['min', 'max']='min',
+                                     heat_capacity: xr.DataArray, phase_h1: Optional[xr.DataArray] = None,
+                                     amp_h1: Optional[xr.DataArray] = None,
+                                     lambda_const: Optional[xr.DataArray]=None,
+                                     lambda_phase: Optional[xr.DataArray]=None, extrema_type: Literal['min', 'max']='min',
                                      day_seconds=86400, n_year_days=360):
+    """
+    Compute the phase and amplitude of temperature extrema relative to the first harmonic extremum.
+
+    This returns the dimensionless phase $y = \\sin(2\\pi f\\Delta)$, where
+    $\\Delta = t_{extrema} - t_{extrema,1}$ is the time difference between the full-solution extremum
+    and the extremum of the first harmonic, and the relative amplitude
+    $A = T_{extrema}/T_{extrema,1}$, both evaluated pointwise in xarray space.
+
+    Args:
+        time:
+            Time coordinate in days as an xarray DataArray, typically something like
+            `time = np.arange(n_year_days)`. Assumed periodic with period one year.
+        temp_anom:
+            Surface temperature anomaly $T_s - \\overline{T}_s$ as an xarray DataArray, evaluated at the
+            extremum of interest and broadcastable over `time`. This is the numerator of the amplitude
+            ratio $A = T_{extrema}/T_{extrema,1}$.
+        sw_amp1:
+            Amplitude of the first harmonic of downward shortwave radiation at the surface, $F_1$, as
+            an xarray DataArray, with units of $Wm^{-2}$. Used together with `heat_capacity`,
+            `lambda_const`, and `lambda_phase` to reconstruct the first-harmonic temperature response
+            if `phase_h1`/`amp_h1` are not supplied.
+        heat_capacity:
+            Surface heat capacity $C$ as an xarray DataArray, with units of $JK^{-1}m^{-2}$.
+        phase_h1:
+            Optional precomputed phase of the first harmonic extremum $\\phi_1$ as an xarray DataArray.
+            If provided, the time of the first harmonic extremum is taken as
+            $t_{extrema,1} = \\phi_1 / (2\\pi f)$. If `None`, it is diagnosed from
+            $(C, \\lambda, \\lambda_{phase})$ using the analytic expression.
+        amp_h1:
+            Optional precomputed amplitude of the first harmonic temperature response $T_1$ as an
+            xarray DataArray. If provided, it is used directly in the amplitude ratio
+            $A = T_{extrema}/T_{extrema,1}$. If `None`, it is diagnosed from `get_temp_shift_params`
+            with all higher-order and empirical parameters set to zero.
+        lambda_const:
+            Optional linear feedback parameter $\\lambda$ as an xarray DataArray, used to diagnose
+            the first-harmonic phase and amplitude when `phase_h1` and `amp_h1` are not provided.
+            Required if `phase_h1` is `None`.
+        lambda_phase:
+            Optional phase-lag feedback parameter $\\lambda_{phase}$ as an xarray DataArray, used
+            when diagnosing the first-harmonic phase and amplitude internally. Required if
+            `phase_h1` is `None`.
+        extrema_type:
+            Specifies which extremum of the first harmonic to treat as the reference. Use `'min'`
+            for the minimum (default) or `'max'` for the maximum; for `'max'` the reference time
+            is shifted by half a period, $1/(2f)$.
+        day_seconds:
+            Length of one day in seconds, used to convert `time` (in days) to seconds and to define
+            the frequency $f = 1/(\\mathcal{T})$ with $\\mathcal{T} = n_{year\\_days} \\times day\\_seconds$.
+        n_year_days:
+            Number of days in one period $\\mathcal{T}$ (e.g. 360), used together with `day_seconds`
+            to define the annual frequency $f$.
+
+    Returns:
+        y:
+            Dimensionless phase shift $y = \\sin(2\\pi f\\Delta)$ as an xarray DataArray, where
+            $\\Delta = t_{extrema} - t_{extrema,1}$ is the time offset of the full-solution extremum
+            relative to the first-harmonic extremum.
+        amp_harmonic1:
+            Amplitude ratio $A = T_{extrema}/T_{extrema,1}$ as an xarray DataArray, giving the
+            extremum temperature relative to the first-harmonic extremum amplitude at each point.
+    """
     # Returns y=sin(2\pi f\Delta) where \Delta=t_extrema - t_extrema_1 and A=T_extrema/T_extrema_1
     # I.e. the time and amplitude of extrema relative to first harmonic
     f = 1/(n_year_days * day_seconds)
-    x = 2*np.pi*f*heat_capacity/lambda_const
-    lambda_phase_dim = get_param_dimensionless(lambda_phase, heat_capacity=heat_capacity, n_year_days=n_year_days)
-    x1 = x * (1-lambda_phase_dim)
-    time_harmonic1 = np.arctan(x1) / (2 * np.pi * f)
+    if phase_h1 is not None:
+        time_harmonic1 = phase_h1 / (2 * np.pi * f)
+    else:
+        x = 2*np.pi*f*heat_capacity/lambda_const
+        lambda_phase_dim = get_param_dimensionless(lambda_phase, heat_capacity=heat_capacity, n_year_days=n_year_days)
+        x1 = x * (1-lambda_phase_dim)
+        time_harmonic1 = np.arctan(x1) / (2 * np.pi * f)
+        sw_amp2 = 10  # can be anything, not used, but zero gives error
+        amp_h1 = get_temp_shift_params(heat_capacity, sw_amp1, sw_amp2, lambda_const, lambda_phase,
+                                       0, 0, 0, n_year_days, day_seconds)[0]
     if np.max(sw_amp1) > 0:
         raise ValueError('sw_amp1>0 so Southern Hemisphere but this only works for Northern')
     if extrema_type == 'max':
         time_harmonic1 = time_harmonic1 + 1/(2*f)
     time_shift = time * day_seconds - time_harmonic1
     y = np.sin(2*np.pi*f*time_shift)
-    sw_amp2 = 10        # can be anything, not used
-    temp_harmonic1 = get_temp_shift_params(heat_capacity, sw_amp1, sw_amp2, lambda_const, lambda_phase,
-                                          0, 0, 0, n_year_days, day_seconds)[0]
-    amp_harmonic1 = np.abs(temp_anom/temp_harmonic1)
+    amp_harmonic1 = np.abs(temp_anom / amp_h1)
     return y, amp_harmonic1

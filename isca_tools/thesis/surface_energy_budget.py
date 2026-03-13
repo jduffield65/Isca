@@ -1332,7 +1332,7 @@ def get_temp_extrema_theory(heat_capacity: float, sw_amp1: float, sw_amp2: float
 
         param_ref = {'param_sw': 0, 'param_square': 0, 'param_cos': 0, 'param_sin': 0}
         if approx_level is None:
-            param_ref['param_sw'] = 1e-10  # cannot be exactly zero in exact case
+            param_ref['param_sw'] = 1e-7  # cannot be exactly zero in exact case
         param_with_dim = {'sw': sw_amp2 / sw_amp1, 'square': lambda_sq, 'cos': lambda_cos,
                           'sin': lambda_sin}  # parameters with dimensions
         for key in param_ref:
