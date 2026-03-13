@@ -4,6 +4,7 @@ import xarray as xr
 import inspect
 from typing import Union, Literal, Optional, Tuple, List, Callable
 import itertools
+from matplotlib.ticker import FuncFormatter
 
 from isca_tools.thesis.surface_flux_taylor import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw, \
     name_square, name_nl, get_latent_heat, get_sensible_heat, get_lwup_sfc_net, get_sensitivity_lh, \
@@ -28,6 +29,8 @@ width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
 label_lat = "Latitude [deg]"
 label_error = 'Error [%]'
 label_time = 'Day of year'
+label_time_shift = lambda x ='ex': '$\sin(2\pi f\Delta_{\\text{'+x+'}})$'
+label_amp = lambda x='ex': '$A(\Delta_{\\text{'+x+'}})$ [KK$^{-1}$]'
 ax_lims_time = [-1, 360]
 leg_handlelength = 1.5
 month_ticks = (np.arange(15, 12 * 30 + 15, 30), ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
@@ -999,3 +1002,18 @@ def get_phase_amp_relative_harmonic1(time: xr.DataArray, temp_anom: xr.DataArray
     y = np.sin(2*np.pi*f*time_shift)
     amp_harmonic1 = np.abs(temp_anom / amp_h1)
     return y, amp_harmonic1
+
+
+def add_time_shift_second_ax(ax, n_year_days: int, ex_label: Literal['ex', 'min', 'max']='ex'):
+    # Add right axis in units of days
+    ax1_right = ax.secondary_yaxis(
+        "right",
+        functions=(lambda y: y, lambda y: y),
+    )
+    ax1_right.yaxis.set_major_formatter(
+        FuncFormatter(
+            lambda y, pos: f"{np.arcsin(y) / 2 / np.pi * n_year_days:.0f}"
+        )
+    )
+    ax1_right.set_ylabel('$\Delta_{\\text{' + ex_label + '}}$ [days]')
+    return ax1_right
