@@ -30,7 +30,7 @@ label_lat = "Latitude [deg]"
 label_error = 'Error [%]'
 label_time = 'Day of year'
 label_time_shift = lambda x ='ex': '$\sin(2\pi f\Delta_{\\text{'+x+'}})$'
-label_amp = lambda x='ex': '$A(\Delta_{\\text{'+x+'}})$ [KK$^{-1}$]'
+label_amp = lambda x='ex': '$A_{\\text{'+x+'}}$ [KK$^{-1}$]'
 ax_lims_time = [-1, 360]
 leg_handlelength = 1.5
 month_ticks = (np.arange(15, 12 * 30 + 15, 30), ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
@@ -1004,8 +1004,29 @@ def get_phase_amp_relative_harmonic1(time: xr.DataArray, temp_anom: xr.DataArray
     return y, amp_harmonic1
 
 
-def add_time_shift_second_ax(ax, n_year_days: int, ex_label: Literal['ex', 'min', 'max']='ex'):
-    # Add right axis in units of days
+def add_time_shift_second_ax(ax: plt.Axes, n_year_days: int, ex_label: Literal['ex', 'min', 'max']='ex'):
+    """
+    Add a secondary y-axis showing extremum time shift in days corresponding to $y = \\sin(2\\pi f\\Delta)$.
+
+    The primary y-axis is assumed to show the dimensionless phase variable $y$. This function adds a
+    right-hand y-axis whose tick labels are the associated time shifts $\\Delta$ in days, computed as
+    $\\Delta = \\arcsin(y)/(2\\pi f)$ with $f = 1/\\mathcal{T}$ and $\\mathcal{T} = n_{year\\_days}$ days.
+
+    Args:
+        ax:
+            Matplotlib Axes on which the primary y-axis represents the dimensionless phase variable $y$.
+        n_year_days:
+            Number of days in one period $\\mathcal{T}$ (e.g. 360). Used to convert $y$ to a time shift
+            in days via $\\Delta = \\arcsin(y)/(2\\pi) \\times n_{year\\_days}$.
+        ex_label:
+            Label string inserted into the LaTeX subscript of $\\Delta$ on the secondary y-axis. Use
+            `'ex'`, `'min'`, or `'max'` to get labels like $\\Delta_{\\text{ex}}$, $\\Delta_{\\text{min}}$,
+            or $\\Delta_{\\text{max}}$.
+
+    Returns:
+        ax1_right:
+            The newly created secondary y-axis (right-hand side) with tick labels in units of days.
+    """
     ax1_right = ax.secondary_yaxis(
         "right",
         functions=(lambda y: y, lambda y: y),
