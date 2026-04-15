@@ -18,6 +18,34 @@ from isca_tools.utils.base import parse_int_list, split_list_max_n
 logging.basicConfig(level=logging.INFO, format='%(asctime)s,%(msecs)03d - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     stream=sys.stdout)
 
+def create_var_per_job_nml(input_file_path: str, exist_ok: Optional[bool] = None) -> List:
+    input_info = f90nml.read(input_file_path)
+    if 'one_var_per_file' not in input_info['script_info'] or not input_info['script_info']['one_var_per_file']:
+        # If one_var_per_file does not exist or is False, just return input file as it is
+        out_file_names = [input_file_path]
+    else:
+        request_dict = initialize_request_dict(copy.deepcopy(input_info['request']))
+        vars_all = request_dict['variable']
+        out_file_names = []
+        input_dir = os.path.dirname(input_file_path)
+        input_file_name = os.path.basename(input_file_path)
+        for i, var in enumerate(vars_all):
+            input_dir_var = os.path.join(input_dir, var)
+            os.makedirs(input_dir_var, exist_ok=True)
+            out_file_names.append(os.path.join(input_dir_var, input_file_name))
+            if os.path.exists(out_file_names[-1]):
+                if exist_ok is None:
+                    print(f'Variable {i+1}/{len(vars_all)} | {var}: Output nml file already exists. Leaving unchanged')
+                    continue
+
+            input_info['request']['variable'] = var
+            # Set output directory to be in directory corresponding to the variable
+            input_info['script_info']['out_dir'] = input_info['script_info']['out_dir'].replace(input_dir, input_dir_var)
+            os.makedirs(input_info['script_info']['out_dir'], exist_ok=True)       # ensure output directory exists
+            input_info.write(out_file_names[-1], force=exist_ok)
+            print(f'Variable {i+1}/{len(vars_all)} | {var}: Output nml file created')
+    return out_file_names
+
 def create_years_per_job_nml(input_file_path: str, exist_ok: Optional[bool] = None) -> List:
     """
     Splits up list of all years into separate lists of no more than `max_workers` in each.
@@ -27,8 +55,8 @@ def create_years_per_job_nml(input_file_path: str, exist_ok: Optional[bool] = No
 
     Args:
         input_file_path: Path to `nml` file for experiment.
-        exist_ok: If `True`, do not raise exception if any file to be created already exists.
-            If `False`, will overwrite it. If `None` leaves the existing file unchanged.
+        exist_ok: If `True`, do not raise exception if any file to be created already exists, will overwrite it.
+            If `False`, will give error if already exists. If `None` leaves the existing file unchanged with no error.
 
     Returns:
         List of paths to nml files created e.g. `['/Users/.../input1985.nml', '/Users/.../input1985.nml']`

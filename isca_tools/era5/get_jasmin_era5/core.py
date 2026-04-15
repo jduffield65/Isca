@@ -55,6 +55,7 @@ class Find_era5:
         self._ML_VARS = ['sp', 'lnsp', 'o3', 'q', 't', 'u', 'v', 'vo', 'z']       # variables on model levels
         self._SURF_VARS = ['10u', '10v', '2d', '2t', 'asn', 'cape', 'ci',   # variables on surface level
                            'msl', 'sd', 'skt', 'sst', 'tcc', 'tcwv']
+        self._FORECAST_VARS = ['metss', 'mntss', 'mslhf', 'msnlwrf', 'msnswrf']     # variables that are surface level forcecast parameter data (fc_sfc not an_sfc)
         self._ML_WARNING_YEARS = np.arange(2000, 2007).tolist()  # in these years model level data suffer from statospheric cold biases - should use ERA5.1
 
     def __getitem__(self, args):
@@ -143,7 +144,8 @@ class Find_era5:
             # If no data found
             raise ValueError(f'No data found for ecmwf-era5{self.archive}, var={var} and date={date}.\n'
                              f'Model level variables = {self._ML_VARS}\n'
-                             f'Surface variables = {self._SURF_VARS}\n'
+                             f'Surface analysis variables = {self._SURF_VARS}\n'
+                             f'Surface forecast variables = {self._FORECAST_VARS}\n'
                              f'Invariant variables = {self._INVARIANTS}')
 
         if sp_info['in_var']:
