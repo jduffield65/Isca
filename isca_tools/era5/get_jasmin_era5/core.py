@@ -55,7 +55,7 @@ class Find_era5:
         self._ML_VARS = ['sp', 'lnsp', 'o3', 'q', 't', 'u', 'v', 'vo', 'z']       # variables on model levels
         self._SURF_VARS = ['10u', '10v', '2d', '2t', 'asn', 'cape', 'ci',   # variables on surface level
                            'msl', 'sd', 'skt', 'sst', 'tcc', 'tcwv']
-        self._FORECAST_VARS = ['metss', 'mntss', 'mslhf', 'msnlwrf', 'msnswrf']     # variables that are surface level forcecast parameter data (fc_sfc not an_sfc)
+        self._FORECAST_VARS = ['metss', 'mntss', 'mslhf', 'msnlwrf', 'msnswrf']     # variables that are surface level forecast parameter data (fc_sfc not an_sfc)
         self._ML_WARNING_YEARS = np.arange(2000, 2007).tolist()  # in these years model level data suffer from statospheric cold biases - should use ERA5.1
 
     def __getitem__(self, args):

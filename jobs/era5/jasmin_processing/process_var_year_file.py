@@ -3,7 +3,6 @@ import time
 
 import f90nml
 from isca_tools.era5.get_jasmin_era5 import Find_era5
-from isca_tools.utils.base import split_list_max_n
 from typing import Literal, List, Optional, Union
 import xarray as xr
 import os
@@ -173,7 +172,7 @@ def main(input_file_path: str):
     func_arg_names = inspect.signature(process_year).parameters
     func_args = {k: v for k, v in script_info.items() if k in func_arg_names}
     logger = logging.getLogger()  # for printing to console time info
-    # While loop to stop mutliple processes making directory at same time
+    # While loop to stop multiple processes making directory at same time
     if not os.path.exists(script_info['out_dir']):
         i = 0
         success = False
