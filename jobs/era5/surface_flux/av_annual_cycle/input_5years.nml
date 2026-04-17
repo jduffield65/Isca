@@ -1,0 +1,40 @@
+! Info for SLURM job submission to give to run_script function in isca_tools/jasmin/run/base.py.
+&slurm_info
+   jobs_dir = '/home/users/jamd1/Isca/jobs/'                  ! Directory containing jobs on JASMIN
+   script_path = 'era5/surface_flux/get_av_annual_cycle.py'  ! Path to python script within jobs_dir
+   script_args =                                              ! Will set to the path to this file if blank
+   job_name =                                                 ! Set to name of directory containing this file if blank
+   time = '24:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
+   n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
+   cpus_per_task = 1            ! How many CPUs to allocate per task.
+   mem = 80                     ! Memory to allocate for the job in GB.
+   partition = 'standard'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   qos =                        ! Set to same as partition if blank
+   conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
+   account = 'global_ex'        ! Account to use for submitting jobs.
+   exist_output_ok =            ! Whether to run script if console_output for `job_name` already exists
+                                ! blank will just append number if output already exists.
+/
+
+! var = 'skt', 'mslhf', 'msshf', 'msnswrf', 'msnlwrf', 'sp', 't', 'q', 'u', 'v'           ! Old variables
+&script_info
+    out_dir = '/home/users/jamd1/Isca/jobs/era5/surface_flux/av_annual_cycle/output_5years'        ! Where nd2 file saved
+    var = 'skt', 'mslhf', 'msshf', 'msnswrf', 'msnlwrf', 'sp', '2t', '2d', '10u', '10v', 't', 'q', 'u', 'v'           ! all variables to obtain (last 5 are on lowest sigma level)
+    year_start = 1979
+    year_end = 1984
+    stat = 'mean'                   ! Whether to compute mean, min or max over the stat_freq time period
+    stat_freq = '1D'                ! Integer followed by 'H' for hour, ''D' for day, 'W' for week, 'M' for month, 'Y' for year
+    level = -1                        ! Model level to consider variable at. -1 or 137 for model closest to surface, and 1 for closest to space. Not required if single level variable
+    lon_min =                    ! Will consider longitudes between lon_min and lon_max. Leave blank for whole globe.
+    lon_max =
+    lat_min =                    ! Will consider latitudes between lat_min and lat_max. Leave blank for whole globe.
+    lat_max =
+    smooth_n_days = 50              ! Smooth data over 50 days to remove day to day variability
+    smooth_center = .true.          ! If True, use a centered window for smoothing.
+    smooth_min_periods = 10         ! Minimum number of observations in smooth window required to have a value
+    model = 'oper'                  ! Either `oper` for operational reanalysis (default era5 output) or `enda` for ensemble dataset
+    load_all_at_start = .false.     ! Whether to load data for given chunk of months before doing processing
+    exist_ok =                      ! If output already exists, overwrite if .true., skip if blank, give error if .false.
+    complevel = 4                   ! Level of compression, higher means more compression. Max is 9
+    single_month = .false.          ! Hack if .true. to test for a single month just to make sure it works.
+/
