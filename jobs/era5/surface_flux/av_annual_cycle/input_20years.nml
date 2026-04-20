@@ -4,12 +4,12 @@
    script_path = 'era5/surface_flux/get_av_annual_cycle.py'  ! Path to python script within jobs_dir
    script_args =                                              ! Will set to the path to this file if blank
    job_name =                                                 ! Set to name of directory containing this file if blank
-   time = '24:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
+   time = '48:00:00'            ! Maximum wall time for your job in format `hh:mm:ss`
    n_tasks = 1                  ! Number of tasks to run (usually 1 for a single script).
    cpus_per_task = 1            ! How many CPUs to allocate per task.
-   mem = 100                     ! Memory to allocate for the job in GB.
-   partition = 'standard'          ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
-   qos =                       ! Set to same as partition if blank
+   mem = 900                    ! Memory to allocate for the job in GB.
+   partition = 'standard'       ! Specifies the partition for the job. Options are `standard`, `highres` and `debug`.
+   qos = 'high'                 ! Set to same as partition if blank
    conda_env = 'myenv'          ! Name of the conda environment on JASMIN to use.
    account = 'global_ex'        ! Account to use for submitting jobs.
    exist_output_ok =            ! Whether to run script if console_output for `job_name` already exists
@@ -20,7 +20,7 @@
 ! var = 'skt', 'mslhf', 'msshf', 'msnswrf', 'msnlwrf', 'sp', '2t', '2d', '10u', '10v'           ! shorter to run as 2D variables
 &script_info
     out_dir = '/home/users/jamd1/Isca/jobs/era5/surface_flux/av_annual_cycle/output_20years'        ! Where nd2 file saved
-    var = 'skt', 'mslhf', 'msshf', 'msnswrf', 'msnlwrf', 'sp', '2t', '2d', '10u', '10v'           ! all variables to obtain (last 5 are on lowest sigma level)
+    var = 'skt', 'mslhf', 'msshf', 'msnswrf', 'msnlwrf', 'sp', '2t', '2d', '10u', '10v', 't', 'q', 'u', 'v'           ! all variables to obtain (last 5 are on lowest sigma level)
     year_start = 1979
     year_end = 1999
     stat = 'mean'                   ! Whether to compute mean, min or max over the stat_freq time period

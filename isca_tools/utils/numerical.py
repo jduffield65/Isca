@@ -9,7 +9,7 @@ from ..utils.fourier import get_fourier_coef, fourier_series
 
 def get_var_shift(x: np.ndarray, shift_time: Optional[float] = None, shift_phase: Optional[float] = None,
                   time: Optional[np.ndarray] = None, time_start: Optional[float] = None,
-                  time_end: Optional[float] = None) -> np.ndarray:
+                  time_end: Optional[float] = None, force_int_shift: bool = False) -> np.ndarray:
     """
     Returns the periodic variable $x(t-t_{shift})$ where $t$=`time`, and $t_{shift}=$`shift_time`.
     If `shift_phase` is provided, will set `shift_time = shift_phase * period`.
@@ -27,6 +27,7 @@ def get_var_shift(x: np.ndarray, shift_time: Optional[float] = None, shift_phase
             If not provided, will set to min value in `time`.
         time_end: End time such that period is given by `time_end - time_start + 1`.
             If not provided, will set to max value in `time`.
+        force_int_shift: If `True`, will raise an error if shifted by a non integer amount of time.
 
     Returns:
         x_shift: `float [n_x]`</br>
@@ -53,8 +54,9 @@ def get_var_shift(x: np.ndarray, shift_time: Optional[float] = None, shift_phase
         if shift_phase is not None:
             shift_time = shift_phase * x.size
         if int(np.round(shift_time)) != shift_time:
-            raise ValueError(f'shift_time={shift_time} is not a whole number - '
-                             f'may be better using spline by providing time.')
+            if force_int_shift:
+                raise ValueError(f'shift_time={shift_time} is not a whole number - '
+                                 f'may be better using spline by providing time.')
         x_shift = np.roll(x, int(np.round(shift_time)))
     return x_shift
 
