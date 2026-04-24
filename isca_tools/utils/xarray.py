@@ -288,14 +288,17 @@ def update_dim_slice(obj: Union[xr.DataArray, xr.Dataset], dim: str, dim_val,
             else:
                 raise ValueError("Provide var_name (or pass a DataArray with var.name set).")
 
-        obj[var_name].loc[{dim: dim_val}] = var
+        try:
+            obj[var_name].loc[{dim: dim_val}] = var
+        except ValueError as e:
+            raise ValueError(f"Encountered ValueError: {e}\nSolution is probably ds=ds.copy(deep=True) so can update ds.")
         return obj
 
     if isinstance(obj, xr.DataArray):
         try:
             obj.loc[{dim: dim_val}] = var
         except ValueError as e:
-            print(f"Encountered ValueError: {e}\nSolution is probably ds=ds.copy(deep=True) so can update ds.")
+            raise ValueError(f"Encountered ValueError: {e}\nSolution is probably ds=ds.copy(deep=True) so can update ds.")
         return obj
 
     raise TypeError(f"Expected xarray Dataset or DataArray, got {type(obj)}")
