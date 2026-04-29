@@ -127,7 +127,7 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
     return flux_surf - flux_toa
 
 
-def get_heat_capacity(c_p: float, density: float, layer_depth: float) -> float:
+def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_depth: bool=False) -> float:
     """
     Given heat capacity un units of $JK^{-1}kg^{-1}$, this returns heat capacity in units of $JK^{-1}m^{-2}$.
 
@@ -136,13 +136,17 @@ def get_heat_capacity(c_p: float, density: float, layer_depth: float) -> float:
             Units: $JK^{-1}kg^{-1}$
         density: Density of substance (usually air or water).</br>
             Units: $kgm^{-3}$
-        layer_depth: Depth of layer.</br>
+        layer_depth: Depth of layer or heat capacity if `return_depth=True`</br>
             Units: $m$
+        return_depth: If `True`, will return mixed layer depth in $m$ given heat capacity in $JK^{-1}m^{-2}$.
 
     Returns:
-        Heat capacity in units of $JK^{-1}m^{-2}$.
+        Heat capacity in units of $JK^{-1}m^{-2}$ or mixed layer depth in $m$ if `return_depth=True`.
     """
-    return c_p * density * layer_depth
+    if return_depth:
+        return layer_depth / (c_p * density)
+    else:
+        return c_p * density * layer_depth
 
 def opd_lw_gray(lat: np.ndarray, pressure: Optional[float] = None,
                 kappa: float = 1, tau_eq: float = 6, tau_pole: float = 1.5,
