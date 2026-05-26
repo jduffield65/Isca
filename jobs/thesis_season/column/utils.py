@@ -134,7 +134,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
 
 
 def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
-             calc: bool = False) -> xr.DataArray:
+             calc: bool = False, use_rh_flux_q: bool = False) -> xr.DataArray:
     """Return a surface turbulent/radiative flux from a Dataset.
 
     This helper provides two modes:
@@ -163,6 +163,9 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
             If True, calculate the flux from required inputs using the corresponding
             flux function. If False, return the precomputed/direct flux expression
             from `ds`.
+        use_rh_flux_q:
+            For latent heat calculation, this will use `rh_flux_q` in attributes rather than `rh_atm`
+            to compute the latent heat flux.
 
     Returns:
         flux: Flux as an `xr.DataArray`. Dimensions/coords follow the underlying dataset
@@ -187,6 +190,13 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
           "net" variable.
     """
     if calc:
+        if flux_name == 'lh':
+            if use_rh_flux_q:
+                ds = ds.copy(deep=True)  # so not to overwrite
+                if 'rh_flux_q' in ds.attrs:
+                    ds['rh_atm'] = ds.rh_atm*0 + ds.rh_flux_q
+                else:
+                    raise ValueError('ds does not contain rh_flux_q')
         flux_func = {'lh': get_latent_heat, 'sh': get_sensible_heat, 'lw': get_lw_atm_net}[flux_name]
         arg_names = list(inspect.signature(flux_func).parameters.keys())
         var = {}
@@ -202,7 +212,8 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
         return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw': ds.lwup_sfc - ds.lwdn_sfc - ds.olr}[flux_name]
 
 
-def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh') -> xr.Dataset:
+def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
+                         use_rh_flux_q: bool = False) -> xr.Dataset:
     """
     Return flux sensitivity (Taylor-series coefficients) for a chosen flux decomposition.
 
@@ -214,6 +225,9 @@ def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 
     Args:
         ds: Dataset containing the required inputs as variables and/or attributes.
         flux_name: Flux decomposition to use: `'lh'`, `'sh'`, or `'lw'`.
+        use_rh_flux_q:
+            For latent heat calculation, this will use `rh_flux_q` in attributes rather than `rh_atm`
+            to compute the latent heat flux.
 
     Returns:
         Dataset of Taylor-series coefficients returned by the selected sensitivity function.
@@ -223,6 +237,13 @@ def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 
     """
     func_use = {'lh': get_sensitivity_lh, 'sh': get_sensitivity_sh, 'lw': get_sensitivity_lw}[flux_name]
     arg_names = inspect.signature(func_use).parameters.keys()
+    if flux_name == 'lh':
+        if use_rh_flux_q:
+            ds = ds.copy(deep=True)  # so not to overwrite
+            if 'rh_flux_q' in ds.attrs:
+                ds['rh_atm'] = ds.rh_atm * 0 + ds.rh_flux_q
+            else:
+                raise ValueError('ds does not contain rh_flux_q')
     var = {}
     for key in arg_names:
         if key in ds:
@@ -237,7 +258,8 @@ def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 
 def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
                         flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
                         numerical: bool = False,
-                        time_dim: str = 'time', ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.Dataset]:
+                        time_dim: str = 'time', use_rh_flux_q: bool = False
+                        ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.Dataset]:
     reconstruct_flux = {'lh': reconstruct_lh, 'sh': reconstruct_sh, 'lw': reconstruct_lw}[flux_name]
     arg_names = list(inspect.signature(reconstruct_flux).parameters.keys())
     arg_names = [key for key in arg_names if key != 'numerical']  # treat numerical as kwarg
@@ -251,6 +273,17 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
         # Add time dimension to drag and evap, as don't have initially
         drag_coef = ds.temp_surf * 0 + ds_ref.drag_coef
         evap_prefactor = ds.temp_surf * 0 + ds_ref.evap_prefactor
+        if use_rh_flux_q:
+            ds = ds.copy(deep=True)     # so not to overwrite
+            ds_ref = ds_ref.copy(deep=True)
+            if 'rh_flux_q' in ds.attrs:
+                ds['rh_atm'] = ds.rh_atm * 0 + ds.rh_flux_q
+            else:
+                raise ValueError('ds does not contain rh_flux_q')
+            if 'rh_flux_q' in ds_ref.attrs:
+                ds_ref['rh_atm'] = ds_ref.rh_atm * 0 + ds_ref.rh_flux_q
+            else:
+                raise ValueError('ds does not contain rh_flux_q')
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
             reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.rh_atm, ds_ref.w_atm, ds_ref.drag_coef,
                                   ds_ref.p_surf, ds_ref.sigma_atm, ds_ref.evap_prefactor,

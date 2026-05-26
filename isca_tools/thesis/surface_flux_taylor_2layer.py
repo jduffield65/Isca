@@ -109,6 +109,7 @@ def get_sensitivity_lh(
     """
     p_atm = p_surf * sigma_atm
     alpha_surf = clausius_clapeyron_factor(temp_surf, p_surf)
+    q_surf = sphum_sat(temp_surf, p_surf)
     alpha_atm = clausius_clapeyron_factor(temp_atm, p_atm)
     q_atm_sat = sphum_sat(temp_atm, p_atm)
     q_atm = rh_atm * q_atm_sat
@@ -117,7 +118,7 @@ def get_sensitivity_lh(
     lh_prefactor = evap_prefactor * L_v * drag_coef * w_atm * rho_atm
 
     # Differential of lh wrt each param - same order as input args
-    out_dict = {'temp_surf': lh_prefactor * alpha_surf * sphum_sat(temp_surf, p_surf),
+    out_dict = {'temp_surf': lh_prefactor * alpha_surf * q_surf,
                 'temp_atm': -lh / temp_atm - lh_prefactor * q_atm * alpha_atm,
                 'rh_atm': -lh_prefactor * q_atm_sat,
                 'w_atm': lh / w_atm,
@@ -125,6 +126,16 @@ def get_sensitivity_lh(
                 'p_surf': 0,
                 'evap_prefactor': lh / evap_prefactor
                 }
+
+    out_dict[name_square('temp_surf')] = lh_prefactor * alpha_surf * q_surf / temp_surf * (alpha_surf*temp_surf - 2)
+    out_dict[name_square('temp_surf')] = out_dict[name_square('temp_surf')] * 0.5  # to match the taylor series coef
+
+    out_dict[name_square('temp_atm')] = -out_dict['temp_atm']/temp_atm + lh/temp_atm**2 + \
+                                        lh_prefactor * alpha_atm*q_atm*(3/temp_atm-alpha_atm)
+    out_dict[name_square('temp_atm')] = out_dict[name_square('temp_atm')] * 0.5  # to match the taylor series coef
+
+    # Mechanism combinations
+    out_dict[name_nl('temp_surf', 'temp_atm')] = -out_dict['temp_surf']/temp_atm
     return out_dict
 
 
@@ -519,6 +530,13 @@ def get_sensitivity_lw(
                 'temp_diseqb_r': 8 * Stefan_Boltzmann * emiss_factor * temp_rad ** 3,
                 'odp_surf': Stefan_Boltzmann * (temp_surf ** 4 - 2 * temp_rad ** 4) * np.exp(-odp_surf),
                 }
+
+    out_dict[name_square('temp_surf')] = 12 * Stefan_Boltzmann * emiss_factor * temp_surf ** 2
+    out_dict[name_square('temp_surf')] = out_dict[name_square('temp_surf')] * 0.5  # to match the taylor series coef
+
+    out_dict[name_square('temp_atm')] = -24 * Stefan_Boltzmann * emiss_factor * temp_rad ** 2
+    out_dict[name_square('temp_atm')] = out_dict[name_square('temp_atm')] * 0.5  # to match the taylor series coef
+
     return out_dict
 
 
