@@ -264,6 +264,7 @@ logical :: do_simple             = .false.
 real    :: w_atm_const           = 0.0    ! JD 11/05/2025 - Add option for no-WISHE (approx value should be 10)
 real    :: drag_const            = 0.0    ! JD 11/05/2025 - Add option for no-WISHE (approx value should be 0.0009)
 logical :: mo_drag_use_w_atm_const = .false.   ! JD 11/05/2025 - option to use constant wind to compute drag coeffs if no-WISHE
+real    :: rh_flux_q               =  0.0    ! JD 26/5/2026 - option for fixed relative humidity for latent heat calc
 
 real    :: land_humidity_prefactor  =  1.0    ! Default is that land makes no difference to evaporative fluxes
 real    :: land_evap_prefactor  =  1.0    ! Default is that land makes no difference to evaporative fluxes
@@ -286,6 +287,7 @@ namelist /surface_flux_nml/ no_neg_q,             &
                             w_atm_const,          &     ! JD 11/05/2025 noWISHE
                             drag_const,           &     ! JD 11/05/2025 noWISHE
                             mo_drag_use_w_atm_const, &  ! JD 11/05/2025 noWISHE
+                            rh_flux_q,               &   ! JD 26/5/2026 - option for fixed relative humidity for latent heat calc
                             land_humidity_prefactor, & ! Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
                             land_evap_prefactor, & ! Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
                             flux_heat_gp,         &    ! prescribed lower boundary heat flux on a giant planet
@@ -401,7 +403,8 @@ subroutine surface_flux_1d (                                           &
        rho_drag, drag_t,    drag_m,   drag_q,              &
        q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
        e_sat_2m, q_sat_2m, cd_t_ignored, cd_q_ignored,     &      ! JD 11/05/2025 - drag calc
-       cd_m_ignored, u_star_ignored, b_star_ignored               ! JD 11/05/2025 - drag calc
+       cd_m_ignored, u_star_ignored, b_star_ignored,       &      ! JD 11/05/2025 - drag calc
+       e_sat_atm    ! JD 26/5/2026 - need for fixed relative humidity for latent heat calc
 
   integer :: i, nbad
 
@@ -645,6 +648,25 @@ subroutine surface_flux_1d (                                           &
          rho_drag  =  drag_q * rho
       end where
   end if
+
+  ! JD 26/5/2026 - need for fixed relative humidity for latent heat calc (start)
+  if (rh_flux_q > 0.0) then
+      call escomp (t_atm, e_sat_atm)  ! saturation vapor pressure at lowest atmospheric level
+
+      ! set atmospheric humidity used for latent heat calc to rh_flux_q multiplied by saturated specific humidity
+      ! at the lowest atmospheric level
+      if(use_mixing_ratio) then
+          ! surface mixing ratio at saturation
+          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-e_sat_atm)
+      elseif(do_simple) then
+          q_atm   = rh_flux_q*d622*e_sat_atm / p_atm
+      else
+          ! surface specific humidity at saturation
+          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-d378*e_sat_atm)
+      endif
+  end if
+ ! JD 26/5/2026 - need for fixed relative humidity for latent heat calc (end)
+
 
 ! Add bucket - if bucket is on evaluate fluxes based on moisture availability.
 ! Note changes to avail statements to allow bucket to be switched on or off
