@@ -163,6 +163,9 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
     ds['evap_prefactor'] = xr.DataArray(evap_prefactor, dims="depth", coords={"depth": ds["depth"]})
     ds['hybm'] = ds.hybm.isel(depth=0)
     ds.attrs['drag_coef'] = namelist['surface_flux_nml']['drag_const']  # drag coef is a constant here
+    if 'rh_flux_q' in namelist['surface_flux_nml']:
+        # Constant RH used in latent heat calculations
+        ds.attrs['rh_flux_q'] = namelist['surface_flux_nml']['rh_flux_q']
     # Rename temp vars to used in surface flux functions
     ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf',
                          'hybm': 'sigma_atm'})
