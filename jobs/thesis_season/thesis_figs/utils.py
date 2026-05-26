@@ -78,7 +78,7 @@ exp_dir = lambda x, y=False: f'thesis_season/depth={x}/k=1_const_drag{"_evap=0_1
 
 
 def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, var_keep: List = var_keep,
-            lat_min: float = lat_min, lat_max: float = lat_max) -> xr.Dataset:
+            lat_min: float = lat_min, lat_max: float = lat_max, exp_name: Optional[Union[str, List]]=None) -> xr.Dataset:
     """Load and preprocess near-surface fields for one or two mixed-layer depths.
 
     Loads the Isca experiment dataset(s), keeps selected variables, subsets a latitude
@@ -113,14 +113,17 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
           you want to preserve the original list.
     """
     # Load dataset
-    if depth == 5:
-        exp_name = [exp_dir(5, reduced_evap)]
-    elif depth == 20:
-        exp_name = [exp_dir(20)]
-    elif depth == 'both':
-        exp_name = [exp_dir(5, reduced_evap), exp_dir(20)]
-    else:
-        raise ValueError('Depth must be either 5 or 20 or "both"')
+    if exp_name is None:
+        if depth == 5:
+            exp_name = [exp_dir(5, reduced_evap)]
+        elif depth == 20:
+            exp_name = [exp_dir(20)]
+        elif depth == 'both':
+            exp_name = [exp_dir(5, reduced_evap), exp_dir(20)]
+        else:
+            raise ValueError('Depth must be either 5 or 20 or "both"')
+    elif isinstance(exp_name, str):
+        exp_name = [exp_name]
 
     # Get low level sigma level
     namelist = load_namelist(exp_name[0])
