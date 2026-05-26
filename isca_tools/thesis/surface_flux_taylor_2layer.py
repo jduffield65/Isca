@@ -118,7 +118,7 @@ def get_sensitivity_lh(
 
     # Differential of lh wrt each param - same order as input args
     out_dict = {'temp_surf': lh_prefactor * alpha_surf * sphum_sat(temp_surf, p_surf),
-                'temp_diseqb': -lh / temp_atm - lh_prefactor * q_atm * alpha_atm,
+                'temp_atm': -lh / temp_atm - lh_prefactor * q_atm * alpha_atm,
                 'rh_atm': -lh_prefactor * q_atm_sat,
                 'w_atm': lh / w_atm,
                 'drag_coef': lh / drag_coef,
