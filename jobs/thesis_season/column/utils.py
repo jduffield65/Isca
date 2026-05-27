@@ -3,9 +3,10 @@ import xarray as xr
 import inspect
 from typing import Union, Literal, Optional, Tuple, List, Callable
 
-from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_rad, reconstruct_lh, reconstruct_sh, reconstruct_lw, \
-    name_square, name_nl, get_latent_heat, get_sensible_heat, get_lw_atm_net, get_sensitivity_lh, \
-    get_sensitivity_sh, get_sensitivity_lw
+from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_rad_atm, reconstruct_lh, reconstruct_sh, reconstruct_lw_atm, \
+    name_square, name_nl, get_latent_heat, get_sensible_heat, get_lw_atm, get_sensitivity_lh, \
+    get_sensitivity_sh, get_sensitivity_lw_atm, get_lw_surf, get_sensitivity_lw_surf, reconstruct_lw_surf
+from isca_tools.thesis.surface_flux_taylor import get_temp_rad as get_temp_rad_surf
 from tqdm.notebook import tqdm
 
 from isca_tools.utils.constants import c_p_water, rho_water
@@ -128,12 +129,15 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     ds['p_atm'] = ds.p_surf * ds.sigma_atm
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_atm)
     ds['lw_atm'] = ds.lwup_sfc - ds.lwdn_sfc - ds.olr
-    ds['temp_rad'] = get_temp_rad(ds.olr, ds.lwdn_sfc, ds.temp_surf, ds.odp_surf)
-    ds['temp_diseqb_r'] = ds.temp_atm - ds.temp_rad
+    ds['lw_surf'] = ds.lwup_sfc - ds.lwdn_sfc
+    ds['temp_rad_surf'] = get_temp_rad_surf(ds.lwdn_sfc, ds.odp_surf)
+    ds['temp_diseqb_surf'] = ds.temp_atm - ds.temp_rad_surf
+    ds['temp_rad_atm'] = get_temp_rad_atm(ds.olr, ds.temp_surf, ds.odp_surf)
+    ds['temp_diseqb_atm'] = ds.temp_atm - ds.temp_rad_atm
     return ds
 
 
-def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
+def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw_atm', 'lw_surf'] = 'lh',
              calc: bool = False, use_rh_flux_q: bool = False) -> xr.DataArray:
     """Return a surface turbulent/radiative flux from a Dataset.
 
@@ -197,7 +201,8 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
                     ds['rh_atm'] = ds.rh_atm*0 + ds.rh_flux_q
                 else:
                     raise ValueError('ds does not contain rh_flux_q')
-        flux_func = {'lh': get_latent_heat, 'sh': get_sensible_heat, 'lw': get_lw_atm_net}[flux_name]
+        flux_func = {'lh': get_latent_heat, 'sh': get_sensible_heat, 'lw_atm': get_lw_atm,
+                     'lw_sfc': get_lw_surf}[flux_name]
         arg_names = list(inspect.signature(flux_func).parameters.keys())
         var = {}
         for key in arg_names:
@@ -209,10 +214,11 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
                 raise ValueError(f'ds does not contain the variable "{key}"')
         return flux_func(**var)
     else:
-        return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw': ds.lwup_sfc - ds.lwdn_sfc - ds.olr}[flux_name]
+        return {'lh': ds.flux_lhe, 'sh': ds.flux_t, 'lw_atm': ds.lwup_sfc - ds.lwdn_sfc - ds.olr,
+                'lw_surf': ds.lwup_sfc - ds.lwdn_sfc}[flux_name]
 
 
-def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
+def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw_atm', 'lw_surf'] = 'lh',
                          use_rh_flux_q: bool = False) -> xr.Dataset:
     """
     Return flux sensitivity (Taylor-series coefficients) for a chosen flux decomposition.
@@ -235,7 +241,8 @@ def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 
     Raises:
         ValueError: If any required input is missing from both `ds` and `ds.attrs`.
     """
-    func_use = {'lh': get_sensitivity_lh, 'sh': get_sensitivity_sh, 'lw': get_sensitivity_lw}[flux_name]
+    func_use = {'lh': get_sensitivity_lh, 'sh': get_sensitivity_sh, 'lw_atm': get_sensitivity_lw_atm,
+                'lw_sfc': get_sensitivity_lw_surf}[flux_name]
     arg_names = inspect.signature(func_use).parameters.keys()
     if flux_name == 'lh':
         if use_rh_flux_q:
@@ -256,11 +263,12 @@ def get_flux_sensitivity(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw'] = 
 
 
 def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
-                        flux_name: Literal['lh', 'sh', 'lw'] = 'lh',
+                        flux_name: Literal['lh', 'sh', 'lw_atm', 'lw_surf'] = 'lh',
                         numerical: bool = False,
                         time_dim: str = 'time', use_rh_flux_q: bool = False
                         ) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.Dataset]:
-    reconstruct_flux = {'lh': reconstruct_lh, 'sh': reconstruct_sh, 'lw': reconstruct_lw}[flux_name]
+    reconstruct_flux = {'lh': reconstruct_lh, 'sh': reconstruct_sh, 'lw_atm': reconstruct_lw_atm,
+                        'lw_surf': reconstruct_lw_surf}[flux_name]
     arg_names = list(inspect.signature(reconstruct_flux).parameters.keys())
     arg_names = [key for key in arg_names if key != 'numerical']  # treat numerical as kwarg
     input_core_dims = [[] if (('_ref' in arg) or (arg in ['sigma_atm'])) else [time_dim] for arg in
@@ -296,13 +304,21 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
             reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.w_atm, ds_ref.drag_coef,
                                   ds_ref.p_surf, ds_ref.sigma_atm, ds.temp_surf, ds.temp_atm,
                                   ds.w_atm, drag_coef, ds.p_surf, numerical=numerical)
-    elif flux_name == 'lw':
+    elif flux_name == 'lw_atm':
         # Add time dimension to odp_surf, as don't have initially
         odp_surf = ds.temp_surf * 0 + ds_ref.odp_surf
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
-            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.temp_diseqb_r, ds_ref.odp_surf,
-                                  ds.temp_surf, ds.temp_atm, ds.temp_diseqb_r, odp_surf, numerical=numerical)
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.temp_diseqb_surf, ds_ref.temp_diseqb_atm,
+                                  ds_ref.odp_surf, ds.temp_surf, ds.temp_atm, ds.temp_diseqb_surf, ds.temp_diseqb_atm,
+                                  odp_surf, numerical=numerical)
+    elif flux_name == 'lw_surf':
+        # Add time dimension to odp_surf, as don't have initially
+        odp_surf = ds.temp_surf * 0 + ds_ref.odp_surf
+        flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.temp_diseqb_surf,
+                                  ds_ref.odp_surf, ds.temp_surf, ds.temp_atm, ds.temp_diseqb_surf,
+                                  odp_surf, numerical=numerical)
     else:
-        raise ValueError(f'Unknown flux_name="{flux_name}". Must be one of "lh", "sh", "lw".')
+        raise ValueError(f'Unknown flux_name="{flux_name}". Must be one of "lh", "sh", "lw_atm", "lw_sfc".')
     info_cont = xr.Dataset(convert_ds_of_dicts(info_cont, ds.time, 'time'))
     return flux_ref, flux_anom_linear, flux_anom_nl, info_cont
