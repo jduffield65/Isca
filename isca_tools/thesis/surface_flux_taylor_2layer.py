@@ -1,16 +1,11 @@
 import numpy as np
 import xarray as xr
-from typing import Union, Tuple, Optional, Callable
-import copy
-import itertools
+from typing import Union, Tuple, Optional
 
 from ..convection import potential_temp
 from ..utils.moist_physics import get_density, sphum_sat, clausius_clapeyron_factor
 from ..utils.constants import L_v, c_p, kappa, Stefan_Boltzmann
-from .surface_flux_taylor import reconstruct_flux, first_non_none_key
-
-name_square = lambda x: f"nl_{x}_square"  # name of square cont of individual mechanism
-name_nl = lambda x, y: f"nl_{x}_{y}"  # name of combination of two individual mechanism
+from .surface_flux_taylor import reconstruct_flux, first_non_none_key, name_square, name_nl
 
 
 def get_latent_heat(
@@ -137,22 +132,6 @@ def get_sensitivity_lh(
     # Mechanism combinations
     out_dict[name_nl('temp_surf', 'temp_atm')] = -out_dict['temp_surf'] / temp_atm
     return out_dict
-
-
-def first_non_none_key(d: dict) -> str:
-    """
-    Return key of the first non-None value in `d`.
-
-    Args:
-        d: Dictionary to find first non-None key.
-
-    Returns:
-        key: First non-None key.
-    """
-    for key in d:
-        if d[key] is not None:
-            return key
-    raise ValueError("All dict values are None")
 
 
 def reconstruct_lh(temp_surf_ref: float, temp_atm_ref: float,
