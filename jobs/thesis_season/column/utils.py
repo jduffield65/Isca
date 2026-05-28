@@ -24,7 +24,8 @@ exp_dir = lambda x: f'thesis_season/column/depth={x}/fix_rh'
 
 
 def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
-            lat_min: float = lat_min, lat_max: float = lat_max, exp_name: Optional[Union[str, List]]=None) -> xr.Dataset:
+            lat_min: float = lat_min, lat_max: float = lat_max, exp_name: Optional[Union[str, List]]=None,
+            low_lev_only: bool = True) -> xr.Dataset:
     """Load and preprocess near-surface fields for one or two mixed-layer depths.
 
     Loads the Isca experiment dataset(s), keeps selected variables, subsets a latitude
@@ -96,7 +97,8 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
             ds_use = ds_use[var_keep]
         ds_use = ds_use.sel(lat=lat_range)
         ds_use['hybm'] = ds_use.temp.isel(time=0, lat=0, lon=0) * 0 + sigma_levels_full
-        ds_use = ds_use.sel(pfull=np.inf, method='nearest')  # only keep lowest level
+        if low_lev_only:
+            ds_use = ds_use.sel(pfull=np.inf, method='nearest')  # only keep lowest level
         ds.append(ds_use.load())  # only keep after spin up
         try:
             evap_prefactor.append(load_namelist(exp_name[i])['surface_flux_nml']['land_evap_prefactor'])
@@ -115,6 +117,9 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     # Rename temp vars to used in surface flux functions
     ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf',
                          'hybm': 'sigma_atm'})
+    if not low_lev_only:
+        ds = ds.rename_vars({'temp_atm': 'temp'})
+        ds['temp_atm'] = ds.temp.sel(pfull=np.inf, method='nearest')
 
     # Get optical depth at surface - assume same for both experiments
     odp_info = {'odp': 1, 'ir_tau_eq': 6, 'ir_tau_pole': 1.5, 'linear_tau': 0.1, 'wv_exponent': 4}  # default vals
@@ -126,7 +131,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
                                  k_exponent=odp_info['wv_exponent'])  # optical depth as function of latitude
 
     # Compute variables required for flux breakdown
-    ds['p_atm'] = ds.p_surf * ds.sigma_atm
+    ds['p_atm'] = ds.p_surf * ds.sigma_atm.sel(pfull=np.inf, method='nearest')
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_atm)
     ds['lw_atm'] = ds.lwup_sfc - ds.lwdn_sfc - ds.olr
     ds['lw_surf'] = ds.lwup_sfc - ds.lwdn_sfc

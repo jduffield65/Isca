@@ -30,7 +30,8 @@ def get_dmse_dt(temp: xr.DataArray, sphum: xr.DataArray, height: xr.DataArray, p
         time: `float [n_time]`.</br>
             Time at which data recorded. Units: *second*.
         zonal_mean: `bool`.</br>
-            Whether to take zonal average or not. If `False`, returned arrays will have size `[n_time x n_lon]`
+            Whether to take zonal average or not. If `False`, returned arrays will have size `[n_time x n_lon]`.
+            REMOVED AS MEANS CAN'T USE wrap_with_apply_ufunc.
         spline_smoothing_factor: `float`.</br>
             If positive, a spline will be fit to smooth `mse_integ` and compute `dmse_dt`. *Typical: 0.001*.</br>
             If 0, the deriviative will be computed using `np.gradient`, but in general I recommend using the spline.
@@ -45,13 +46,13 @@ def get_dmse_dt(temp: xr.DataArray, sphum: xr.DataArray, height: xr.DataArray, p
     """
     # compute zonal mean mse in units of J/kg
     mse = moist_static_energy(temp, sphum, height) * 1000
-    if 'lon' in list(temp.coords.keys()) and zonal_mean:
-        # Take zonal mean if longitude is a coordinate
-        mse = mse.mean(dim='lon')
+    # if 'lon' in list(temp.coords.keys()) and zonal_mean:
+    #     # Take zonal mean if longitude is a coordinate
+    #     mse = mse.mean(dim='lon')
     mse_integ = integrate.simpson(mse / g, p_levels, axis=1)    # do mass weighted integral over atmosphere
     if spline_smoothing_factor > 0:
-        if not zonal_mean:
-            raise ValueError('Can only use spline if taking the zonal mean')
+        # if not zonal_mean:
+        #     raise ValueError('Can only use spline if taking the zonal mean')
         # Divide by mean to fit spline as otherwise numbers too large to fit properly
         spl = UnivariateSpline(time, mse_integ / np.mean(mse_integ), s=spline_smoothing_factor)
         dmse_dt = spl.derivative()(time) * np.mean(mse_integ)      # compute derivative direct from spline fit
