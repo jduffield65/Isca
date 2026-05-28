@@ -86,7 +86,7 @@ def get_tropopause_lev_ind(temp_env: xr.DataArray, z_env: xr.DataArray, p_env: x
     lapse = lapse.fillna(lapse_dry * 1000)  # ensure final value satisfies lapse criteria
     lapse = lapse.where(p_env < p_max)
     mask = lapse < 0
-    trpause_ind = (mask.where(mask, other=np.nan) * np.arange(lapse.lev.size)).max(dim=lev_dim).astype(int)
+    trpause_ind = (mask.where(mask, other=np.nan) * np.arange(lapse[lev_dim].size)).max(dim=lev_dim).astype(int)
     # lnb_ind = np.where(lapse < 0)[0][-1]
     # If lapse rate has very big variation, push LNB closer to surface
     for j in range(n_iter):
