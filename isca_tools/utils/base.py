@@ -1,4 +1,7 @@
 import xarray as xr
+from scipy import integrate
+
+from .xarray import wrap_with_apply_ufunc
 
 try:
     from xarray.core.weighted import DataArrayWeighted
@@ -31,8 +34,8 @@ def area_weighting(var: xr.DataArray) -> DataArrayWeighted:
     weights.name = "weights"
     return var.weighted(weights)
 
-def mass_weighted_vertical_integral(var: xr.DataArray, pressure: xr.DataArray,
-                                    lev_dim: str = 'lev', norm: bool=True) -> xr.DataArray:
+
+def mass_weighted_vertical_integral_numpy(var: np.ndarray, pressure: np.ndarray, norm: bool = True) -> np.ndarray:
     """
     Performs the mass-weighted vertical integral $\int \chi dp/g$ of a given variable $\chi$
 
@@ -50,11 +53,43 @@ def mass_weighted_vertical_integral(var: xr.DataArray, pressure: xr.DataArray,
     Returns:
         Value of integral
     """
-    dp = np.abs(pressure.differentiate(lev_dim))  # Pa
-    weights = (dp / g)  # mass weights (kg/m²)
-    var_int = (var * weights).sum('lev')  # var_units * kg/m²
+    var_int = integrate.simpson(var / g, pressure)
     if norm:
-        var_int = var_int / weights.sum(lev_dim)
+        var_int = var_int * g / (pressure.max() - pressure.min())
+    return var_int
+
+
+def mass_weighted_vertical_integral(var: xr.DataArray, pressure: xr.DataArray,
+                                    lev_dim: str = 'lev', norm: bool = True,
+                                    simpson_method: bool = False) -> xr.DataArray:
+    """
+    Performs the mass-weighted vertical integral $\int \chi dp/g$ of a given variable $\chi$
+
+    E.g. Neelin and Held 1987 equation 2.5.
+
+    Args:
+        var: `float [n_lev]`
+            Variable to integrate along `lev_dim` dimension.
+        pressure: `float [n_lev]`
+            Pressure at each model level
+        lev_dim: Name of model level dimension along which to integrate.
+        norm: If `True`, will normalize by mass of column i.e. becomes a mass weighted vertical average,
+            with the same units as `var`.
+        simpson_method: If `True`, will scipy.integrate.simpson method of integration, otherwise will just use sum.
+
+    Returns:
+        Value of integral
+    """
+    if simpson_method:
+        func_xr = wrap_with_apply_ufunc(mass_weighted_vertical_integral_numpy, input_core_dims=[[lev_dim], [lev_dim]],
+                                        output_core_dims=[[]])
+        return func_xr(var, pressure, norm=norm)
+    else:
+        dp = np.abs(pressure.diff(lev_dim))  # Pa
+        weights = (dp / g)  # mass weights (kg/m²)
+        var_int = (var * weights).sum(lev_dim)  # var_units * kg/m²
+        if norm:
+            var_int = var_int / weights.sum(lev_dim)
     return var_int
 
 
@@ -401,7 +436,8 @@ def weighted_RMS(
 
 
 def insert_to_array(x_values: Union[np.ndarray, xr.DataArray], y_values: Union[np.ndarray, xr.DataArray],
-                    x_new: Union[np.ndarray, xr.DataArray, List, float], y_new: Union[np.ndarray, xr.DataArray, List, float]
+                    x_new: Union[np.ndarray, xr.DataArray, List, float],
+                    y_new: Union[np.ndarray, xr.DataArray, List, float]
                     ) -> tuple[Union[np.ndarray, xr.DataArray], Union[np.ndarray, xr.DataArray]]:
     """Insert multiple (x, y) pairs into arrays while preserving the sort order of x (ascending or descending).
 
