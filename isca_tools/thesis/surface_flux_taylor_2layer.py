@@ -422,9 +422,8 @@ def get_temp_rad_atm(olr: Union[float, np.ndarray, xr.DataArray],
 
 def get_lw_atm(
         temp_surf: Union[float, np.ndarray, xr.DataArray],
-        temp_atm: Union[float, np.ndarray, xr.DataArray],
-        temp_diseqb_surf: Union[float, np.ndarray, xr.DataArray],
-        temp_diseqb_atm: Union[float, np.ndarray, xr.DataArray],
+        temp_rad_surf: Union[float, np.ndarray, xr.DataArray],
+        temp_rad_atm: Union[float, np.ndarray, xr.DataArray],
         odp_surf: Union[float, np.ndarray, xr.DataArray],
 ) -> Union[float, np.ndarray, xr.DataArray]:
     """Compute net longwave flux absorbed by atmosphere in a gray-gas model.
@@ -455,19 +454,14 @@ def get_lw_atm(
             or xarray DataArray), assuming consistent broadcasting.
 
     """
-    # Effective atmospheric radiating temperature used for emission to surface
-    temp_rad_surf = temp_atm - temp_diseqb_surf
-    # Effective atmospheric radiating temperature used for OLR
-    temp_rad_atm = temp_atm - temp_diseqb_atm
     emiss_factor = 1 - np.exp(-odp_surf)
     return Stefan_Boltzmann * emiss_factor * (temp_surf ** 4 - temp_rad_atm ** 4 - temp_rad_surf**4)
 
 
 def get_sensitivity_lw_atm(
         temp_surf: Union[float, np.ndarray, xr.DataArray],
-        temp_atm: Union[float, np.ndarray, xr.DataArray],
-        temp_diseqb_surf: Union[float, np.ndarray, xr.DataArray],
-        temp_diseqb_atm: Union[float, np.ndarray, xr.DataArray],
+        temp_rad_surf: Union[float, np.ndarray, xr.DataArray],
+        temp_rad_atm: Union[float, np.ndarray, xr.DataArray],
         odp_surf: Union[float, np.ndarray, xr.DataArray],
 ) -> dict:
     """Compute sensitivities of net longwave to gray-gas parameters.
@@ -504,34 +498,33 @@ def get_sensitivity_lw_atm(
             - odp_surf: $\\partial LW_{net}^{\\uparrow} / \\partial \\tau_s$
 
     """
-    # Effective atmospheric radiating temperature used for emission to surface
-    temp_rad_surf = temp_atm - temp_diseqb_surf
-    # Effective atmospheric radiating temperature used for OLR
-    temp_rad_atm = temp_atm - temp_diseqb_atm
     emiss_factor = 1 - np.exp(-odp_surf)
 
     # Differential of sh wrt each param - same order as input args
     out_dict = {'temp_surf': 4 * Stefan_Boltzmann * emiss_factor * temp_surf ** 3,
-                'temp_atm': -4 * Stefan_Boltzmann * emiss_factor * (temp_rad_surf ** 3 + temp_rad_atm ** 3),
-                'temp_diseqb_surf': 4 * Stefan_Boltzmann * emiss_factor * temp_rad_surf ** 3,
-                'temp_diseqb_atm': 4 * Stefan_Boltzmann * emiss_factor * temp_rad_atm ** 3,
-                'odp_surf': Stefan_Boltzmann * (temp_surf ** 4 - temp_rad_surf ** 4 - temp_rad_atm ** 4) * np.exp(-odp_surf),
+                'temp_rad_surf': -4 * Stefan_Boltzmann * emiss_factor * temp_rad_surf ** 3,
+                'temp_rad_atm': -4 * Stefan_Boltzmann * emiss_factor * temp_rad_atm ** 3,
+                'odp_surf': Stefan_Boltzmann * (temp_surf ** 4 - temp_rad_surf ** 4 -
+                                                temp_rad_atm ** 4) * np.exp(-odp_surf),
                 }
 
     out_dict[name_square('temp_surf')] = 12 * Stefan_Boltzmann * emiss_factor * temp_surf ** 2
     out_dict[name_square('temp_surf')] = out_dict[name_square('temp_surf')] * 0.5  # to match the taylor series coef
 
-    out_dict[name_square('temp_atm')] = -12 * Stefan_Boltzmann * emiss_factor * (temp_rad_surf ** 2 + temp_rad_atm ** 2)
-    out_dict[name_square('temp_atm')] = out_dict[name_square('temp_atm')] * 0.5  # to match the taylor series coef
+    out_dict[name_square('temp_rad_surf')] = -12 * Stefan_Boltzmann * emiss_factor * temp_rad_surf ** 2
+    out_dict[name_square('temp_rad_surf')] = out_dict[name_square('temp_rad_surf')] * 0.5  # to match the taylor series coef
+
+    out_dict[name_square('temp_rad_atm')] = -12 * Stefan_Boltzmann * emiss_factor * temp_rad_atm ** 2
+    out_dict[name_square('temp_rad_atm')] = out_dict[name_square('temp_rad_atm')] * 0.5  # to match the taylor series coef
 
     return out_dict
 
 
-def reconstruct_lw_atm(temp_surf_ref: float, temp_atm_ref: float,
-                       temp_diseqb_surf_ref: float, temp_diseqb_atm_ref: float,
+def reconstruct_lw_atm(temp_surf_ref: float,
+                       temp_rad_surf_ref: float, temp_rad_atm_ref: float,
                        odp_surf_ref: float,
-                       temp_surf: Optional[np.ndarray] = None, temp_atm: Optional[np.ndarray] = None,
-                       temp_diseqb_surf: Optional[np.ndarray] = None, temp_diseqb_atm: Optional[np.ndarray] = None,
+                       temp_surf: Optional[np.ndarray] = None,
+                       temp_rad_surf: Optional[np.ndarray] = None, temp_rad_atm: Optional[np.ndarray] = None,
                        odp_surf: Optional[np.ndarray] = None,
                        numerical: bool = False) -> Tuple[float, np.ndarray, np.ndarray, dict]:
     """Reconstruct net upward surface longwave anomalies from a reference state.
@@ -602,8 +595,7 @@ def reconstruct_lw_atm(temp_surf_ref: float, temp_atm_ref: float,
 
 def get_lw_surf(
         temp_surf: Union[float, np.ndarray, xr.DataArray],
-        temp_atm: Union[float, np.ndarray, xr.DataArray],
-        temp_diseqb_surf: Union[float, np.ndarray, xr.DataArray],
+        temp_rad_surf: Union[float, np.ndarray, xr.DataArray],
         odp_surf: Union[float, np.ndarray, xr.DataArray],
 ) -> Union[float, np.ndarray, xr.DataArray]:
     """Compute net upward longwave flux at the surface in a gray-gas model.
@@ -645,18 +637,16 @@ def get_lw_surf(
 
     """
     # Effective atmospheric radiating temperature used for gray downwelling LW
-    temp_rad = temp_atm - temp_diseqb_surf
     # Gray-gas emissivity for optical depth tau_sfc: epsilon = 1 - exp(-tau_sfc)
     # Downwelling LW at surface would be sigma * epsilon * T_rad^4
     # Surface upwelling LW is sigma * T_s^4
     emiss_factor = 1 - np.exp(-odp_surf)
-    return Stefan_Boltzmann * (temp_surf ** 4 - temp_rad ** 4 * emiss_factor)
+    return Stefan_Boltzmann * (temp_surf ** 4 - temp_rad_surf ** 4 * emiss_factor)
 
 
 def get_sensitivity_lw_surf(
         temp_surf: Union[float, np.ndarray, xr.DataArray],
-        temp_atm: Union[float, np.ndarray, xr.DataArray],
-        temp_diseqb_surf: Union[float, np.ndarray, xr.DataArray],
+        temp_rad_surf: Union[float, np.ndarray, xr.DataArray],
         odp_surf: Union[float, np.ndarray, xr.DataArray],
 ) -> dict:
     """Compute sensitivities of net upward surface longwave to gray-gas parameters.
@@ -712,29 +702,27 @@ def get_sensitivity_lw_surf(
         the derivatives here.
 
     """
-    temp_rad = temp_atm - temp_diseqb_surf
     emiss_factor = 1 - np.exp(-odp_surf)
 
     # Differential of sh wrt each param - same order as input args
     out_dict = {'temp_surf': 4 * Stefan_Boltzmann * temp_surf ** 3,
-                'temp_atm': -4 * Stefan_Boltzmann * temp_rad ** 3 * emiss_factor,
-                'temp_diseqb_surf': 4 * Stefan_Boltzmann * temp_rad ** 3 * emiss_factor,
-                'odp_surf': -Stefan_Boltzmann * temp_rad ** 4 * np.exp(-odp_surf),
+                'temp_rad_surf': -4 * Stefan_Boltzmann * temp_rad_surf ** 3 * emiss_factor,
+                'odp_surf': -Stefan_Boltzmann * temp_rad_surf ** 4 * np.exp(-odp_surf),
                 }
 
     # Nonlinear contributions
     out_dict[name_square('temp_surf')] = 12 * Stefan_Boltzmann * temp_surf ** 2
     out_dict[name_square('temp_surf')] = out_dict[name_square('temp_surf')] * 0.5  # to match the taylor series coef
-    out_dict[name_square('temp_atm')] = -12 * Stefan_Boltzmann * temp_rad ** 2 * emiss_factor
-    out_dict[name_square('temp_atm')] = out_dict[name_square('temp_atm')] * 0.5  # to match the taylor series coef
+    out_dict[name_square('temp_rad_surf')] = -12 * Stefan_Boltzmann * temp_rad_surf ** 2 * emiss_factor
+    out_dict[name_square('temp_rad_surf')] = out_dict[name_square('temp_rad_surf')] * 0.5  # to match the taylor series coef
 
     return out_dict
 
 
-def reconstruct_lw_surf(temp_surf_ref: float, temp_atm_ref: float,
-                        temp_diseqb_surf_ref: float, odp_surf_ref: float,
-                        temp_surf: Optional[np.ndarray] = None, temp_atm: Optional[np.ndarray] = None,
-                        temp_diseqb_surf: Optional[np.ndarray] = None,
+def reconstruct_lw_surf(temp_surf_ref: float,
+                        temp_rad_surf_ref: float, odp_surf_ref: float,
+                        temp_surf: Optional[np.ndarray] = None,
+                        temp_rad_surf: Optional[np.ndarray] = None,
                         odp_surf: Optional[np.ndarray] = None,
                         numerical: bool = False) -> Tuple[float, np.ndarray, np.ndarray, dict]:
     """Reconstruct net upward surface longwave anomalies from a reference state.

@@ -313,15 +313,15 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
         # Add time dimension to odp_surf, as don't have initially
         odp_surf = ds.temp_surf * 0 + ds_ref.odp_surf
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
-            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.temp_diseqb_surf, ds_ref.temp_diseqb_atm,
-                                  ds_ref.odp_surf, ds.temp_surf, ds.temp_atm, ds.temp_diseqb_surf, ds.temp_diseqb_atm,
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_rad_surf, ds_ref.temp_rad_atm,
+                                  ds_ref.odp_surf, ds.temp_surf, ds.temp_rad_surf, ds.temp_rad_atm,
                                   odp_surf, numerical=numerical)
     elif flux_name == 'lw_surf':
         # Add time dimension to odp_surf, as don't have initially
         odp_surf = ds.temp_surf * 0 + ds_ref.odp_surf
         flux_ref, flux_anom_linear, flux_anom_nl, info_cont = \
-            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_atm, ds_ref.temp_diseqb_surf,
-                                  ds_ref.odp_surf, ds.temp_surf, ds.temp_atm, ds.temp_diseqb_surf,
+            reconstruct_flux_wrap(ds_ref.temp_surf, ds_ref.temp_rad_surf,
+                                  ds_ref.odp_surf, ds.temp_surf, ds.temp_rad_surf,
                                   odp_surf, numerical=numerical)
     else:
         raise ValueError(f'Unknown flux_name="{flux_name}". Must be one of "lh", "sh", "lw_atm", "lw_sfc".')

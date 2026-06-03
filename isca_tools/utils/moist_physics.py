@@ -190,7 +190,8 @@ def sphum_sat(temp: Union[float, xr.DataArray, np.ndarray],
     return q_sat
 
 
-def clausius_clapeyron_factor(temp: np.ndarray, pressure: Union[float, np.ndarray]) -> np.ndarray:
+def clausius_clapeyron_factor(temp:  Union[float, xr.DataArray, np.ndarray],
+                              pressure: Union[float, np.ndarray]) -> np.ndarray:
     """
     This is the factor $\\alpha$, such that $dq^*/dT = \\alpha q^*$.
 
