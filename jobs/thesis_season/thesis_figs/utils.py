@@ -16,7 +16,7 @@ from isca_tools.thesis.surface_energy_budget import get_temp_extrema_numerical, 
     get_temp_fourier_analytic2, get_temp_extrema_theory, get_param_dimensionless, get_temp_shift_params
 from isca_tools.utils import area_weighting, annual_mean
 import isca_tools.utils.fourier as fourier
-from isca_tools.utils.constants import c_p_water, rho_water
+from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
@@ -159,7 +159,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
     mixed_layer_depth = [load_namelist(exp_name[i])['mixed_layer_nml']['depth'] for i in range(n_exp)]
     mixed_layer_depth = xr.DataArray(mixed_layer_depth, dims="depth", name='depth')
     ds = xr.concat(ds, dim=mixed_layer_depth)
-    ds['heat_capacity'] = get_heat_capacity(c_p_water, rho_water, ds.depth)
+    ds['heat_capacity'] = get_heat_capacity(c_p_ocean, rho_ocean, ds.depth)
     ds['evap_prefactor'] = xr.DataArray(evap_prefactor, dims="depth", coords={"depth": ds["depth"]})
     ds['hybm'] = ds.hybm.isel(depth=0)
     ds.attrs['drag_coef'] = namelist['surface_flux_nml']['drag_const']  # drag coef is a constant here

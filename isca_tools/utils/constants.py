@@ -16,10 +16,10 @@ R_v = 461.5
 epsilon = R/R_v
 
 # Specific heat of water at constant pressure. Units: JK^{-1}kg^{-1}
-c_p_water = 4184
+c_p_ocean = 3989.24495292815      # This is Isca value. Note google value for water is 4184
 
 # density of water. Units: kgm^{-3}
-rho_water = 1000
+rho_ocean = 1035      # This is Isca value foe. Note google value for water is 1000
 
 # Molecular weight of water. Units: kgkmol^{-1} or equally gmol^{-1}
 m_v = 18.016
