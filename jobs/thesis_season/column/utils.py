@@ -25,7 +25,7 @@ exp_dir = lambda x: f'thesis_season/column/depth={x}/fix_rh'
 
 def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
             lat_min: float = lat_min, lat_max: float = lat_max, exp_name: Optional[Union[str, List]]=None,
-            low_lev_only: bool = True) -> xr.Dataset:
+            low_lev_only: bool = True, first_month_file=121) -> xr.Dataset:
     """Load and preprocess near-surface fields for one or two mixed-layer depths.
 
     Loads the Isca experiment dataset(s), keeps selected variables, subsets a latitude
@@ -83,7 +83,7 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     ds = []
     evap_prefactor = []
     for i in tqdm(range(n_exp)):
-        ds_use = load_dataset(exp_name[i], first_month_file=121)
+        ds_use = load_dataset(exp_name[i], first_month_file=first_month_file)
         try:
             ds_use = ds_use[var_keep]
         except KeyError:

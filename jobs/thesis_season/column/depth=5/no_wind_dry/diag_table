@@ -13,7 +13,6 @@
 "column", "pk", "pk", "atmos_daily", "all", .false., "none", 2,
 "column", "temp", "temp", "atmos_daily", "all", .true., "none", 2,
 "column", "ps", "ps", "atmos_daily", "all", .true., "none", 2,
-"column", "sphum", "sphum", "atmos_daily", "all", .true., "none", 2,
 "two_stream", "olr", "olr", "atmos_daily", "all", .true., "none", 2,
 "two_stream", "swdn_toa", "swdn_toa", "atmos_daily", "all", .true., "none", 2,
 "two_stream", "swdn_sfc", "swdn_sfc", "atmos_daily", "all", .true., "none", 2,
