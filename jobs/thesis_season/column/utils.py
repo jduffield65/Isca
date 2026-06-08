@@ -16,7 +16,7 @@ from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, rai
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
 from jobs.thesis_season.thesis_figs.utils import get_annual_zonal_mean, month_ticks, width, label_lat, label_time, \
-    lat_min, lat_max, ax_lims_lat, day_seconds
+    lat_min, lat_max, ax_lims_lat, day_seconds, get_fourier_fit_xr, fourier_series_xr
 
 var_keep = ['temp', 't_surf', 'swdn_sfc', 'lwup_sfc', 'lwdn_sfc',
             'flux_lhe', 'flux_t', 'q_surf', 'ps', 'q_surf', 'w_atm', 'q_atm', 'olr']
@@ -327,3 +327,45 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
         raise ValueError(f'Unknown flux_name="{flux_name}". Must be one of "lh", "sh", "lw_atm", "lw_sfc".')
     info_cont = xr.Dataset(convert_ds_of_dicts(info_cont, ds.time, 'time'))
     return flux_ref, flux_anom_linear, flux_anom_nl, info_cont
+
+
+def get_fit_coef_complex(var: xr.DataArray, temp: xr.DataArray, time: xr.DataArray):
+    """
+    Compute the complex fitting coefficient between two variables.
+
+    This estimates the complex coefficient $\beta$ in the relationship:
+        $var \\approx \beta \\cdot temp$
+
+    using the first harmonic of a Fourier fit. The coefficient is represented
+    in amplitude and phase form:
+        $\beta = A_{var} / A_{temp} \\cdot e^{i(\\phi_{var} - \\phi_{temp})}$
+
+    where $A$ and $\\phi$ denote the amplitude and phase of the first harmonic.
+
+    Args:
+        var:
+            Target variable to fit.
+        temp:
+            Reference variable.
+        time:
+            Time coordinate corresponding to `var` and `temp`.
+
+    Returns:
+        amp_ratio: Amplitude component of $\beta$,
+              given by $1 - A_{var} / A_{temp}$.
+        phase_diff: Phase difference $\phi_{var} - \phi_{temp}$.
+    """
+    # Perform Fourier fit for var and extract first harmonic amplitude and phase
+    var_fourier = get_fourier_fit_xr(time, var, n_harmonics=1,
+                                     pad_coefs_phase=True, pos_amp=True)
+    var_amp_coef = var_fourier[1].sel(harmonic=1)
+    var_phase_coef = var_fourier[2].sel(harmonic=1)
+
+    # Perform Fourier fit for temp and extract first harmonic amplitude and phase
+    temp_fourier = get_fourier_fit_xr(time, temp, n_harmonics=1,
+                                      pad_coefs_phase=True, pos_amp=True)
+    temp_amp_coef = temp_fourier[1].sel(harmonic=1)
+    temp_phase_coef = temp_fourier[2].sel(harmonic=1)
+
+    # Return amplitude ratio and phase difference defining complex coefficient β
+    return var_amp_coef / temp_amp_coef, var_phase_coef - temp_phase_coef
