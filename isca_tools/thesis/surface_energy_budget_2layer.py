@@ -93,16 +93,16 @@ Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
         temp_col_amp_param = (1 - temp_col_coef_amp) * np.cos(temp_col_coef_phase)
         temp_col_phase_param = (1 - temp_col_coef_amp) * np.sin(temp_col_coef_phase)
 
-    lambda_a2_mod = lambda_a1-omega*temp_col_phase_param*heat_cap_atmos
+    lambda_a2_mod = lambda_a1+omega*temp_col_phase_param*heat_cap_atmos
     heat_cap_atmos_mod = heat_cap_atmos*(temp_col_amp_param+mu)
 
     # Add lambda2 contribution, where phase can be important
     if assume_small_temp_rad_atm_phase:
         lambda_a2_mod += lambda_a2
-        heat_cap_atmos_mod += lambda_a2 * temp_rad_atm_coef_phase/omega
+        heat_cap_atmos_mod -= lambda_a2 * temp_rad_atm_coef_phase/omega
     else:
         lambda_a2_mod += lambda_a2*np.cos(temp_rad_atm_coef_phase)
-        heat_cap_atmos_mod += lambda_a2 * np.sin(temp_rad_atm_coef_phase) / omega
+        heat_cap_atmos_mod -= lambda_a2 * np.sin(temp_rad_atm_coef_phase) / omega
 
     if assume_small_heat_cap_atmos:
         lambda_s1_scaling = 1-lambda_s2*lambda_a1/lambda_s1/lambda_a2_mod
