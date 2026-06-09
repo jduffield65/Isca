@@ -352,7 +352,7 @@ def get_fit_coef_complex(var: xr.DataArray, temp: xr.DataArray, time: xr.DataArr
 
     Returns:
         amp_ratio: Amplitude component of $\beta$,
-              given by $1 - A_{var} / A_{temp}$.
+              given by $A_{var} / A_{temp}$.
         phase_diff: Phase difference $\phi_{var} - \phi_{temp}$.
     """
     # Perform Fourier fit for var and extract first harmonic amplitude and phase
