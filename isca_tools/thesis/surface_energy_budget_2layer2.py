@@ -1,0 +1,115 @@
+import numpy as np
+import xarray as xr
+import inspect
+from typing import Union, Tuple, Optional
+
+from scipy.constants import Stefan_Boltzmann
+from .surface_flux_taylor_2layer import get_sensitivity_sh, get_sensitivity_lh, \
+    get_sensitivity_lw_surf, get_sensitivity_lw_atm
+from ..utils.constants import c_p, g, L_v
+from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat
+
+
+def get_feedback_params_analytic(temp_surf: Union[float, np.ndarray, xr.DataArray],
+                                 temp_atm: Union[float, np.ndarray, xr.DataArray],
+                                 temp_rad_surf: Union[float, np.ndarray, xr.DataArray],
+                                 temp_rad_atm: Union[float, np.ndarray, xr.DataArray],
+                                 rh_atm: Union[float, np.ndarray, xr.DataArray],
+                                 w_atm: Union[float, np.ndarray, xr.DataArray],
+                                 drag_coef: Union[float, np.ndarray, xr.DataArray],
+                                 p_surf: Union[float, np.ndarray, xr.DataArray],
+                                 odp_surf: Union[float, np.ndarray, xr.DataArray],
+                                 sigma_atm: float,
+                                 temp_col_sphum: Union[float, np.ndarray, xr.DataArray],
+                                 p_col_sphum: float,
+                                 rh_col: Union[float, np.ndarray, xr.DataArray],
+                                 pressure_heat_cap_atmos_calc: Optional[float] = None,
+                                 evap_prefactor: float = 1,
+                                 coef_amp_rad_surf: Union[float, np.ndarray, xr.DataArray] = 1,
+                                 coef_amp_olr: Union[float, np.ndarray, xr.DataArray] = 1,
+                                 coef_amp_col_sphum: Union[float, np.ndarray, xr.DataArray] = 1,
+                                 approx_lambda_lh: bool = False
+                                 ) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
+    # NOTE HAVE CHANGE DEFINITIUON OF coef_amp, now should be approx 1 not approx 0.
+    local_vars = locals()
+    get_sensitivity = {'lh': get_sensitivity_lh, 'sh': get_sensitivity_sh, 'lw_surf': get_sensitivity_lw_surf,
+                       'lw_atm': get_sensitivity_lw_atm}
+    gamma = {}
+    for key in get_sensitivity:
+        arg_names = list(inspect.signature(get_sensitivity[key]).parameters.keys())
+        args_use = {name: local_vars[name] for name in arg_names if name in local_vars}
+        gamma[key] = get_sensitivity[key](**args_use)
+
+    # Construct two layer feedback parameters from individual flux sensitivity factors
+    emiss_factor = 1 - np.exp(-odp_surf)
+    lambda_const = gamma['sh']['temp_surf'] + gamma['lh']['temp_surf'] + gamma['lw_surf']['temp_surf']
+    lambda_lw1 = 4 * Stefan_Boltzmann * np.exp(-odp_surf) * temp_surf ** 3
+    lambda_lw2 = 4 * Stefan_Boltzmann * (temp_surf ** 3 - emiss_factor * coef_amp_rad_surf * temp_rad_surf ** 3)
+    flux_prefactor = gamma['sh']['temp_surf'] / c_p
+    lambda_sh = flux_prefactor * c_p * (temp_surf / temp_atm - 1)
+    alpha_atm = clausius_clapeyron_factor(temp_atm, p_surf * sigma_atm)
+    q_atm = rh_atm * sphum_sat(temp_atm, p_surf * sigma_atm)
+    q_surf = sphum_sat(temp_surf, p_surf)
+    if approx_lambda_lh:
+        # Replace alpha_surf with alpha_atm
+        lambda_lh = flux_prefactor * L_v * evap_prefactor * (alpha_atm - 1 / temp_atm) * (q_surf - q_atm)
+    else:
+        alpha_surf = clausius_clapeyron_factor(temp_surf, p_surf)
+        lambda_lh = flux_prefactor * L_v * evap_prefactor * (
+                    alpha_surf * q_surf - alpha_atm * q_atm - (q_surf - q_atm) / temp_atm)
+    B = -gamma['lw_atm']['temp_rad_atm'] * coef_amp_olr
+    heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
+    alpha_col_sphum = clausius_clapeyron_factor(temp_col_sphum, p_col_sphum)
+    q_sat_col_sphum = sphum_sat(temp_col_sphum, p_col_sphum)
+    if pressure_heat_cap_atmos_calc is None:
+        pressure_heat_cap_atmos_calc = p_surf
+    # mu is the effect of column specific humidity
+    mu = L_v / c_p * alpha_col_sphum * rh_col * q_sat_col_sphum * coef_amp_col_sphum
+    return mu, lambda_const, B, lambda_sh, lambda_lh, lambda_lw1, lambda_lw2
+
+
+def get_heat_cap_lambda_eff(mu: Union[float, np.ndarray, xr.DataArray],
+                            lambda_const: Union[float, np.ndarray, xr.DataArray],
+                            B: Union[float, np.ndarray, xr.DataArray],
+                            lambda_sh: Union[float, np.ndarray, xr.DataArray],
+                            lambda_lh: Union[float, np.ndarray, xr.DataArray],
+                            lambda_lw1: Union[float, np.ndarray, xr.DataArray],
+                            lambda_lw2: Union[float, np.ndarray, xr.DataArray],
+                            heat_cap_surf: Union[float, np.ndarray, xr.DataArray],
+                            pressure_heat_cap_atmos_calc: float,
+                            coef_amp_col: Union[float, np.ndarray, xr.DataArray] = 1,
+                            coef_phase_col: Union[float, np.ndarray, xr.DataArray] = 0,
+                            coef_phase_olr: Union[float, np.ndarray, xr.DataArray] = 0,
+                            sw_abs: Union[float, np.ndarray, xr.DataArray] = 0,
+                            albedo: Union[float, np.ndarray, xr.DataArray] = 0,
+                            n_year_days: int = 360,
+                            day_seconds: int = 86400
+                            ) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray]]:
+    f = 1 / (n_year_days * day_seconds)
+    omega = 2 * np.pi * f
+    heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
+    heat_cap_atmos_mod = heat_cap_atmos * (coef_amp_col + mu - B * coef_phase_olr / omega / heat_cap_atmos)
+
+    lambda_resid = lambda_lh + lambda_lw2 - lambda_sh
+    lambda_mod = lambda_const + B - lambda_resid + omega * heat_cap_atmos * coef_amp_col * coef_phase_col
+
+    scaling_param = (lambda_const - lambda_resid) * (lambda_const - lambda_lw1) / (
+                omega ** 2 * heat_cap_atmos_mod ** 2 +
+                lambda_mod ** 2)
+    heat_cap_scaling0 = 1 + scaling_param * heat_cap_atmos_mod / heat_cap_surf
+    heat_cap_eff0 = heat_cap_scaling0 * heat_cap_surf
+    lambda_scaling0 = 1 - scaling_param * lambda_mod / lambda_const
+    lambda_eff0 = lambda_scaling0 * lambda_const
+
+    sw_abs_mod = sw_abs * (lambda_const - lambda_resid) * lambda_mod / (omega ** 2 * heat_cap_atmos_mod ** 2 +
+                                                                        lambda_mod ** 2) / (1 - albedo) / (1 - sw_abs)
+    heat_cap_scaling = heat_cap_scaling0 * (
+                1 - sw_abs_mod + lambda_eff0 / lambda_mod * heat_cap_atmos_mod / heat_cap_eff0 * sw_abs_mod)
+    lambda_scaling = lambda_scaling0 * (
+                1 - sw_abs_mod - omega * heat_cap_atmos_mod / lambda_mod * omega * heat_cap_eff0 / lambda_eff0 * sw_abs_mod)
+
+    return lambda_scaling, heat_cap_scaling
