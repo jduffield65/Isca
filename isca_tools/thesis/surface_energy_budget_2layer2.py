@@ -59,7 +59,7 @@ Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
     else:
         alpha_surf = clausius_clapeyron_factor(temp_surf, p_surf)
         lambda_lh = flux_prefactor * L_v * evap_prefactor * (
-                    alpha_surf * q_surf - alpha_atm * q_atm - (q_surf - q_atm) / temp_atm)
+                alpha_surf * q_surf - alpha_atm * q_atm - (q_surf - q_atm) / temp_atm)
     B = -gamma['lw_atm']['temp_rad_atm'] * coef_amp_olr
     heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
     alpha_col_sphum = clausius_clapeyron_factor(temp_col_sphum, p_col_sphum)
@@ -98,8 +98,8 @@ Union[float, np.ndarray, xr.DataArray]]:
     lambda_mod = lambda_const + B - lambda_resid + omega * heat_cap_atmos * coef_amp_col * coef_phase_col
 
     scaling_param = (lambda_const - lambda_resid) * (lambda_const - lambda_lw1) / (
-                omega ** 2 * heat_cap_atmos_mod ** 2 +
-                lambda_mod ** 2)
+            omega ** 2 * heat_cap_atmos_mod ** 2 +
+            lambda_mod ** 2)
     heat_cap_scaling0 = 1 + scaling_param * heat_cap_atmos_mod / heat_cap_surf
     heat_cap_eff0 = heat_cap_scaling0 * heat_cap_surf
     lambda_scaling0 = 1 - scaling_param * lambda_mod / lambda_const
@@ -107,9 +107,15 @@ Union[float, np.ndarray, xr.DataArray]]:
 
     sw_abs_mod = sw_abs * (lambda_const - lambda_resid) * lambda_mod / (omega ** 2 * heat_cap_atmos_mod ** 2 +
                                                                         lambda_mod ** 2) / (1 - albedo) / (1 - sw_abs)
-    heat_cap_scaling = heat_cap_scaling0 * (
-                1 - sw_abs_mod + lambda_eff0 / lambda_mod * heat_cap_atmos_mod / heat_cap_eff0 * sw_abs_mod)
-    lambda_scaling = lambda_scaling0 * (
-                1 - sw_abs_mod - omega * heat_cap_atmos_mod / lambda_mod * omega * heat_cap_eff0 / lambda_eff0 * sw_abs_mod)
+
+    sw_effect_real = 1 - sw_abs + (1 - omega ** 2 * heat_cap_atmos_mod ** 2 / lambda_mod ** 2) * sw_abs ** 2
+    # Get cross terms due to effect of sw on imaginary part, need to take account of. Especially important if large
+    # heat capacity
+    sw_effect_heat_cap = sw_effect_real + lambda_eff0 / lambda_mod * heat_cap_atmos_mod / heat_cap_eff0 * sw_abs_mod * (
+                1 - 2 * sw_abs_mod)
+    sw_effect_lambda = sw_effect_real - omega * heat_cap_atmos_mod / lambda_mod * omega * heat_cap_eff0 / lambda_eff0 * sw_abs_mod * (
+                1 - 2 * sw_abs_mod)
+    heat_cap_scaling = heat_cap_scaling0 * sw_effect_heat_cap
+    lambda_scaling = lambda_scaling0 * sw_effect_lambda
 
     return lambda_scaling, heat_cap_scaling

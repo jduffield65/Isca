@@ -8,10 +8,9 @@ from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_rad_atm, recon
     get_sensitivity_sh, get_sensitivity_lw_atm, get_lw_surf, get_sensitivity_lw_surf, reconstruct_lw_surf
 from isca_tools.thesis.surface_flux_taylor import get_temp_rad as get_temp_rad_surf
 from tqdm.notebook import tqdm
-
 from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
-from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray
+from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
@@ -122,14 +121,17 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
         ds['temp_atm'] = ds.temp.sel(pfull=np.inf, method='nearest')
 
     # Get optical depth at surface - assume same for both experiments
-    odp_info = {'odp': 1, 'ir_tau_eq': 6, 'ir_tau_pole': 1.5, 'linear_tau': 0.1, 'wv_exponent': 4}  # default vals
+    odp_info = {'odp': 1, 'ir_tau_eq': 6, 'ir_tau_pole': 1.5, 'linear_tau': 0.1, 'wv_exponent': 4,
+                'atm_abs': 0}  # default vals
     for key in odp_info:  # If provided, update
         if key in namelist['two_stream_gray_rad_nml']:
             odp_info[key] = namelist['two_stream_gray_rad_nml'][key]
     ds['odp_surf'] = opd_lw_gray(ds.lat, kappa=odp_info['odp'], tau_eq=odp_info['ir_tau_eq'],
                                  tau_pole=odp_info['ir_tau_pole'], frac_linear=odp_info['linear_tau'],
                                  k_exponent=odp_info['wv_exponent'])  # optical depth as function of latitude
-
+    ds.attrs['odp_sw'] = float(frierson_sw_optical_depth(ds.p_surf.isel(depth=0, time=0, lon=0, lat=0), odp_info['atm_abs']))
+    ds.attrs['sw_abs'] = 1 - np.exp(-ds.attrs['odp_sw'])      # fraction of sw absorbed
+    ds.attrs['albedo'] = namelist['mixed_layer_nml']['albedo_value']
     # Compute variables required for flux breakdown
     ds['p_atm'] = ds.p_surf * ds.sigma_atm.sel(pfull=np.inf, method='nearest')
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_atm)
