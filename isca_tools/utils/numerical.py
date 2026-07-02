@@ -772,3 +772,114 @@ def weighted_median(x: np.ndarray, w: np.ndarray) -> float:
     cw = np.cumsum(w)
     cutoff = 0.5 * wsum
     return float(x[np.searchsorted(cw, cutoff, side="left")])
+
+
+def spline_deriv_periodic(time, var, period=None, check=True, rtol=1e-10, atol=1e-12):
+    """Return the derivative of a periodic variable using an exact periodic cubic spline.
+
+    Args:
+        time: 1D array of strictly increasing coordinates over one cycle.
+        var: 1D array of values on `time`.
+        period: Period length. If None, use `time[-1] - time[0] + (time[1] - time[0])`.
+            This default assumes evenly spaced samples with the endpoint omitted.
+        check: If True, validate monotonic time and endpoint consistency when present.
+        rtol: Relative tolerance used in endpoint checks.
+        atol: Absolute tolerance used in endpoint checks.
+
+    Returns:
+        1D array containing d(var)/d(time) evaluated at the input `time`.
+
+    Notes:
+        `CubicSpline(..., bc_type="periodic")` requires the first and last `y`
+        values to be identical, and enforces equality of the first and second
+        derivatives at the endpoints. If the provided data does not already
+        include the closing point, this function appends one period and repeats
+        the first value.
+    """
+    time = np.asarray(time, dtype=float)
+    var = np.asarray(var, dtype=float)
+
+    if time.ndim != 1 or var.ndim != 1:
+        raise ValueError("`time` and `var` must both be 1D arrays.")
+    if time.size != var.size:
+        raise ValueError("`time` and `var` must have the same length.")
+    if time.size < 3:
+        raise ValueError("Need at least 3 points for a periodic cubic spline.")
+
+    dt = np.diff(time)
+    if check and np.any(dt <= 0):
+        raise ValueError("`time` must be strictly increasing.")
+
+    if period is None:
+        if time.size < 2:
+            raise ValueError("Cannot infer period from fewer than 2 time points.")
+        period = time[-1] - time[0] + (time[1] - time[0])
+
+    time_end = time[0] + period
+
+    has_endpoint = np.isclose(time[-1], time_end, rtol=rtol, atol=atol)
+
+    if has_endpoint:
+        if check and not np.isclose(var[0], var[-1], rtol=rtol, atol=atol):
+            raise ValueError(
+                "Endpoint is present in `time`, so periodic data requires "
+                "`var[0] == var[-1]` within tolerance."
+            )
+        time_use = time
+        var_use = var.copy()
+        var_use[-1] = var_use[0]
+    else:
+        time_use = np.append(time, time_end)
+        var_use = np.append(var, var[0])
+
+    cs = CubicSpline(time_use, var_use, bc_type="periodic")
+    return cs(time, 1)
+
+
+def fit_linear_zero_mean(x1, y, x2=None, check=False, atol=1e-10):
+    """Fit y = a*x1 + b*x2 with no intercept.
+
+    If `x2` is None, fit y = a*x1 and return b = 0.
+
+    Args:
+        x1: 1D array, first predictor.
+        y: 1D array, target.
+        x2: Optional 1D array, second predictor.
+        check: If True, check means are close to zero.
+        atol: Absolute tolerance for the zero-mean check.
+
+    Returns:
+        a: Coefficient for x1.
+        b: Coefficient for x2, or 0 if x2 is None.
+    """
+    x1 = np.asarray(x1, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    if x1.ndim != 1 or y.ndim != 1:
+        raise ValueError("`x1` and `y` must be 1D arrays.")
+    if x1.size != y.size:
+        raise ValueError("`x1` and `y` must have the same length.")
+
+    arrays_to_check = {"x1": x1, "y": y}
+
+    if x2 is None:
+        X = x1[:, None]
+    else:
+        x2 = np.asarray(x2, dtype=float)
+        if x2.ndim != 1:
+            raise ValueError("`x2` must be a 1D array.")
+        if x2.size != y.size:
+            raise ValueError("`x2` must have the same length as `x1` and `y`.")
+        X = np.column_stack([x1, x2])
+        arrays_to_check["x2"] = x2
+
+    if check:
+        for name, arr in arrays_to_check.items():
+            if not np.isclose(arr.mean(), 0.0, atol=atol):
+                raise ValueError(f"`{name}` does not have zero mean.")
+
+    coef, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
+
+    if x2 is None:
+        return coef[0], 0.0
+    return coef[0], coef[1]
