@@ -12,7 +12,7 @@ from ..utils.xarray import wrap_with_apply_ufunc
 
 def get_dmse_dt(temp: xr.DataArray, sphum: xr.DataArray, height: xr.DataArray, p_levels: xr.DataArray,
                 time: xr.DataArray, zonal_mean: bool = True,
-                spline_smoothing_factor: float = 0) -> Tuple[xr.DataArray, xr.DataArray]:
+                spline_smoothing_factor: float = 0, simpson_method: bool = False) -> Tuple[xr.DataArray, xr.DataArray]:
     """
     For a given latitude, this computes the time derivative of the mass weighted vertical integral of the zonal mean
     moist static energy, $<[\\partial_t m]>$, used in the paper to compute the parameter $R_1$.
