@@ -19,7 +19,8 @@ import isca_tools.utils.fourier as fourier
 from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray
-from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
+from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical, \
+    periodic_rolling_mean
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
 
@@ -63,7 +64,7 @@ style_map_var_nl = {name_nl('temp_surf', 'w_atm'): ("C0", '--', '$T_sU_a$'),
                     name_square('temp_surf'): ("C3", "-", "$T_s$", "K")}
 
 # General info
-smooth_n_days = 50  # default smoothing window in days
+smooth_n_days = 49  # default smoothing window in days
 resample = False  # Don't do resample in polyfit_phase as complicated
 deg_max = 2  # In fitting go up to maximum of T^2 dependence of surface fluxes
 # Lowest power is last in deg to match polyfit
@@ -191,7 +192,8 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
 
 
 def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,
-                          smooth_center=True, keep_attrs: bool = True):
+                          smooth_center=True, keep_attrs: bool = True,
+                          smooth_time: Literal['start', 'end'] = 'end'):
     """Compute annual-mean zonal mean, optionally combining ±latitudes.
 
     This function:
@@ -212,6 +214,8 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
             number of time steps, e.g. days). If None or <= 1, no smoothing.
         smooth_center: If True, use a centered window for smoothing.
         keep_attrs: Optional boolean flag for keeping attributes. Defaults to True.
+        smooth_time: If 'start', will do smoothing before taking annual mean, otherwise will do it after.
+            Get more smoothed result if do at the end.
 
     Returns:
         An xarray Dataset or DataArray containing the annual-mean zonal mean.
@@ -222,9 +226,13 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
         ValueError: If `combine_abs_lat` is True but `lat_name` is not a
             dimension of the input after zonal averaging.
     """
-    if smooth_n_days is not None and smooth_n_days > 1:
+    if 'lon' in ds.dims:
+        ds = ds.mean(dim='lon')
+    else:
+        print('no lon dimension')
+    if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'start'):
         ds = ds.rolling(time=int(smooth_n_days), center=smooth_center).mean()
-    ds_av = annual_mean(ds).mean(dim='lon')
+    ds_av = annual_mean(ds)
     # ds_av = annual_mean(ds.mean(dim='lon'))           # order does not matter, I checked gives same result
 
     if combine_abs_lat:
@@ -241,6 +249,8 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
         )
 
     ds_av = ds_av.assign_coords(time=(ds_av.time - ds_av.time.min()).astype(int))
+    if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'end'):
+        ds_av = periodic_rolling_mean(ds_av, int(smooth_n_days), 'time')
     for key in ds:
         # Get rid of time dimension of variables that dont have time dimension initially
         if 'time' not in ds[key].dims:

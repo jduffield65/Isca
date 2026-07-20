@@ -363,3 +363,61 @@ def transpose_common_dims_like(y: xr.DataArray, x: xr.DataArray) -> xr.DataArray
     remaining = [d for d in y.dims if d not in common_order]
     order = tuple(common_order + remaining)
     return y.transpose(*order)
+
+
+def periodic_rolling_mean(
+    da: Union[xr.DataArray, xr.Dataset],
+    window: int,
+    dim: str = "dayofyear",
+    *,
+    center: bool = True,
+    min_periods: Optional[int] = None,
+) -> Union[xr.DataArray, xr.Dataset]:
+    """Compute a rolling mean with periodic boundary conditions.
+
+    Pads the selected dimension using wrapped values before applying the
+    rolling mean, then removes the padding. This allows windows near either
+    boundary to include values from the opposite boundary.
+
+    Args:
+        da: Input DataArray or Dataset.
+        window: Number of points in the rolling window. For a centred rolling
+            mean, an odd value is required.
+        dim: Dimension over which to calculate the rolling mean.
+        center: Whether to centre the rolling window on each coordinate.
+        min_periods: Minimum number of valid values required for each result.
+            Defaults to `window`.
+
+    Returns:
+        DataArray or Dataset with the same size and coordinates as `da`,
+        smoothed along `dim`.
+
+    Raises:
+        ValueError: If `window` is not a positive integer.
+        ValueError: If `center=True` and `window` is even.
+    """
+    if not isinstance(window, int) or window < 1:
+        raise ValueError("window must be a positive integer")
+
+    if center and window % 2 == 0:
+        raise ValueError(
+            "A centred periodic window should be odd; use e.g. 3, 5, 7, ..."
+        )
+
+    if min_periods is None:
+        min_periods = window
+
+    # For a centred odd window, pad equally at both ends.
+    # For an uncentred window, pad on the left because rolling is right-aligned.
+    pad_width = window // 2 if center else window - 1
+    pad = {dim: (pad_width, pad_width) if center else (pad_width, 0)}
+
+    padded = da.pad(pad, mode="wrap")
+    smoothed = padded.rolling(
+        {dim: window},
+        center=center,
+        min_periods=min_periods,
+    ).mean()
+
+    # Restore exactly the original coordinate extent.
+    return smoothed.isel({dim: slice(pad_width, pad_width + da.sizes[dim])})
