@@ -32,8 +32,8 @@ def frierson_sw_optical_depth(surface_pressure: xr.DataArray, tau_equator: float
     Returns:
         Shortwave surface optical depth with dimensions of latitude, longitude and time.
     """
-    tau_surface = (1-tau_lat_var * np.sin(np.deg2rad(surface_pressure.lat))**2) * tau_equator
-    return tau_surface * (surface_pressure/ref_pressure)**pressure_exponent
+    tau_surface = (1 - tau_lat_var * np.sin(np.deg2rad(surface_pressure.lat)) ** 2) * tau_equator
+    return tau_surface * (surface_pressure / ref_pressure) ** pressure_exponent
 
 
 def frierson_net_toa_sw_dwn(insolation: xr.DataArray, surface_pressure: xr.DataArray, albedo: float = 0,
@@ -73,7 +73,7 @@ def frierson_net_toa_sw_dwn(insolation: xr.DataArray, surface_pressure: xr.DataA
         Net downward shortwave radiation at the top of atmosphere with dimensions of latitude, longitude and time.
     """
     tau = frierson_sw_optical_depth(surface_pressure, tau_equator, tau_lat_var, pressure_exponent, ref_pressure)
-    return insolation*(1-albedo*np.exp(-tau))
+    return insolation * (1 - albedo * np.exp(-tau))
 
 
 def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray:
@@ -121,13 +121,72 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
     # flux_toa = swup_net_toa + ds.olr
     # return ds.swdn_toa - ds.swdn_sfc / (1 - albedo) + ds.lwup_sfc - ds.lwdn_sfc - ds.olr
 
-    swup_toa = albedo/(1-albedo) * ds.swdn_sfc
+    swup_toa = albedo / (1 - albedo) * ds.swdn_sfc
     flux_toa = swup_toa - ds.swdn_toa + ds.olr
     flux_surf = -ds.swdn_sfc + ds.lwup_sfc - ds.lwdn_sfc
     return flux_surf - flux_toa
 
 
-def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_depth: bool=False) -> float:
+def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.DataArray] = None,
+                        sw_diff: float = 0, solar_exponent: float = 0, p_ref: float = 101325,
+                        swdn_sfc: Optional[xr.DataArray] = None, swdn_toa: Optional[xr.DataArray] = None,
+                        albedo: float = 0) -> xr.DataArray:
+    """Calculates the fraction of incoming shortwave radiation absorbed by the atmosphere.
+
+    Calculates atmospheric shortwave absorption either from supplied downward
+    shortwave fluxes at the surface and top of atmosphere, or from the
+    Frierson shortwave optical-depth parameterization. The flux-based method
+    is used only when both ``swdn_sfc`` and ``swdn_toa`` are provided.
+
+    Args:
+        atm_abs: Atmospheric shortwave absorption parameter used by the
+            optical-depth parameterization. Ignored when both shortwave flux
+            inputs are provided. This is the name in Isca namelist.
+        p_surf: Surface pressure. Used by the optical-depth parameterization;
+            ignored when both shortwave flux inputs are provided.
+        sw_diff: Additive shortwave optical-depth parameter. This is the name in Isca namelist.
+        solar_exponent: Exponent controlling the pressure dependence of
+            shortwave optical depth. This is the name in Isca namelist.
+        p_ref: Reference pressure for the optical-depth parameterization, in
+            Pa.
+        swdn_sfc: Downward shortwave flux at the surface.
+        swdn_toa: Downward shortwave flux at the top of the atmosphere.
+        albedo: Surface albedo used to infer atmospheric absorption from the
+            fluxes.
+
+    Returns:
+        Fraction of incoming shortwave radiation absorbed by the atmosphere.
+        The returned `xarray.DataArray` has the dimensions and coordinates of
+        the supplied fluxes or surface pressure.
+
+    Notes:
+        With supplied fluxes, atmospheric absorption is
+
+        $$
+        f_{\mathrm{abs}} =
+        1 - \frac{F_{\mathrm{sfc}}}
+        {F_{\mathrm{toa}}(1 - \alpha)}.
+        $$
+
+        Otherwise, it is calculated from the shortwave optical depth as
+
+        $$
+        f_{\mathrm{abs}} = 1 - \exp(-\tau_{\mathrm{sw}}),
+        $$
+
+        where $$\tau_{\mathrm{sw}}$$ is calculated by
+        `frierson_sw_optical_depth`.
+    """
+    if (swdn_sfc is not None) and (swdn_toa is not None):
+        # I think this method may have problems with diurnal cycle if using daily average data
+        sw_abs = 1 - swdn_sfc / swdn_toa / (1 - albedo)
+    else:
+        odp_sw = frierson_sw_optical_depth(p_surf, atm_abs, sw_diff, solar_exponent, p_ref)
+        sw_abs = 1 - np.exp(-odp_sw)  # fraction of sw absorbed
+    return sw_abs
+
+
+def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_depth: bool = False) -> float:
     """
     Given heat capacity un units of $JK^{-1}kg^{-1}$, this returns heat capacity in units of $JK^{-1}m^{-2}$.
 
@@ -148,9 +207,10 @@ def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_dep
     else:
         return c_p * density * layer_depth
 
+
 def opd_lw_gray(lat: np.ndarray, pressure: Optional[float] = None,
                 kappa: float = 1, tau_eq: float = 6, tau_pole: float = 1.5,
-                pressure_ref: float = 10**5, frac_linear: float=0.1, k_exponent: float=4) -> np.ndarray:
+                pressure_ref: float = 10 ** 5, frac_linear: float = 0.1, k_exponent: float = 4) -> np.ndarray:
     """
     Returns the longwave optical depth used in the
     [Frierson](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#frierson-byrne-schemes)
@@ -182,5 +242,6 @@ def opd_lw_gray(lat: np.ndarray, pressure: Optional[float] = None,
     if pressure is None:
         return opd_surf
     else:
-        pressure_factor = frac_linear * (pressure/pressure_ref) + (1-frac_linear) * (pressure/pressure_ref)**k_exponent
+        pressure_factor = frac_linear * (pressure / pressure_ref) + (1 - frac_linear) * (
+                pressure / pressure_ref) ** k_exponent
         return opd_surf * pressure_factor

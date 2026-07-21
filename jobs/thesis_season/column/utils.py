@@ -10,7 +10,7 @@ from isca_tools.thesis.surface_flux_taylor import get_temp_rad as get_temp_rad_s
 from tqdm.notebook import tqdm
 from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
-from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth
+from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth, get_frierson_sw_abs
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
@@ -129,8 +129,10 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     ds['odp_surf'] = opd_lw_gray(ds.lat, kappa=odp_info['odp'], tau_eq=odp_info['ir_tau_eq'],
                                  tau_pole=odp_info['ir_tau_pole'], frac_linear=odp_info['linear_tau'],
                                  k_exponent=odp_info['wv_exponent'])  # optical depth as function of latitude
-    ds.attrs['odp_sw'] = float(frierson_sw_optical_depth(ds.p_surf.isel(depth=0, time=0, lon=0, lat=0), odp_info['atm_abs']))
-    ds.attrs['sw_abs'] = 1 - np.exp(-ds.attrs['odp_sw'])      # fraction of sw absorbed
+    # ds.attrs['odp_sw'] = float(frierson_sw_optical_depth(ds.p_surf.isel(depth=0, time=0, lon=0, lat=0), odp_info['atm_abs']))
+    # ds.attrs['sw_abs'] = 1 - np.exp(-ds.attrs['odp_sw'])      # fraction of sw absorbed
+    ds.attrs['atm_abs'] = odp_info['atm_abs']
+    ds.attrs['sw_abs'] = float(get_frierson_sw_abs(odp_info['atm_abs'], ds.p_surf.isel(depth=0, time=0, lon=0, lat=0)))
     ds.attrs['albedo'] = namelist['mixed_layer_nml']['albedo_value']
     # Compute variables required for flux breakdown
     ds['p_atm'] = ds.p_surf * ds.sigma_atm.sel(pfull=np.inf, method='nearest')
