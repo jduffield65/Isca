@@ -3,12 +3,9 @@ import xarray as xr
 import inspect
 from typing import Union, Tuple, Optional
 
-from scipy.constants import Stefan_Boltzmann
-from sympy.abc import lamda
-
 from .surface_flux_taylor_2layer import get_sensitivity_sh, get_sensitivity_lh, \
     get_sensitivity_lw_surf, get_sensitivity_lw_atm
-from ..utils.constants import c_p, g, L_v
+from ..utils.constants import c_p, g, L_v, Stefan_Boltzmann
 from ..utils.moist_physics import clausius_clapeyron_factor, sphum_sat
 
 
@@ -182,7 +179,7 @@ Union[float, np.ndarray, xr.DataArray]]:
     sw_abs_mod = sw_abs * (1-lambda_resid) / (x_a_mod ** 2 + y ** 2) / (1-albedo) / (1-sw_abs)
 
     sw_effect_real = 1 - y * sw_abs_mod + (y**2 - x_a_mod**2) * sw_abs_mod**2
-    sw_effect_imag = sw_abs - 2 * y * sw_abs_mod**2
+    sw_effect_imag = sw_abs_mod - 2 * y * sw_abs_mod**2
 
     sw_effect_x = sw_effect_real + y_eff0 * x_a_mod/x_s_eff0 * sw_effect_imag
     sw_effect_y = sw_effect_real - x_s_eff0 * x_a_mod / y_eff0 * sw_effect_imag
