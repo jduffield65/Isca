@@ -119,6 +119,22 @@ Union[float, np.ndarray, xr.DataArray]]:
 
     return lambda_scaling, heat_cap_scaling
 
+def combine_olr_adv(B: Union[float, np.ndarray, xr.DataArray],
+                    lambda_adv: Union[float, np.ndarray, xr.DataArray] = 0,
+                    coef_phase_olr: Union[float, np.ndarray, xr.DataArray] = 0,
+                    coef_phase_adv: Union[float, np.ndarray, xr.DataArray] = 0,
+                    small_phase: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray]]:
+    if small_phase:
+        # Assume phase for col, olr, adv are all small i.e., cos(phase)=1 and sin(phase)=phase
+        b = B + lambda_adv
+        coef_phase_b = (B * coef_phase_olr + lambda_adv * coef_phase_adv) / b
+    else:
+        # Combine advection with olr
+        b = B * np.cos(coef_phase_olr) + lambda_adv * np.cos(coef_phase_adv)
+        coef_phase_b = (B * np.sin(coef_phase_olr) + lambda_adv * np.sin(coef_phase_adv)) / b
+    return b, coef_phase_b
+
 
 def get_heat_cap_lambda_eff2(mu: Union[float, np.ndarray, xr.DataArray],
                             lambda_const: Union[float, np.ndarray, xr.DataArray],
@@ -146,15 +162,8 @@ Union[float, np.ndarray, xr.DataArray]]:
     omega = 2 * np.pi * f
     heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
     lambda_resid = lambda_lh + lambda_lw2 - lambda_sh
-
-    if small_phase:
-        # Assume phase for col, olr, adv are all small i.e., cos(phase)=1 and sin(phase)=phase
-        b = B + lambda_adv
-        coef_phase_b = (B * coef_phase_olr + lambda_adv * coef_phase_adv) / b
-    else:
-        # Combine advection with olr
-        b = B * np.cos(coef_phase_olr) + lambda_adv * np.cos(coef_phase_adv)
-        coef_phase_b = (B * np.sin(coef_phase_olr) + lambda_adv * np.sin(coef_phase_adv)) / b
+    b, coef_phase_b = combine_olr_adv(B, lambda_adv, coef_phase_olr, coef_phase_adv, small_phase)
+    if not small_phase:
         # Make col accurate
         coef_amp_col = coef_amp_col * np.cos(coef_phase_col)
         coef_phase_col = np.tan(coef_phase_col)
