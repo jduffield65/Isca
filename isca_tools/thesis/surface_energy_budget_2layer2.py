@@ -4,6 +4,8 @@ import inspect
 from typing import Union, Tuple, Optional
 
 from scipy.constants import Stefan_Boltzmann
+from sympy.abc import lamda
+
 from .surface_flux_taylor_2layer import get_sensitivity_sh, get_sensitivity_lh, \
     get_sensitivity_lw_surf, get_sensitivity_lw_atm
 from ..utils.constants import c_p, g, L_v
@@ -108,7 +110,7 @@ Union[float, np.ndarray, xr.DataArray]]:
     sw_abs_mod = sw_abs * (lambda_const - lambda_resid) * lambda_mod / (omega ** 2 * heat_cap_atmos_mod ** 2 +
                                                                         lambda_mod ** 2) / (1 - albedo) / (1 - sw_abs)
 
-    sw_effect_real = 1 - sw_abs + (1 - omega ** 2 * heat_cap_atmos_mod ** 2 / lambda_mod ** 2) * sw_abs ** 2
+    sw_effect_real = 1 - sw_abs_mod + (1 - omega ** 2 * heat_cap_atmos_mod ** 2 / lambda_mod ** 2) * sw_abs_mod ** 2
     # Get cross terms due to effect of sw on imaginary part, need to take account of. Especially important if large
     # heat capacity
     sw_effect_heat_cap = sw_effect_real + lambda_eff0 / lambda_mod * heat_cap_atmos_mod / heat_cap_eff0 * sw_abs_mod * (
@@ -119,3 +121,74 @@ Union[float, np.ndarray, xr.DataArray]]:
     lambda_scaling = lambda_scaling0 * sw_effect_lambda
 
     return lambda_scaling, heat_cap_scaling
+
+
+def get_heat_cap_lambda_eff2(mu: Union[float, np.ndarray, xr.DataArray],
+                            lambda_const: Union[float, np.ndarray, xr.DataArray],
+                            B: Union[float, np.ndarray, xr.DataArray],
+                            lambda_sh: Union[float, np.ndarray, xr.DataArray],
+                            lambda_lh: Union[float, np.ndarray, xr.DataArray],
+                            lambda_lw1: Union[float, np.ndarray, xr.DataArray],
+                            lambda_lw2: Union[float, np.ndarray, xr.DataArray],
+                            heat_cap_surf: Union[float, np.ndarray, xr.DataArray],
+                            pressure_heat_cap_atmos_calc: float,
+                            coef_amp_col: Union[float, np.ndarray, xr.DataArray] = 1,
+                            coef_phase_col: Union[float, np.ndarray, xr.DataArray] = 0,
+                            coef_phase_olr: Union[float, np.ndarray, xr.DataArray] = 0,
+                            lambda_adv: Union[float, np.ndarray, xr.DataArray] = 0,
+                            coef_phase_adv: Union[float, np.ndarray, xr.DataArray] = 0,
+                            sw_abs: Union[float, np.ndarray, xr.DataArray] = 0,
+                            albedo: Union[float, np.ndarray, xr.DataArray] = 0,
+                            n_year_days: int = 360,
+                            day_seconds: int = 86400,
+                            small_phase: bool = False,
+                            ) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray]]:
+    # Different way with everything dimensionless, and add advection
+    f = 1 / (n_year_days * day_seconds)
+    omega = 2 * np.pi * f
+    heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
+    lambda_resid = lambda_lh + lambda_lw2 - lambda_sh
+
+    if small_phase:
+        # Assume phase for col, olr, adv are all small i.e., cos(phase)=1 and sin(phase)=phase
+        b = B + lambda_adv
+        coef_phase_b = (B * coef_phase_olr + lambda_adv * coef_phase_adv) / b
+    else:
+        # Combine advection with olr
+        b = B * np.cos(coef_phase_olr) + lambda_adv * np.cos(coef_phase_adv)
+        coef_phase_b = (B * np.sin(coef_phase_olr) + lambda_adv * np.sin(coef_phase_adv)) / b
+        # Make col accurate
+        coef_amp_col = coef_amp_col * np.cos(coef_phase_col)
+        coef_phase_col = np.tan(coef_phase_col)
+
+    # Make all parameters dimensionless by dividing by lambda_const
+    x_a = omega * heat_cap_atmos / lambda_const
+    x_s = omega * heat_cap_surf / lambda_const
+    lambda_resid /= lambda_const
+    b /= lambda_const
+    lambda_lw1 /= lambda_const
+
+    # In between parameters useful for final answer
+    x_a_mod = x_a * (coef_amp_col + mu - b * coef_phase_b / x_a)
+    y = 1 + b - lambda_resid + x_a * coef_amp_col * coef_phase_col
+    scaling_param = (1 - lambda_resid) * (1 - lambda_lw1) / (x_a_mod ** 2 + y ** 2)
+
+    # Heat cap and lambda with no sw_abs
+    x_s_eff0 = x_s * (1 + scaling_param * x_a_mod/x_s)
+    y_eff0 = 1 - scaling_param * y
+
+    # Account for sw_abs
+    sw_abs_mod = sw_abs * (1-lambda_resid) / (x_a_mod ** 2 + y ** 2) / (1-albedo) / (1-sw_abs)
+
+    sw_effect_real = 1 - y * sw_abs_mod + (y**2 - x_a_mod**2) * sw_abs_mod**2
+    sw_effect_imag = sw_abs - 2 * y * sw_abs_mod**2
+
+    sw_effect_x = sw_effect_real + y_eff0 * x_a_mod/x_s_eff0 * sw_effect_imag
+    sw_effect_y = sw_effect_real - x_s_eff0 * x_a_mod / y_eff0 * sw_effect_imag
+
+
+    x_s_eff = x_s_eff0 * sw_effect_x
+    y_eff = y_eff0 * sw_effect_y
+
+    return lambda_const * y_eff, lambda_const * x_s_eff / omega
