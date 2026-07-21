@@ -128,7 +128,7 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
 
 
 def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.DataArray] = None,
-                        sw_diff: float = 0, solar_exponent: float = 0, p_ref: float = 101325,
+                        sw_diff: float = 0, solar_exponent: float = 4, p_ref: float = 101325,
                         swdn_sfc: Optional[xr.DataArray] = None, swdn_toa: Optional[xr.DataArray] = None,
                         albedo: float = 0) -> xr.DataArray:
     """Calculates the fraction of incoming shortwave radiation absorbed by the atmosphere.
