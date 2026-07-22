@@ -14,7 +14,8 @@ from tqdm.notebook import tqdm
 from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.numerical import get_fit_coef_complex, spline_deriv_periodic, fit_linear_zero_mean
-from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth, get_frierson_sw_abs
+from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth, get_frierson_sw_abs, \
+    get_sw_abs_amp
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
@@ -349,6 +350,8 @@ get_temp_from_sphum_sat_xr = wrap_with_apply_ufunc(get_temp_from_sphum_sat, inpu
 
 spline_deriv_periodic_xr = wrap_with_apply_ufunc(spline_deriv_periodic, input_core_dims=[['time'], ['time']],
                                                  output_core_dims=[['time']])
+
+get_sw_abs_amp_xr = wrap_with_apply_ufunc(get_sw_abs_amp, input_core_dims=[['time'], ['time'], ['time']], output_core_dims=[[]])
 
 fit_linear_zero_mean_xr_1 = wrap_with_apply_ufunc(
     lambda x1, y: fit_linear_zero_mean(x1, y, x2=None)[0],

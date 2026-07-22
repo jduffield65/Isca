@@ -3,6 +3,8 @@ import numpy as np
 from netCDF4 import Dataset
 from typing import Optional, Union
 
+from .fourier import get_fourier_coef
+
 
 def frierson_sw_optical_depth(surface_pressure: xr.DataArray, tau_equator: float = 0, tau_lat_var: float = 0,
                               pressure_exponent: float = 4, ref_pressure: float = 101325) -> xr.DataArray:
@@ -131,7 +133,7 @@ def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.Dat
                         sw_diff: float = 0, solar_exponent: float = 4, p_ref: float = 101325,
                         swdn_sfc: Optional[xr.DataArray] = None, swdn_toa: Optional[xr.DataArray] = None,
                         albedo: float = 0) -> xr.DataArray:
-    """Calculates the fraction of incoming shortwave radiation absorbed by the atmosphere.
+    r"""Calculates the fraction of incoming shortwave radiation absorbed by the atmosphere.
 
     Calculates atmospheric shortwave absorption either from supplied downward
     shortwave fluxes at the surface and top of atmosphere, or from the
@@ -185,6 +187,45 @@ def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.Dat
         sw_abs = 1 - np.exp(-odp_sw)  # fraction of sw absorbed
     return sw_abs
 
+def get_sw_abs_amp(swdn_sfc: np.ndarray, swdn_toa: np.ndarray, time: np.ndarray, albedo: float) -> float:
+    r"""Compute the atmospheric shortwave absorption from annual-harmonic amplitudes.
+
+    The atmospheric absorption fraction is inferred from the ratio between the
+    amplitude of the first annual harmonic of downward shortwave radiation at
+    the surface and at the top of the atmosphere:
+
+    $f_\mathrm{abs} = 1 - \frac{A_\mathrm{sfc}}
+    {A_\mathrm{TOA}(1 - \alpha)}$
+
+    where $A_\mathrm{sfc}$ and $A_\mathrm{TOA}$ are the positive amplitudes of
+    the annual harmonic in surface and top-of-atmosphere downward shortwave
+    radiation, respectively, and $\alpha$ is the surface albedo.
+
+    Args:
+        swdn_sfc:
+            Downward shortwave radiation at the surface, sampled at `time`.
+        swdn_toa:
+            Downward shortwave radiation at the top of the atmosphere, sampled at
+            `time`.
+        time:
+            Time coordinate corresponding to the radiation data. Its units and
+            sampling must be compatible with :func:`get_fourier_coef`.
+        albedo:
+            Surface albedo, expressed as a fraction between 0 and 1.
+
+    Returns:
+            Fraction of the incoming annual-harmonic shortwave-radiation amplitude
+            absorbed by the atmosphere.
+
+    Notes:
+        This diagnostic concerns the seasonal-cycle amplitude rather than the
+        time-mean shortwave absorption. It assumes that `amp_toa` and
+        `1 - albedo` are non-zero.
+    """
+    amp_sfc = get_fourier_coef(time, swdn_sfc, 1, pos_amp=True)[0]
+    amp_toa = get_fourier_coef(time, swdn_toa, 1, pos_amp=True)[0]
+    sw_abs = 1 - amp_sfc / amp_toa / (1 - albedo)
+    return sw_abs
 
 def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_depth: bool = False) -> float:
     """
