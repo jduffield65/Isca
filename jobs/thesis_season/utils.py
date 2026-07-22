@@ -7,13 +7,15 @@ from tqdm import tqdm
 from isca_tools.thesis.surface_flux_taylor_2layer import get_p_eff
 from isca_tools.utils.base import mass_weighted_vertical_integral
 from isca_tools.utils.moist_physics import sphum_sat
+from isca_tools.utils.numerical import get_var_shift
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_atmospheric_heating
 from isca_tools import load_dataset, load_namelist
 from isca_tools.utils.constants import c_p_ocean, rho_ocean, c_p, L_v, g, Stefan_Boltzmann
+from isca_tools.utils.xarray import wrap_with_apply_ufunc
 
 from jobs.thesis_season.column.utils import get_fit_coef_complex_xr, lat_min, lat_max, get_annual_zonal_mean, \
     get_temp_from_sphum_sat_xr, get_sw_abs_amp_xr, spline_deriv_periodic_xr, day_seconds, get_fourier_fit_xr, \
-    fit_linear_zero_mean_xr
+    fit_linear_zero_mean_xr, width, month_ticks
 from jobs.thesis_season.thesis_figs.utils import smooth_n_days
 
 var_keep = ['temp', 'ps', 'sphum', 'olr', 'swdn_toa', 'swdn_sfc', 'lwdn_sfc', 'lwup_sfc', 'flux_t',
@@ -242,3 +244,143 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False) -> dict:
     params['lambda_adv'], params['coef_phase_adv'] = get_fit_coef_complex_xr(ds.adv_atmos, -ds.temp_atm, ds.time)
 
     return params
+
+
+def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
+                        coef_phase_col: xr.DataArray, mu: xr.DataArray,
+                        p_integ_calc: xr.DataArray,
+                        time: xr.DataArray) -> xr.DataArray:
+    r"""Approximate the atmospheric moist-static-energy tendency.
+
+    Reconstructs the reduced-model approximation to the atmospheric
+    moist-static-energy tendency,
+
+    $$
+    C_a\left[\beta_{\mathrm{col}} + \mu
+    - i\beta_{\mathrm{col}}\phi_{\mathrm{col}}\right]
+    \frac{\partial T_a}{\partial t},
+    $$
+
+    using the near-surface atmospheric temperature tendency. The column
+    temperature tendency is scaled by $\beta_{\mathrm{col}}$ and shifted in
+    time according to $\phi_{\mathrm{col}}$, while the specific-humidity
+    contribution is represented by $\mu \partial T_a / \partial t$.
+
+    Args:
+        temp_atm: Near-surface atmospheric temperature, $T_a$.
+        coef_amp_col: Amplitude factor relating column-mean and near-surface
+            atmospheric temperature tendencies, $\beta_{\mathrm{col}}$.
+        coef_phase_col: Phase correction for the column-temperature tendency,
+            $\phi_{\mathrm{col}}$.
+        mu: Moisture-related atmospheric heat-capacity correction, $\mu$.
+        p_integ_calc: Pressure thickness of the atmospheric column used in the
+            energy-budget calculation. Should be the mean over the `time` dimension.
+        time: Time coordinate, in days, used to calculate the periodic
+            temperature tendency and apply the phase shift.
+
+    Returns:
+        Approximation to the atmospheric moist-static-energy tendency in units
+        of energy flux, $C_a(\partial T_{\mathrm{col}}/\partial t +
+        \mu\partial T_a/\partial t)$.
+    """
+    if 'time' in p_integ_calc.dims:
+        raise ValueError('p_integ_calc should be an average over time')
+    temp_atm_deriv = spline_deriv_periodic_xr(time * day_seconds, temp_atm)
+    temp_atm_deriv_shift = get_var_shift_xr(temp_atm_deriv, coef_phase_col / (2 * np.pi / time.size),
+                                            None, time)
+    temp_col_tend = coef_amp_col * temp_atm_deriv_shift
+    sphum_tend = mu * temp_atm_deriv
+    c_a = c_p * p_integ_calc / g
+    return c_a * (temp_col_tend + sphum_tend)
+
+
+def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn_toa: xr.DataArray,
+                          sw_abs: xr.DataArray, lambda_const: xr.DataArray, lambda_a: xr.DataArray,
+                          B: xr.DataArray, lambda_lw1: xr.DataArray, coef_phase_olr: xr.DataArray):
+    r"""Approximate non-advective atmospheric energy-budget fluxes.
+
+    Reconstructs the explicitly diagnosed terms on the right-hand side of the
+    atmospheric energy budget, excluding atmospheric advection:
+
+    $$
+    \mathrm{flux}_{\mathrm{atmos}} =
+    \mathrm{SW}_{\mathrm{abs}}(t)
+    + \lambda(T_s - T_a)
+    + \Lambda T_a
+    - \lambda_{\mathrm{lw1}} T_s
+    - B\left[1 - i\phi_{\mathrm{olr}}\right]T_a.
+    $$
+
+    All temperature and incoming solar-radiation anomalies are calculated
+    relative to their time means. The phase correction
+    $\phi_{\mathrm{olr}}$ is applied as a time shift to the atmospheric
+    temperature contribution to outgoing longwave radiation.
+
+    Args:
+        temp_atm: Near-surface atmospheric temperature, $T_a$.
+        temp_surf: Surface temperature, $T_s$.
+        swdn_toa: Downward shortwave radiation at the top of the atmosphere.
+        sw_abs: Fraction of top-of-atmosphere shortwave radiation absorbed by
+            the atmosphere.
+        lambda_const: Coefficient multiplying the surface--atmosphere
+            temperature contrast, $\lambda$.
+        lambda_a: Coefficient multiplying atmospheric temperature,
+            $\Lambda$.
+        B: Amplitude of the atmospheric contribution to outgoing longwave
+            radiation.
+        lambda_lw1: Coefficient for the surface-temperature-dependent
+            longwave contribution to outgoing longwave radiation.
+        coef_phase_olr: Phase correction for the atmospheric outgoing
+            longwave-radiation contribution, $\phi_{\mathrm{olr}}$.
+
+    Returns:
+        Approximate atmospheric energy-budget flux convergence excluding
+        advection, comprising absorbed shortwave radiation, turbulent and
+        longwave surface-exchange terms, and the phase-shifted atmospheric
+        outgoing-longwave-radiation term.
+    """
+    temp_atm = temp_atm - temp_atm.mean(dim='time')
+    temp_surf = temp_surf - temp_surf.mean(dim='time')
+    flux_abs = sw_abs * (swdn_toa - swdn_toa.mean(dim='time'))
+
+    flux_linear = lambda_const * (temp_surf - temp_atm) + lambda_a * temp_atm - lambda_lw1 * temp_surf
+    temp_atm_shift = get_var_shift_xr(temp_atm, coef_phase_olr / (2 * np.pi / temp_atm.time.size),
+                                      None, temp_atm.time)
+    flux_shift = -B * temp_atm_shift
+    return flux_abs + flux_linear + flux_shift
+
+def get_approx_adv_atmos(temp_atm: xr.DataArray, lambda_adv: xr.DataArray,
+                         coef_phase_adv: xr.DataArray) -> xr.DataArray:
+    r"""Approximate the atmospheric advection term.
+
+    Reconstructs the residual atmospheric energy-budget contribution from
+    advection using a phase-shifted atmospheric temperature anomaly:
+
+    $$
+    \mathrm{adv}_{\mathrm{atmos}} =
+    -\lambda_{\mathrm{adv}}
+    \left[1 - i\phi_{\mathrm{adv}}\right]T_a.
+    $$
+
+    The phase correction $\phi_{\mathrm{adv}}$ is implemented as a time shift
+    of the demeaned near-surface atmospheric temperature.
+
+    Args:
+        temp_atm: Near-surface atmospheric temperature, $T_a$.
+        lambda_adv: Amplitude of the atmospheric advection response,
+            $\lambda_{\mathrm{adv}}$.
+        coef_phase_adv: Phase correction for atmospheric advection,
+            $\phi_{\mathrm{adv}}$.
+
+    Returns:
+        Approximate atmospheric advection term, with the same units as the
+        atmospheric energy-budget fluxes.
+    """
+    temp_atm = temp_atm - temp_atm.mean(dim='time')
+    temp_atm_shift = get_var_shift_xr(temp_atm, coef_phase_adv / (2 * np.pi / temp_atm.time.size),
+                                      None, temp_atm.time)
+    return -lambda_adv * temp_atm_shift
+
+
+get_var_shift_xr = wrap_with_apply_ufunc(get_var_shift, input_core_dims=[['time'], [], [], ['time']],
+                                         output_core_dims=[['time']])
