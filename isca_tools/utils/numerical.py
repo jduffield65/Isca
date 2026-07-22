@@ -883,3 +883,43 @@ def fit_linear_zero_mean(x1, y, x2=None, check=False, atol=1e-10):
     if x2 is None:
         return coef[0], 0.0
     return coef[0], coef[1]
+
+
+def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp: bool = True):
+    """
+    Compute the complex fitting coefficient between two variables.
+
+    This estimates the complex coefficient $\beta$ in the relationship:
+        $y \\approx \\beta \\cdot x$
+
+    using the first harmonic of a Fourier fit. The coefficient is represented
+    in amplitude and phase form:
+        $\\beta = A_{y} / A_{x} \\cdot e^{i(\\phi_{y} - \\phi_{x})}$
+
+    where $A$ and $\\phi$ denote the amplitude and phase of the first harmonic.
+
+    Args:
+        pos_amp:
+        y:
+            Target variable to fit.
+        x:
+            Reference variable.
+        time:
+            Time coordinate corresponding to `y` and `x`.
+        pos_amp: Used in `get_fourier_coef`. If True, Fourier amplitude coefficient found will always be positive
+            with phase_coef in $[-\\pi, \\pi]$, Otherwise will choose the sign of amp_coef to minimize the magnitude of
+            phase_coef i.e., keep phase_coef in range between $[-\\pi/2, \\pi/2]$.
+
+    Returns:
+        amp_ratio: Amplitude component of $\\beta$,
+              given by $A_{y} / A_{x}$.
+        phase_diff: Phase difference $\\phi_{y} - \\phi_{x}$.
+    """
+    # Perform Fourier fit for var and extract first harmonic amplitude and phase
+    y_amp_coef, y_phase_coef = get_fourier_coef(time, y, n=1, pos_amp=pos_amp)
+
+    # Perform Fourier fit for temp and extract first harmonic amplitude and phase
+    x_amp_coef, x_phase_coef = get_fourier_coef(time, x, n=1, pos_amp=pos_amp)
+
+    # Return amplitude ratio and phase difference defining complex coefficient β
+    return y_amp_coef / x_amp_coef, y_phase_coef - x_phase_coef

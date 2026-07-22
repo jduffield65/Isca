@@ -226,6 +226,7 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
         ValueError: If `combine_abs_lat` is True but `lat_name` is not a
             dimension of the input after zonal averaging.
     """
+    attrs = ds.attrs.copy()
     if 'lon' in ds.dims:
         ds = ds.mean(dim='lon')
     else:
@@ -256,7 +257,7 @@ def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_da
         if 'time' not in ds[key].dims:
             ds_av[key] = ds_av[key].isel(time=0)
     if keep_attrs:
-        ds_av.attrs = ds.attrs
+        ds_av.attrs = attrs
     return ds_av
 
 

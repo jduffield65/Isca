@@ -2,14 +2,18 @@ import numpy as np
 import xarray as xr
 import inspect
 from typing import Union, Literal, Optional, Tuple, List, Callable
+import scipy.optimize
 
-from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_rad_atm, reconstruct_lh, reconstruct_sh, reconstruct_lw_atm, \
+from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_rad_atm, reconstruct_lh, reconstruct_sh, \
+    reconstruct_lw_atm, \
     name_square, name_nl, get_latent_heat, get_sensible_heat, get_lw_atm, get_sensitivity_lh, \
-    get_sensitivity_sh, get_sensitivity_lw_atm, get_lw_surf, get_sensitivity_lw_surf, reconstruct_lw_surf
+    get_sensitivity_sh, get_sensitivity_lw_atm, get_lw_surf, get_sensitivity_lw_surf, reconstruct_lw_surf, \
+    get_temp_from_sphum_sat
 from isca_tools.thesis.surface_flux_taylor import get_temp_rad as get_temp_rad_surf
 from tqdm.notebook import tqdm
 from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
+from isca_tools.utils.numerical import get_fit_coef_complex, spline_deriv_periodic, fit_linear_zero_mean
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth, get_frierson_sw_abs
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
 from isca_tools import load_namelist, load_dataset
@@ -23,7 +27,7 @@ exp_dir = lambda x: f'thesis_season/column/depth={x}/fix_rh'
 
 
 def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
-            lat_min: float = lat_min, lat_max: float = lat_max, exp_name: Optional[Union[str, List]]=None,
+            lat_min: float = lat_min, lat_max: float = lat_max, exp_name: Optional[Union[str, List]] = None,
             low_lev_only: bool = True, first_month_file=121) -> xr.Dataset:
     """Load and preprocess near-surface fields for one or two mixed-layer depths.
 
@@ -135,7 +139,10 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     ds.attrs['sw_abs'] = float(get_frierson_sw_abs(odp_info['atm_abs'], ds.p_surf.isel(depth=0, time=0, lon=0, lat=0)))
     ds.attrs['albedo'] = namelist['mixed_layer_nml']['albedo_value']
     # Compute variables required for flux breakdown
-    ds['p_atm'] = ds.p_surf * ds.sigma_atm.sel(pfull=np.inf, method='nearest')
+    if low_lev_only:
+        ds['p_atm'] = ds.p_surf * ds.sigma_atm
+    else:
+        ds['p_atm'] = ds.p_surf * ds.sigma_atm.sel(pfull=np.inf, method='nearest')
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_atm)
     ds['lw_atm'] = ds.lwup_sfc - ds.lwdn_sfc - ds.olr
     ds['lw_surf'] = ds.lwup_sfc - ds.lwdn_sfc
@@ -207,7 +214,7 @@ def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw_atm', 'lw_surf']
             if use_rh_flux_q:
                 ds = ds.copy(deep=True)  # so not to overwrite
                 if 'rh_flux_q' in ds.attrs:
-                    ds['rh_atm'] = ds.rh_atm*0 + ds.rh_flux_q
+                    ds['rh_atm'] = ds.rh_atm * 0 + ds.rh_flux_q
                 else:
                     raise ValueError('ds does not contain rh_flux_q')
         flux_func = {'lh': get_latent_heat, 'sh': get_sensible_heat, 'lw_atm': get_lw_atm,
@@ -291,7 +298,7 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
         drag_coef = ds.temp_surf * 0 + ds_ref.drag_coef
         evap_prefactor = ds.temp_surf * 0 + ds_ref.evap_prefactor
         if use_rh_flux_q:
-            ds = ds.copy(deep=True)     # so not to overwrite
+            ds = ds.copy(deep=True)  # so not to overwrite
             ds_ref = ds_ref.copy(deep=True)
             if 'rh_flux_q' in ds.attrs:
                 ds['rh_atm'] = ds.rh_atm * 0 + ds.rh_flux_q
@@ -333,43 +340,81 @@ def reconstruct_flux_xr(ds: xr.Dataset, ds_ref: xr.Dataset,
     return flux_ref, flux_anom_linear, flux_anom_nl, info_cont
 
 
-def get_fit_coef_complex(var: xr.DataArray, temp: xr.DataArray, time: xr.DataArray):
-    """
-    Compute the complex fitting coefficient between two variables.
+# Xarray versions of functions
+get_fit_coef_complex_xr = wrap_with_apply_ufunc(get_fit_coef_complex, input_core_dims=[['time'], ['time'], ['time']],
+                                                output_core_dims=[[], []])
 
-    This estimates the complex coefficient $\beta$ in the relationship:
-        $var \\approx \beta \\cdot temp$
+get_temp_from_sphum_sat_xr = wrap_with_apply_ufunc(get_temp_from_sphum_sat, input_core_dims=[[], []],
+                                                   output_core_dims=[[]])
 
-    using the first harmonic of a Fourier fit. The coefficient is represented
-    in amplitude and phase form:
-        $\beta = A_{var} / A_{temp} \\cdot e^{i(\\phi_{var} - \\phi_{temp})}$
+spline_deriv_periodic_xr = wrap_with_apply_ufunc(spline_deriv_periodic, input_core_dims=[['time'], ['time']],
+                                                 output_core_dims=[['time']])
 
-    where $A$ and $\\phi$ denote the amplitude and phase of the first harmonic.
+fit_linear_zero_mean_xr_1 = wrap_with_apply_ufunc(
+    lambda x1, y: fit_linear_zero_mean(x1, y, x2=None)[0],
+    input_core_dims=[['time'], ['time']],
+    output_core_dims=[[]],
+)
+
+fit_linear_zero_mean_xr_2 = wrap_with_apply_ufunc(
+    lambda x1, y, x2: fit_linear_zero_mean(x1, y, x2=x2),
+    input_core_dims=[['time'], ['time'], ['time']],
+    output_core_dims=[[], []],
+)
+
+def fit_linear_zero_mean_xr(x1, y, x2=None):
+    r"""Fits one or two mean-centred predictors to a mean-centred response.
+
+    Removes the temporal mean from each supplied variable before fitting a
+    linear model with no intercept. With one predictor, fits
+
+    $$
+    y' = c_1 x_1',
+    $$
+
+    where primes denote anomalies relative to the time mean. With two
+    predictors, fits
+
+    $$
+    y' = c_1 x_1' + c_2 x_2'.
+    $$
 
     Args:
-        var:
-            Target variable to fit.
-        temp:
-            Reference variable.
-        time:
-            Time coordinate corresponding to `var` and `temp`.
+        x1: First predictor. Must contain a `time` dimension.
+        y: Response variable. Must contain a `time` dimension and be
+            broadcast-compatible with `x1`.
+        x2: Optional second predictor. Must contain a `time` dimension and be
+            broadcast-compatible with `x1` and `y`.
 
     Returns:
-        amp_ratio: Amplitude component of $\beta$,
-              given by $A_{var} / A_{temp}$.
-        phase_diff: Phase difference $\phi_{var} - \phi_{temp}$.
+        If `x2` is `None`, returns the fitted coefficient $c_1$ as an
+        `xarray.DataArray`.
+
+        If `x2` is provided, returns a tuple `(c1, c2)` containing the fitted
+        coefficients for `x1` and `x2`, respectively. Each coefficient is an
+        `xarray.DataArray` over all dimensions except `time`.
+
+    Notes:
+        Mean-centering is performed independently over the `time` dimension:
+
+        $$
+        x_i' = x_i - \overline{x_i},
+        \qquad
+        y' = y - \overline{y}.
+        $$
+
+        Consequently, fitting without an intercept to the centred variables is
+        equivalent to fitting a linear model with an intercept to the original
+        variables.
     """
-    # Perform Fourier fit for var and extract first harmonic amplitude and phase
-    var_fourier = get_fourier_fit_xr(time, var, n_harmonics=1,
-                                     pad_coefs_phase=True, pos_amp=True)
-    var_amp_coef = var_fourier[1].sel(harmonic=1)
-    var_phase_coef = var_fourier[2].sel(harmonic=1)
-
-    # Perform Fourier fit for temp and extract first harmonic amplitude and phase
-    temp_fourier = get_fourier_fit_xr(time, temp, n_harmonics=1,
-                                      pad_coefs_phase=True, pos_amp=True)
-    temp_amp_coef = temp_fourier[1].sel(harmonic=1)
-    temp_phase_coef = temp_fourier[2].sel(harmonic=1)
-
-    # Return amplitude ratio and phase difference defining complex coefficient β
-    return var_amp_coef / temp_amp_coef, var_phase_coef - temp_phase_coef
+    if x2 is None:
+        return fit_linear_zero_mean_xr_1(
+            x1 - x1.mean(dim="time"),
+            y - y.mean(dim="time"),
+        )
+    else:
+        return fit_linear_zero_mean_xr_2(
+            x1 - x1.mean(dim="time"),
+            y - y.mean(dim="time"),
+            x2 - x2.mean(dim="time"),
+        )

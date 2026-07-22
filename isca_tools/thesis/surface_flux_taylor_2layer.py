@@ -1,11 +1,97 @@
 import numpy as np
 import xarray as xr
+import scipy.optimize
 from typing import Union, Tuple, Optional
 
 from ..convection import potential_temp
 from ..utils.moist_physics import get_density, sphum_sat, clausius_clapeyron_factor
-from ..utils.constants import L_v, c_p, kappa, Stefan_Boltzmann
+from ..utils.constants import L_v, c_p, kappa, Stefan_Boltzmann, R, g
 from .surface_flux_taylor import reconstruct_flux, first_non_none_key, name_square, name_nl
+
+def get_p_eff(p_surf: Union[xr.DataArray, np.ndarray, float], temp: float=280,
+              lapse_rate: float=6.5 / 1000, p_alpha_calc: float=1000*100):
+    r"""Calculates the effective pressure for the saturation-specific-humidity distribution in a column.
+
+    Accounts for the concentration of saturation specific humidity, $q^*$,
+    near the surface by defining a characteristic pressure that is a fraction
+    of the surface pressure.
+
+    Args:
+        p_surf: Surface pressure.
+        temp: Temperature used to calculate the Clausius--Clapeyron factor, in
+            K. Defaults to $280$ K.
+        lapse_rate: Atmospheric temperature lapse rate, in $\mathrm{K\,m^{-1}}$.
+            Defaults to $6.5 \times 10^{-3}\ \mathrm{K\\,m^{-1}}$.
+        p_alpha_calc: Pressure at which to calculate the Clausius--Clapeyron
+            factor, in Pa. Defaults to $100000$ Pa. Largely insensitive.
+
+    Returns:
+        Effective pressure with the same type, dimensions, and coordinates as
+        `p_surf`.
+
+    Notes:
+        The effective pressure is calculated as
+
+        $$
+        p_{\mathrm{eff}} =
+        \frac{\beta + 1}{\beta + 2} p_{\mathrm{surf}},
+        $$
+
+        where
+
+        $$
+        \beta =
+        \alpha(T, p_{\alpha}) \\Gamma
+        \frac{R T}{g}.
+        $$
+
+        Here, $\alpha$ is the Clausius--Clapeyron factor, $\Gamma$ is the
+        lapse rate, $R$ is the dry-air gas constant, and $g$ is gravitational
+        acceleration.
+    """
+    beta = clausius_clapeyron_factor(temp, p_alpha_calc) * lapse_rate * R * temp / g
+    return (beta + 1) / (beta + 2) * p_surf
+
+
+def get_temp_from_sphum_sat(sphum_sat_target: np.ndarray, p: np.ndarray, guess_temp: float = 280):
+    r"""Calculates temperature from a target saturation specific humidity.
+
+    Numerically inverts `sphum_sat` to find the temperature at which the
+    saturation specific humidity equals `sphum_sat_target`, at pressure `p`.
+    Uses `scipy.optimize.fsolve` independently at each element.
+
+    Args:
+        sphum_sat_target: Target saturation specific humidity, in
+            $\mathrm{kg\,kg^{-1}}$.
+        p: Pressure at which to evaluate saturation specific humidity, in
+            $\mathrm{Pa}$. Must be broadcast-compatible with
+            `sphum_sat_target`.
+        guess_temp: Initial temperature guess supplied to the numerical solver,
+            in $\mathrm{K}$. Defaults to $280\ \mathrm{K}$.
+
+    Returns:
+        Temperature for which the saturation specific humidity satisfies
+
+        $$
+        q^*(T, p) = q^*_{\mathrm{target}},
+        $$
+
+        in $\mathrm{K}$. The output has the same shape as
+        `sphum_sat_target`.
+
+    Notes:
+        The function solves
+
+        $$
+        f(T) = q^*(T, p) - q^*_{\mathrm{target}} = 0
+        $$
+
+        using `scipy.optimize.fsolve`. Convergence depends on the initial
+        temperature estimate and on whether the requested target humidity is
+        physically attainable at the supplied pressure.
+    """
+    fit_func = lambda x: sphum_sat(x, p) - sphum_sat_target
+    return scipy.optimize.fsolve(fit_func, np.full_like(sphum_sat_target, guess_temp))
 
 
 def get_latent_heat(
