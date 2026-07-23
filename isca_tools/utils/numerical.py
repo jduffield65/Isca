@@ -1007,5 +1007,7 @@ def apply_fit_complex(x: np.ndarray, coef_amp: float, coef_phase: float) -> np.n
     """
     if x.ndim != 1:
         raise ValueError("`x` must be a 1D array.")
-    x_shift = get_var_shift(x, shift_phase=coef_phase, time=np.arange(x.size))
+    # Need to divide coef_phase by 2*np.pi for fraction of period to shift by, as required by get_var_shift
+    # I.e., get_var_shift does not require the Fourier coefficient.
+    x_shift = get_var_shift(x, shift_phase=coef_phase/(2*np.pi), time=np.arange(x.size))
     return coef_amp * x_shift

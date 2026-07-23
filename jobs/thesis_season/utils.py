@@ -146,24 +146,27 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
     C_s \frac{\partial T_s}{\partial t}
     = (1 - \alpha)(1 - \xi)F(t)
     + \lambda(T_a - T_s)
-    - \Lambda T_a,
+    - \Lambda\left[1 + i\phi_a\right]T_a,
     $$
 
     $$
-    C_a\left[\beta_{\mathrm{col}} + \mu - i\beta_{\mathrm{col}}\phi_{\mathrm{col}}\right]
+    C_a\left[\beta_{\mathrm{col}} + \mu
+    - i\beta_{\mathrm{col}}\phi_{\mathrm{col}}\right]
     \frac{\partial T_a}{\partial t}
     = \xi F(t)
     + \lambda(T_s - T_a)
-    + \Lambda T_a
-    - B\left[1 - i\phi_{\mathrm{olr}}\right](T_a - \chi_{\mathrm{olr}}T_s)
+    + \Lambda\left[1 + i\phi_a\right]T_a
+    - B\left[1 - i\phi_{\mathrm{olr}}\right]
+    (T_a - \chi_{\mathrm{olr}}T_s)
     - \lambda_{\mathrm{adv}}\left[1 - i\phi_{\mathrm{adv}}\right]T_a.
     $$
 
     The atmospheric heat-capacity correction is represented by $\mu$, while
-    differences between column-mean and near-surface atmospheric temperature
-    are represented by $\beta_{\mathrm{col}}$ and
-    $\phi_{\mathrm{col}}$. Flux regressions are used to estimate the
-    surface--atmosphere exchange and longwave parameters.
+    $\beta_{\mathrm{col}}$ and $\phi_{\mathrm{col}}$ account for amplitude
+    and phase differences between column-mean and near-surface atmospheric
+    temperature tendencies. If `include_phase_lh` is `True`, the latent-heat
+    contribution to $\Lambda$ may lag atmospheric temperature, producing the
+    combined phase coefficient $\phi_a$.
 
     Args:
         ds: Processed dataset containing time-varying surface and atmospheric
@@ -175,6 +178,11 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
             $\phi_{\mathrm{col}}$ without accounting for seasonal variation
             in the atmospheric pressure integral. If `False`, pressure-weight
             column quantities are used before fitting.
+        include_phase_lh: Whether to fit a phase delay in the atmospheric
+            temperature dependence of latent heating. If `True`, the
+            resulting latent-heat phase is combined with sensible- and
+            longwave-flux contributions to give $\Lambda[1 + i\phi_a]$.
+            If `False`, `coef_phase_a_lh` and `coef_phase_a` are zero.
 
     Returns:
         Dictionary containing the fitted empirical model parameters:
@@ -185,33 +193,45 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
           near-surface atmospheric temperature tendencies,
           $\beta_{\mathrm{col}}$.
         - `coef_phase_col`: Phase correction associated with the column
-          temperature factor, $\phi_{\mathrm{col}}$.
-        - `lambda_const`: Component of surface--atmosphere exchange
-          proportional to $T_s - T_a$, combining latent heat, sensible heat,
-          and longwave contributions.
-        - `lambda_a`: Component of the surface energy budget proportional to
-          atmospheric temperature, $\Lambda$.
-        - `lambda_lh`: Atmospheric-temperature dependence of the latent heat
-          flux contribution.
-        - `lambda_sh`: Atmospheric-temperature dependence of the sensible heat
-          flux contribution.
-        - `lambda_lw2`: Atmospheric-temperature dependence of the net
-          surface longwave flux contribution.
+          temperature tendency, $\phi_{\mathrm{col}}$.
+        - `lambda_const_lh`: Latent-heat-flux contribution to the coefficient
+          multiplying $T_s - T_a$.
+        - `lambda_const_sh`: Sensible-heat-flux contribution to the
+          coefficient multiplying $T_s - T_a$.
+        - `lambda_const_lw`: Net surface-longwave-flux contribution to the
+          coefficient multiplying $T_s - T_a$.
+        - `lambda_const`: Total coefficient multiplying $T_s - T_a$,
+          $\lambda$.
+        - `lambda_a_lh`: Amplitude of the atmospheric-temperature-dependent
+          latent-heat-flux contribution.
+        - `lambda_a_sh`: Atmospheric-temperature-dependent sensible-heat-flux
+          contribution.
+        - `lambda_a_lw`: Atmospheric-temperature-dependent net surface
+          longwave-flux contribution.
+        - `coef_phase_a_lh`: Phase correction of the
+          atmospheric-temperature-dependent latent-heat-flux contribution.
+          This is zero when `include_phase_lh` is `False`.
+        - `lambda_a`: Amplitude of the combined
+          atmospheric-temperature-dependent surface-flux term, $\Lambda$.
+        - `coef_phase_a`: Phase correction of the combined $\Lambda$ term,
+          $\phi_a$, such that the temperature dependence is represented by
+          $\Lambda[1 + i\phi_a]$. This is zero when `include_phase_lh` is
+          `False`.
         - `lambda_lw1`: Linearised surface-temperature dependence of the
-          surface-emitted longwave component of OLR.
+          surface-emitted longwave component of outgoing longwave radiation.
         - `B`: Amplitude of the atmospheric contribution to outgoing
           longwave radiation.
-        - `coef_phase_olr`: Phase correction for the atmospheric OLR
-          contribution, $\phi_{\mathrm{olr}}$.
-        - `lambda_adv`: Amplitude of atmospheric temperature damping by
-          advection.
+        - `coef_phase_olr`: Phase correction for the atmospheric outgoing
+          longwave-radiation contribution, $\phi_{\mathrm{olr}}$.
+        - `lambda_adv`: Amplitude of the atmospheric advection response.
         - `coef_phase_adv`: Phase correction for atmospheric advection,
           $\phi_{\mathrm{adv}}$.
 
     Notes:
-        The returned coefficients are estimated from zero-mean linear fits or
-        complex harmonic fits. Phase coefficients describe the imaginary,
-        quadrature component of the relevant seasonal relationship.
+        The coefficients are estimated from zero-mean linear fits or complex
+        harmonic fits. Phase coefficients represent quadrature components of
+        seasonal relationships and are implemented as time shifts when
+        reconstructing budget terms.
     """
     params = {}
     if const_p:
@@ -305,7 +325,7 @@ def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
     if 'time' in p_integ_calc.dims:
         raise ValueError('p_integ_calc should be an average over time')
     temp_atm_deriv = spline_deriv_periodic_xr(time * day_seconds, temp_atm)
-    temp_col_tend = apply_fit_complex_xr(temp_atm_deriv, coef_amp_col, coef_phase_col / 2 / np.pi)
+    temp_col_tend = apply_fit_complex_xr(temp_atm_deriv, coef_amp_col, coef_phase_col)
     sphum_tend = mu * temp_atm_deriv
     c_a = c_p * p_integ_calc / g
     return c_a * (temp_col_tend + sphum_tend)
@@ -313,7 +333,8 @@ def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
 
 def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn_toa: xr.DataArray,
                           sw_abs: xr.DataArray, lambda_const: xr.DataArray, lambda_a: xr.DataArray,
-                          B: xr.DataArray, lambda_lw1: xr.DataArray, coef_phase_olr: xr.DataArray):
+                          B: xr.DataArray, lambda_lw1: xr.DataArray, coef_phase_olr: xr.DataArray,
+                          coef_phase_a: Optional[xr.DataArray] = None) -> xr.DataArray:
     r"""Approximate non-advective atmospheric energy-budget fluxes.
 
     Reconstructs the explicitly diagnosed terms on the right-hand side of the
@@ -323,15 +344,15 @@ def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn
     \mathrm{flux}_{\mathrm{atmos}} =
     \mathrm{SW}_{\mathrm{abs}}(t)
     + \lambda(T_s - T_a)
-    + \Lambda T_a
+    + \Lambda\left[1 + i\phi_a\right]T_a
     - \lambda_{\mathrm{lw1}} T_s
     - B\left[1 - i\phi_{\mathrm{olr}}\right]T_a.
     $$
 
     All temperature and incoming solar-radiation anomalies are calculated
-    relative to their time means. The phase correction
-    $\phi_{\mathrm{olr}}$ is applied as a time shift to the atmospheric
-    temperature contribution to outgoing longwave radiation.
+    relative to their time means. The phase coefficients $\phi_a$ and
+    $\phi_{\mathrm{olr}}$ are implemented as time shifts of the relevant
+    atmospheric-temperature contributions.
 
     Args:
         temp_atm: Near-surface atmospheric temperature, $T_a$.
@@ -341,29 +362,34 @@ def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn
             the atmosphere.
         lambda_const: Coefficient multiplying the surface--atmosphere
             temperature contrast, $\lambda$.
-        lambda_a: Coefficient multiplying atmospheric temperature,
-            $\Lambda$.
+        lambda_a: Amplitude of the atmospheric-temperature-dependent
+            surface-flux term, $\Lambda$.
         B: Amplitude of the atmospheric contribution to outgoing longwave
             radiation.
         lambda_lw1: Coefficient for the surface-temperature-dependent
             longwave contribution to outgoing longwave radiation.
         coef_phase_olr: Phase correction for the atmospheric outgoing
             longwave-radiation contribution, $\phi_{\mathrm{olr}}$.
+        coef_phase_a: Optional phase correction for the combined
+            atmospheric-temperature-dependent surface-flux term, $\phi_a$.
+            If `None`, this term is assumed to have no phase shift.
 
     Returns:
         Approximate atmospheric energy-budget flux convergence excluding
-        advection, comprising absorbed shortwave radiation, turbulent and
-        longwave surface-exchange terms, and the phase-shifted atmospheric
-        outgoing-longwave-radiation term.
+        advection, comprising absorbed shortwave radiation, surface--atmosphere
+        exchange, the potentially phase-shifted $\Lambda$ contribution, and the
+        phase-shifted atmospheric outgoing-longwave-radiation contribution.
     """
     temp_atm = temp_atm - temp_atm.mean(dim='time')
     temp_surf = temp_surf - temp_surf.mean(dim='time')
     flux_abs = sw_abs * (swdn_toa - swdn_toa.mean(dim='time'))
 
-    flux_linear = lambda_const * (temp_surf - temp_atm) + lambda_a * temp_atm - lambda_lw1 * temp_surf
-    # Need to divide coef_phase by 2*np.pi for fraction of period to shift by
-    flux_shift = apply_fit_complex_xr(temp_atm, -B, coef_phase_olr/2/np.pi)
+    flux_linear = apply_linear_zero_mean_xr(temp_surf - temp_atm, lambda_const, temp_atm, lambda_a, coef_phase_a)  \
+                  - lambda_lw1 * temp_surf
+
+    flux_shift = apply_fit_complex_xr(temp_atm, -B, coef_phase_olr)
     return flux_abs + flux_linear + flux_shift
+
 
 def get_approx_adv_atmos(temp_atm: xr.DataArray, lambda_adv: xr.DataArray,
                          coef_phase_adv: xr.DataArray) -> xr.DataArray:
@@ -393,14 +419,4 @@ def get_approx_adv_atmos(temp_atm: xr.DataArray, lambda_adv: xr.DataArray,
         atmospheric energy-budget fluxes.
     """
     temp_atm = temp_atm - temp_atm.mean(dim='time')
-    return apply_fit_complex_xr(temp_atm, -lambda_adv, coef_phase_adv / 2 / np.pi)
-
-
-def get_approx_flux_surf(temp_atm: xr.DataArray, temp_surf: xr. DataArray,
-                         lambda_const: xr.DataArray, lambda_a: xr.DataArray):
-    temp_atm = temp_atm - temp_atm.mean(dim='time')
-    temp_surf = temp_surf - temp_surf.mean(dim='time')
-    return lambda_const * (temp_atm - temp_surf) - lambda_a * temp_atm
-
-get_var_shift_xr = wrap_with_apply_ufunc(get_var_shift, input_core_dims=[['time'], [], [], ['time']],
-                                         output_core_dims=[['time']])
+    return apply_fit_complex_xr(temp_atm, -lambda_adv, coef_phase_adv)

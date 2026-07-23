@@ -501,4 +501,4 @@ def apply_linear_zero_mean_xr(x1: xr.DataArray, a: xr.DataArray, x2: Optional[xr
         return apply_linear_zero_mean_xr_2(x1, a, x2, b)
     else:
         # If have a phase delay for fitting to x2 then must do separately
-        return apply_linear_zero_mean_xr_1(x1, a) + apply_fit_complex_xr(x2, b, b_phase)
+        return apply_linear_zero_mean_xr_1(x1, a) + apply_fit_complex_xr(x2 - x2.mean(dim='time'), b, b_phase)
