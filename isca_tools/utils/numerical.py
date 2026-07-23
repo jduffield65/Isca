@@ -836,7 +836,8 @@ def spline_deriv_periodic(time, var, period=None, check=True, rtol=1e-10, atol=1
     return cs(time, 1)
 
 
-def fit_linear_zero_mean(x1, y, x2=None, check=False, atol=1e-10):
+def fit_linear_zero_mean(x1: np.ndarray, y: np.ndarray, x2: Optional[np.ndarray]=None, check: bool=False,
+                         atol: float=1e-10) -> Tuple[float, float]:
     """Fit y = a*x1 + b*x2 with no intercept.
 
     If `x2` is None, fit y = a*x1 and return b = 0.
@@ -884,19 +885,62 @@ def fit_linear_zero_mean(x1, y, x2=None, check=False, atol=1e-10):
         return coef[0], 0.0
     return coef[0], coef[1]
 
+def apply_linear_zero_mean(x1: np.ndarray, a: float,
+                           x2: Optional[np.ndarray]=None, b: float=0.0) -> np.ndarray:
+    r"""Apply a linear transform to mean-centred one-dimensional predictors.
 
-def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp: bool = True):
+    Computes:
+
+    $$y = a (x_1 - \overline{x_1}) + b (x_2 - \overline{x_2})$$
+
+    Args:
+        x1: One-dimensional array-like first predictor.
+        a: Coefficient multiplying the centred `x1`.
+        x2: Optional one-dimensional array-like second predictor.
+        b: Coefficient multiplying the centred `x2`.
+
+    Returns:
+        Transformed values.
+
+    Raises:
+        ValueError: If inputs are not one-dimensional, have inconsistent
+            lengths, or if `b` is non-zero when `x2` is not supplied.
     """
+    x1 = np.asarray(x1, dtype=float)
+
+    if x1.ndim != 1:
+        raise ValueError("`x1` must be a 1D array.")
+
+    x1 = x1 - x1.mean()
+
+    if x2 is None:
+        if not np.isclose(b, 0.0):
+            raise ValueError("`b` must be zero when `x2` is not supplied.")
+        return a * x1
+
+    x2 = np.asarray(x2, dtype=float)
+
+    if x2.ndim != 1:
+        raise ValueError("`x2` must be a 1D array.")
+    if x2.size != x1.size:
+        raise ValueError("`x1` and `x2` must have the same length.")
+
+    x2 = x2 - x2.mean()
+    return a * x1 + b * x2
+
+
+def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp: bool = True) -> Tuple[float, float]:
+    r"""
     Compute the complex fitting coefficient between two variables.
 
     This estimates the complex coefficient $\beta$ in the relationship:
-        $y \\approx \\beta \\cdot x$
+        $y \approx \beta \cdot x$
 
     using the first harmonic of a Fourier fit. The coefficient is represented
     in amplitude and phase form:
-        $\\beta = A_{y} / A_{x} \\cdot e^{i(\\phi_{y} - \\phi_{x})}$
+        $\beta = A_{y} / A_{x} \cdot e^{i(\phi_{y} - \phi_{x})}$
 
-    where $A$ and $\\phi$ denote the amplitude and phase of the first harmonic.
+    where $A$ and $\phi$ denote the amplitude and phase of the first harmonic.
 
     Args:
         pos_amp:
@@ -907,8 +951,8 @@ def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp
         time:
             Time coordinate corresponding to `y` and `x`.
         pos_amp: Used in `get_fourier_coef`. If True, Fourier amplitude coefficient found will always be positive
-            with phase_coef in $[-\\pi, \\pi]$, Otherwise will choose the sign of amp_coef to minimize the magnitude of
-            phase_coef i.e., keep phase_coef in range between $[-\\pi/2, \\pi/2]$.
+            with phase_coef in $[-\\i, \pi]$, Otherwise will choose the sign of amp_coef to minimize the magnitude of
+            phase_coef i.e., keep phase_coef in range between $[-\pi/2, \pi/2]$.
 
     Returns:
         amp_ratio: Amplitude component of $\\beta$,
@@ -923,3 +967,45 @@ def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp
 
     # Return amplitude ratio and phase difference defining complex coefficient β
     return y_amp_coef / x_amp_coef, y_phase_coef - x_phase_coef
+
+def apply_fit_complex(x: np.ndarray, coef_amp: float, coef_phase: float) -> np.ndarray:
+    r"""Apply a complex Fourier-fit coefficient to a reference variable.
+
+    Estimates the fitted target variable from a reference variable using the
+    amplitude ratio and phase difference returned by `get_fit_coef_complex`.
+    The transformation is
+
+    $$
+    \hat{y}(t) = A_{\beta} x(t + \Delta \phi),
+    $$
+
+    where $A_{\beta}$ is the fitted amplitude ratio and $\Delta \phi$ is the
+    fitted phase difference. The phase shift is applied using
+    `get_var_shift`.
+
+    Args:
+        x: Reference variable to which the fitted complex coefficient is
+            applied.
+        coef_amp: Amplitude component of the fitted complex coefficient,
+            typically the first output of `get_fit_coef_complex`.
+        coef_phase: Phase component of the fitted complex coefficient in
+            radians, typically the second output of `get_fit_coef_complex`.
+
+    Returns:
+        Estimated target variable, with the same shape as `x`.
+
+    Notes:
+        This operation applies the complex relationship
+
+        $$
+        \hat{y} \approx \beta x,
+        \qquad
+        \beta = A_{\beta} e^{i \Delta \phi}.
+        $$
+
+        The sign convention for `coef_phase` follows `get_var_shift`.
+    """
+    if x.ndim != 1:
+        raise ValueError("`x` must be a 1D array.")
+    x_shift = get_var_shift(x, shift_phase=coef_phase, time=np.arange(x.size))
+    return coef_amp * x_shift

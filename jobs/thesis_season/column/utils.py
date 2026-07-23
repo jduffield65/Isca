@@ -13,7 +13,8 @@ from isca_tools.thesis.surface_flux_taylor import get_temp_rad as get_temp_rad_s
 from tqdm.notebook import tqdm
 from isca_tools.utils.constants import c_p_ocean, rho_ocean
 from isca_tools.utils.moist_physics import sphum_sat
-from isca_tools.utils.numerical import get_fit_coef_complex, spline_deriv_periodic, fit_linear_zero_mean
+from isca_tools.utils.numerical import get_fit_coef_complex, spline_deriv_periodic, fit_linear_zero_mean, \
+    apply_linear_zero_mean, apply_fit_complex
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_sw_optical_depth, get_frierson_sw_abs, \
     get_sw_abs_amp
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, raise_if_common_dims_not_identical
@@ -353,6 +354,9 @@ spline_deriv_periodic_xr = wrap_with_apply_ufunc(spline_deriv_periodic, input_co
 
 get_sw_abs_amp_xr = wrap_with_apply_ufunc(get_sw_abs_amp, input_core_dims=[['time'], ['time'], ['time']], output_core_dims=[[]])
 
+apply_fit_complex_xr = wrap_with_apply_ufunc(apply_fit_complex, input_core_dims=[['time'], [], []],
+                                             output_core_dims=[['time']])
+
 fit_linear_zero_mean_xr_1 = wrap_with_apply_ufunc(
     lambda x1, y: fit_linear_zero_mean(x1, y, x2=None)[0],
     input_core_dims=[['time'], ['time']],
@@ -364,6 +368,19 @@ fit_linear_zero_mean_xr_2 = wrap_with_apply_ufunc(
     input_core_dims=[['time'], ['time'], ['time']],
     output_core_dims=[[], []],
 )
+
+apply_linear_zero_mean_xr_1 = wrap_with_apply_ufunc(
+    apply_linear_zero_mean,
+    input_core_dims=[['time'], []],
+    output_core_dims=[['time']],
+)
+
+apply_linear_zero_mean_xr_2 = wrap_with_apply_ufunc(
+    apply_linear_zero_mean,
+    input_core_dims=[['time'], [], ['time'], []],
+    output_core_dims=[['time']],
+)
+
 
 def fit_linear_zero_mean_xr(x1, y, x2=None):
     r"""Fits one or two mean-centred predictors to a mean-centred response.
@@ -421,3 +438,67 @@ def fit_linear_zero_mean_xr(x1, y, x2=None):
             y - y.mean(dim="time"),
             x2 - x2.mean(dim="time"),
         )
+
+def apply_linear_zero_mean_xr(x1: xr.DataArray, a: xr.DataArray, x2: Optional[xr.DataArray]=None,
+                              b: Optional[xr.DataArray]=None, b_phase: Optional[xr.DataArray] = None) -> xr.DataArray:
+    r"""Apply a linear model to one or two mean-centred predictors.
+
+    Removes the temporal mean from each supplied predictor before applying a
+    no-intercept linear model. With one predictor, computes
+
+    $$
+    \hat{y}' = a x_1'.
+    $$
+
+    With two unshifted predictors, computes
+
+    $$
+    \hat{y}' = a x_1' + b x_2'.
+    $$
+
+    If `b_phase` is supplied, applies a phase shift to the second predictor
+    before scaling it by $b$:
+
+    $$
+    \hat{y}' = a x_1' + b \, x_{2, \mathrm{shift}}',
+    $$
+
+    where $x_{2, \mathrm{shift}}'$ is the mean-centred version of $x_2$
+    shifted by `b_phase` using `apply_fit_complex_xr`.
+
+    Args:
+        x1: First predictor. Must contain a `time` dimension and be
+            broadcast-compatible with `a`.
+        a: Fitted coefficient for `x1`. Typically the first output from
+            `fit_linear_zero_mean_xr`.
+        x2: Optional second predictor. Must contain a `time` dimension and be
+            broadcast-compatible with `x1`, `a`, and `b`.
+        b: Fitted coefficient for `x2`. Required when `x2` is supplied.
+            Typically the second output from `fit_linear_zero_mean_xr`.
+        b_phase: Optional phase shift, in radians, applied to `x2` before
+            multiplying it by `b`. Must be broadcast-compatible with `x2`
+            excluding its `time` dimension. If `None`, `x2` is used without
+            a phase shift.
+
+    Returns:
+        Predicted response anomaly as an `xarray.DataArray`, with the
+        broadcast dimensions of the supplied predictors and coefficients.
+
+    Notes:
+        Each predictor is centred independently over `time`:
+
+        $$
+        x_i' = x_i - \overline{x_i}.
+        $$
+
+        When `b_phase` is supplied, the second contribution is evaluated
+        separately because it uses a temporally shifted version of `x2`.
+        This function does not add back the mean of the response variable.
+    """
+    if x2 is None:
+        return apply_linear_zero_mean_xr_1(x1, a)
+    elif b_phase is None:
+        return apply_linear_zero_mean_xr_2(x1, a, x2, b)
+    else:
+        # If have a phase delay for fitting to x2 then must do separately
+        return apply_linear_zero_mean_xr_1(x1, a) + apply_fit_complex_xr(x2, b, b_phase)

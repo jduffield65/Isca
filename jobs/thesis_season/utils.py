@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from isca_tools.thesis.surface_flux_taylor_2layer import get_p_eff
 from isca_tools.utils.base import mass_weighted_vertical_integral
+from isca_tools.utils.fourier import coef_conversion
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.numerical import get_var_shift
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_atmospheric_heating
@@ -15,7 +16,7 @@ from isca_tools.utils.xarray import wrap_with_apply_ufunc
 
 from jobs.thesis_season.column.utils import get_fit_coef_complex_xr, lat_min, lat_max, get_annual_zonal_mean, \
     get_temp_from_sphum_sat_xr, get_sw_abs_amp_xr, spline_deriv_periodic_xr, day_seconds, get_fourier_fit_xr, \
-    fit_linear_zero_mean_xr, width, month_ticks
+    fit_linear_zero_mean_xr, apply_linear_zero_mean_xr, apply_fit_complex_xr, width, month_ticks
 from jobs.thesis_season.thesis_figs.utils import smooth_n_days
 
 var_keep = ['temp', 'ps', 'sphum', 'olr', 'swdn_toa', 'swdn_sfc', 'lwdn_sfc', 'lwup_sfc', 'flux_t',
@@ -122,6 +123,9 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     ds['flux_atmos'] = frierson_atmospheric_heating(ds, ds.albedo) + ds.flux_t + ds.flux_lhe
     ds['adv_atmos'] = ds['mse_tend_atmos'] - ds['flux_atmos']
 
+    # Surface fluxes excluding SW
+    ds['flux_surf'] = ds.flux_t + ds.flux_lhe - ds.lwdn_sfc + ds.lwup_sfc
+
     # Compute annual harmonic components - use surface not toa for solar as incorporates albedo and sw_abs automatically
     _, coef_amp, coef_phase = get_fourier_fit_xr(ds.time, ds.temp_surf, n_harmonics=1, pad_coefs_phase=True)
     _, coef_sw_amp_sl, _ = get_fourier_fit_xr(ds.time, ds.swdn_sfc, n_harmonics=1, pad_coefs_phase=True)
@@ -131,7 +135,8 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     return ds
 
 
-def get_empirical_params(ds: xr.Dataset, const_p: bool = False) -> dict:
+def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
+                         include_phase_lh: bool = False) -> dict:
     r"""Fit empirical parameters for the seasonal surface--atmosphere model.
 
     The fitted parameters correspond to the coupled surface and atmospheric
@@ -228,12 +233,26 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False) -> dict:
         params['coef_amp_col'] /= ds.p_integ_calc.mean(dim='time')
 
     # LH, SH, LW params
-    lambda_lh_cont, params['lambda_lh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_lhe, ds.temp_atm)
-    lambda_sh_cont, params['lambda_sh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_t, -ds.temp_atm)
-    lambda_lw_cont, params['lambda_lw2'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
+    params['lambda_const_lh'], params['lambda_a_lh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_lhe, ds.temp_atm)
+    params['lambda_const_sh'], params['lambda_a_sh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_t, -ds.temp_atm)
+    params['lambda_const_lw'], params['lambda_a_lw'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
                                                                    ds.lwup_sfc - ds.lwdn_sfc, ds.temp_atm)
-    params['lambda_const'] = lambda_lh_cont + lambda_sh_cont + lambda_lw_cont       # for temp_s - temp_a
-    params['lambda_a'] = params['lambda_lh'] + params['lambda_lw2'] - params['lambda_sh']       # for temp_a
+    params['lambda_const'] = params['lambda_const_lh'] + params['lambda_const_sh'] + params['lambda_const_lw']  # for temp_s - temp_a     # for temp_a
+
+    # Deal with phase delay of LH, and combine the temp_a fitting into single lambda_a coefficient
+    if include_phase_lh:
+        # Get what is left of LH after the temp_surf-temp_atm fit
+        flux_lhe_resid = ds.flux_lhe - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_lh'])
+        # Refind the residual atmospheric effect taking into account of phase delay
+        params['lambda_a_lh'], params['coef_phase_a_lh'] = get_fit_coef_complex_xr(flux_lhe_resid, ds.temp_atm, ds.time)
+        params['lambda_a'], params['coef_phase_a'] = \
+            coef_conversion(cos_coef=params['lambda_a_lh']*np.cos(params['coef_phase_a_lh']) + params['lambda_a_lw'] -
+                                     params['lambda_a_sh'],
+                            sin_coef=params['lambda_a_lh']*np.sin(params['coef_phase_a_lh']), take_cos_sign=True)
+    else:
+        params['coef_phase_a_lh'] = 0
+        params['coef_phase_a'] = 0
+        params['lambda_a'] = params['lambda_a_lh'] + params['lambda_a_lw'] - params['lambda_a_sh']
 
     # OLR params
     olr_surf_cont = Stefan_Boltzmann * np.exp(-ds.odp_surf) * ds.temp_surf ** 4
@@ -286,9 +305,7 @@ def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
     if 'time' in p_integ_calc.dims:
         raise ValueError('p_integ_calc should be an average over time')
     temp_atm_deriv = spline_deriv_periodic_xr(time * day_seconds, temp_atm)
-    temp_atm_deriv_shift = get_var_shift_xr(temp_atm_deriv, coef_phase_col / (2 * np.pi / time.size),
-                                            None, time)
-    temp_col_tend = coef_amp_col * temp_atm_deriv_shift
+    temp_col_tend = apply_fit_complex_xr(temp_atm_deriv, coef_amp_col, coef_phase_col / 2 / np.pi)
     sphum_tend = mu * temp_atm_deriv
     c_a = c_p * p_integ_calc / g
     return c_a * (temp_col_tend + sphum_tend)
@@ -344,9 +361,8 @@ def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn
     flux_abs = sw_abs * (swdn_toa - swdn_toa.mean(dim='time'))
 
     flux_linear = lambda_const * (temp_surf - temp_atm) + lambda_a * temp_atm - lambda_lw1 * temp_surf
-    temp_atm_shift = get_var_shift_xr(temp_atm, coef_phase_olr / (2 * np.pi / temp_atm.time.size),
-                                      None, temp_atm.time)
-    flux_shift = -B * temp_atm_shift
+    # Need to divide coef_phase by 2*np.pi for fraction of period to shift by
+    flux_shift = apply_fit_complex_xr(temp_atm, -B, coef_phase_olr/2/np.pi)
     return flux_abs + flux_linear + flux_shift
 
 def get_approx_adv_atmos(temp_atm: xr.DataArray, lambda_adv: xr.DataArray,
@@ -377,10 +393,14 @@ def get_approx_adv_atmos(temp_atm: xr.DataArray, lambda_adv: xr.DataArray,
         atmospheric energy-budget fluxes.
     """
     temp_atm = temp_atm - temp_atm.mean(dim='time')
-    temp_atm_shift = get_var_shift_xr(temp_atm, coef_phase_adv / (2 * np.pi / temp_atm.time.size),
-                                      None, temp_atm.time)
-    return -lambda_adv * temp_atm_shift
+    return apply_fit_complex_xr(temp_atm, -lambda_adv, coef_phase_adv / 2 / np.pi)
 
+
+def get_approx_flux_surf(temp_atm: xr.DataArray, temp_surf: xr. DataArray,
+                         lambda_const: xr.DataArray, lambda_a: xr.DataArray):
+    temp_atm = temp_atm - temp_atm.mean(dim='time')
+    temp_surf = temp_surf - temp_surf.mean(dim='time')
+    return lambda_const * (temp_atm - temp_surf) - lambda_a * temp_atm
 
 get_var_shift_xr = wrap_with_apply_ufunc(get_var_shift, input_core_dims=[['time'], [], [], ['time']],
                                          output_core_dims=[['time']])
