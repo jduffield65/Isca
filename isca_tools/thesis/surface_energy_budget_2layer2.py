@@ -266,8 +266,72 @@ def get_heat_cap_lambda_eff3(mu: Union[float, np.ndarray, xr.DataArray],
                              n_year_days: int = 360,
                              day_seconds: int = 86400,
                              small_phase: bool = False,
+                             simple_phase_a: bool = False
                              ) -> Tuple[Union[float, np.ndarray, xr.DataArray],
 Union[float, np.ndarray, xr.DataArray]]:
+    r"""Calculate effective surface feedback and heat capacity for the two-layer model.
+
+    Reduces the seasonally forced coupled surface--atmosphere model to an
+    effective one-layer surface-temperature equation,
+
+    $$
+    C_{\mathrm{eff}}\frac{\partial T_s}{\partial t}
+    = (1 - \alpha)(1 - f)F(t) - \lambda_{\mathrm{eff}}T_s.
+    $$
+
+    The calculation accounts for atmospheric heat storage, column-temperature and
+    moisture corrections, surface--atmosphere coupling, outgoing longwave
+    radiation, atmospheric advection, and atmospheric shortwave absorption.
+    Complex amplitude--phase terms are combined at the annual frequency before
+    deriving the real effective feedback $\lambda_{\mathrm{eff}}$ and heat
+    capacity $C_{\mathrm{eff}}$.
+
+    Args:
+        mu: Moisture-related correction to atmospheric heat capacity, $\mu$.
+        lambda_const: Surface--atmosphere exchange coefficient multiplying
+            $T_s - T_a$, $\lambda$.
+        B: Amplitude of the atmospheric contribution to outgoing longwave
+            radiation.
+        lambda_a: Amplitude of the atmospheric-temperature-dependent
+            surface-flux term, $\Lambda$.
+        lambda_lw: Surface-temperature-dependent longwave feedback coefficient,
+            $\lambda_{\mathrm{lw}}$.
+        heat_cap_surf: Surface heat capacity, $C_s$.
+        pressure_heat_cap_atmos_calc: Atmospheric pressure thickness used to
+            calculate heat capacity, such that $C_a = c_p p / g$.
+        coef_amp_col: Amplitude factor relating column-mean and near-surface
+            atmospheric temperature tendencies, $\beta_{\mathrm{col}}$.
+        coef_phase_col: Phase correction for the column-temperature tendency,
+            $\phi_{\mathrm{col}}$.
+        coef_phase_olr: Phase correction for the atmospheric outgoing-longwave
+            radiation contribution, $\phi_{\mathrm{olr}}$.
+        coef_phase_a: Phase correction for the combined
+            atmospheric-temperature-dependent surface-flux term, $\phi_a$.
+        lambda_adv: Amplitude of the atmospheric advection response,
+            $\lambda_{\mathrm{adv}}$.
+        coef_phase_adv: Phase correction for atmospheric advection,
+            $\phi_{\mathrm{adv}}$.
+        sw_abs: Fraction of top-of-atmosphere shortwave radiation absorbed by the
+            atmosphere.
+        albedo: Surface albedo, $\alpha$.
+        n_year_days: Number of days in the model year used to define the annual
+            forcing frequency.
+        day_seconds: Number of seconds per day.
+        small_phase: Whether to combine amplitude--phase factors using the
+            small-phase approximation.
+        simple_phase_a: Whether to omit the higher-order correction from
+            $\phi_a$ when calculating the effective surface feedback and heat
+            capacity.
+
+    Returns:
+        lambda_eff: Effective surface feedback, $\lambda_{\mathrm{eff}}$.
+        heat_cap_eff: Effective surface heat capacity, $C_{\mathrm{eff}}$.
+
+    Notes:
+        All inputs except `pressure_heat_cap_atmos_calc`, `n_year_days`, and
+        `day_seconds` may be scalars, NumPy arrays, or `xarray.DataArray`
+        objects. The returned values retain compatible array dimensions.
+    """
     # Different way with everything dimensionless, and add advection
     f = 1 / (n_year_days * day_seconds)
     omega = 2 * np.pi * f
@@ -293,6 +357,8 @@ Union[float, np.ndarray, xr.DataArray]]:
 
     # Heat cap and lambda with no sw_abs
     x_s_eff0 = x_s + (1 - lambda_lw) * (eta * x_a_mod - eta_phase * y)
+    if simple_phase_a:
+        eta_phase = 0       # no more correction for the coef_phase_a parameter in simple approximation
     y_eff0 = 1 - (1 - lambda_lw) * (eta * y + eta_phase * x_a_mod)
 
     # Account for sw_abs
