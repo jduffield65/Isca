@@ -217,7 +217,7 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
           $\phi_a$, such that the temperature dependence is represented by
           $\Lambda[1 + i\phi_a]$. This is zero when `include_phase_lh` is
           `False`.
-        - `lambda_lw1`: Linearised surface-temperature dependence of the
+        - `lambda_lw`: Linearised surface-temperature dependence of the
           surface-emitted longwave component of outgoing longwave radiation.
         - `B`: Amplitude of the atmospheric contribution to outgoing
           longwave radiation.
@@ -276,7 +276,7 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
 
     # OLR params
     olr_surf_cont = Stefan_Boltzmann * np.exp(-ds.odp_surf) * ds.temp_surf ** 4
-    params['lambda_lw1'] = fit_linear_zero_mean_xr(ds.temp_surf, olr_surf_cont)
+    params['lambda_lw'] = fit_linear_zero_mean_xr(ds.temp_surf, olr_surf_cont)
     params['B'], params['coef_phase_olr'] = get_fit_coef_complex_xr(ds.olr - olr_surf_cont, ds.temp_atm, ds.time)
 
     # Advection params
@@ -333,7 +333,7 @@ def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
 
 def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn_toa: xr.DataArray,
                           sw_abs: xr.DataArray, lambda_const: xr.DataArray, lambda_a: xr.DataArray,
-                          B: xr.DataArray, lambda_lw1: xr.DataArray, coef_phase_olr: xr.DataArray,
+                          B: xr.DataArray, lambda_lw: xr.DataArray, coef_phase_olr: xr.DataArray,
                           coef_phase_a: Optional[xr.DataArray] = None) -> xr.DataArray:
     r"""Approximate non-advective atmospheric energy-budget fluxes.
 
@@ -385,7 +385,7 @@ def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn
     flux_abs = sw_abs * (swdn_toa - swdn_toa.mean(dim='time'))
 
     flux_linear = apply_linear_zero_mean_xr(temp_surf - temp_atm, lambda_const, temp_atm, lambda_a, coef_phase_a)  \
-                  - lambda_lw1 * temp_surf
+                  - lambda_lw * temp_surf
 
     flux_shift = apply_fit_complex_xr(temp_atm, -B, coef_phase_olr)
     return flux_abs + flux_linear + flux_shift
