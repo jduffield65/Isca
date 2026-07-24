@@ -121,23 +121,6 @@ Union[float, np.ndarray, xr.DataArray]]:
     return lambda_scaling, heat_cap_scaling
 
 
-def combine_olr_adv(B: Union[float, np.ndarray, xr.DataArray],
-                    lambda_adv: Union[float, np.ndarray, xr.DataArray] = 0,
-                    coef_phase_olr: Union[float, np.ndarray, xr.DataArray] = 0,
-                    coef_phase_adv: Union[float, np.ndarray, xr.DataArray] = 0,
-                    small_phase: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
-Union[float, np.ndarray, xr.DataArray]]:
-    if small_phase:
-        # Assume phase for col, olr, adv are all small i.e., cos(phase)=1 and sin(phase)=phase
-        b = B + lambda_adv
-        coef_phase_b = (B * coef_phase_olr + lambda_adv * coef_phase_adv) / b
-    else:
-        # Combine advection with olr
-        b = B * np.cos(coef_phase_olr) + lambda_adv * np.cos(coef_phase_adv)
-        coef_phase_b = (B * np.sin(coef_phase_olr) + lambda_adv * np.sin(coef_phase_adv)) / b
-    return b, coef_phase_b
-
-
 def combine_amplitude_phase_factor(
     amplitude: List[xr.DataArray],
     phase: List[xr.DataArray],

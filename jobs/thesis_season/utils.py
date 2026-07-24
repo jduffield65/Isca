@@ -16,7 +16,7 @@ from isca_tools.utils.xarray import wrap_with_apply_ufunc
 
 from jobs.thesis_season.column.utils import get_fit_coef_complex_xr, lat_min, lat_max, get_annual_zonal_mean, \
     get_temp_from_sphum_sat_xr, get_sw_abs_amp_xr, spline_deriv_periodic_xr, day_seconds, get_fourier_fit_xr, \
-    fit_linear_zero_mean_xr, apply_linear_zero_mean_xr, apply_fit_complex_xr, width, month_ticks
+    fit_linear_zero_mean_xr, apply_linear_zero_mean_xr, apply_fit_complex_xr, get_phase_amp, width, month_ticks
 from jobs.thesis_season.thesis_figs.utils import smooth_n_days
 
 var_keep = ['temp', 'ps', 'sphum', 'olr', 'swdn_toa', 'swdn_sfc', 'lwdn_sfc', 'lwup_sfc', 'flux_t',
@@ -132,6 +132,10 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     ds['coef_sw_amp'] = np.abs(coef_sw_amp_sl.sel(harmonic=1))
     ds['coef_amp'] = np.abs(coef_amp.sel(harmonic=1))
     ds['coef_phase'] = coef_phase.sel(harmonic=1)
+
+    ds.attrs['omega'] = 2 * np.pi / (day_seconds * ds.time.size)
+    ds['heat_cap_eff'], ds['lambda_eff'] = get_phase_amp(ds.coef_sw_amp, ds.omega, coef_phase=ds.coef_phase,
+                                                         coef_amp=ds.coef_amp)
     return ds
 
 

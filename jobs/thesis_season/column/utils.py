@@ -155,6 +155,21 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     return ds
 
 
+def get_phase_amp(coef_sw_amp: xr.DataArray, omega: float, heat_cap_eff: Optional[xr.DataArray]=None,
+                  lambda_eff: Optional[xr.DataArray]=None, coef_phase: Optional[xr.DataArray]=None,
+                  coef_amp: Optional[xr.DataArray]=None) -> Tuple[xr.DataArray, xr.DataArray]:
+    if (coef_phase is None) and (coef_amp is None):
+        coef_phase = np.arctan2(omega * heat_cap_eff, lambda_eff)
+        coef_amp = coef_sw_amp / np.sqrt(omega ** 2 * heat_cap_eff ** 2 + lambda_eff ** 2)
+        return coef_phase, coef_amp
+    elif (lambda_eff is None) and (heat_cap_eff is None):
+        heat_cap_eff = np.sin(coef_phase) / omega / (coef_amp/coef_sw_amp)
+        lambda_eff = coef_sw_amp * np.cos(coef_phase) / coef_amp
+        return heat_cap_eff, lambda_eff
+    else:
+        raise ValueError('Incorrect arguments for get_phase_amp')
+
+
 def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw_atm', 'lw_surf'] = 'lh',
              calc: bool = False, use_rh_flux_q: bool = False) -> xr.DataArray:
     """Return a surface turbulent/radiative flux from a Dataset.
