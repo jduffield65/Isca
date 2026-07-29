@@ -4,7 +4,8 @@ import os
 from typing import List, Optional, Union, Literal
 from tqdm import tqdm
 
-from isca_tools.thesis.surface_flux_taylor_2layer import get_p_eff
+from isca_tools.thesis.surface_flux_taylor_2layer import get_p_eff, get_sensible_heat, get_sensitivity_lh, \
+    get_sensitivity_sh, get_sensitivity_lw_surf
 from isca_tools.utils.base import mass_weighted_vertical_integral
 from isca_tools.utils.fourier import coef_conversion
 from isca_tools.utils.moist_physics import sphum_sat
@@ -112,6 +113,12 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
         atmospheric energy-budget terms, and first-harmonic temperature and
         shortwave coefficients.
     """
+    # Add wind multiplied by drag coef extracted from sensible heat - use to find lambda_const
+    flux_t_norm = get_sensible_heat(ds.temp_surf, ds.temp_atm, 1, 1, ds.p_surf,
+                                 ds.p_surf * ds.sigma_atm)
+    # take av over time as want single value for each sim/location - median to avoid outliers.
+    ds['wind_drag_av'] = (ds.flux_t/flux_t_norm).median(dim='time')
+
     ds = get_annual_zonal_mean(ds, smooth_n_days=smooth_n_days, smooth_time=smooth_time)
     ds['p_eff'] = get_p_eff(ds.p_surf.mean(dim='time'))
     ds['temp_col_sphum'] = get_temp_from_sphum_sat_xr(ds.sphum_col / ds.rh_col, ds.p_eff)
@@ -140,7 +147,8 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
 
 
 def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
-                         include_phase_lh: bool = False) -> dict:
+                         include_phase_lh: bool = False,
+                         empirical_lambda_const: bool = False) -> dict:
     r"""Fit empirical parameters for the seasonal surface--atmosphere model.
 
     The fitted parameters correspond to the coupled surface and atmospheric
@@ -257,10 +265,27 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
         params['coef_amp_col'] /= ds.p_integ_calc.mean(dim='time')
 
     # LH, SH, LW params
-    params['lambda_const_lh'], params['lambda_a_lh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_lhe, ds.temp_atm)
-    params['lambda_const_sh'], params['lambda_a_sh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_t, -ds.temp_atm)
-    params['lambda_const_lw'], params['lambda_a_lw'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
-                                                                   ds.lwup_sfc - ds.lwdn_sfc, ds.temp_atm)
+    if empirical_lambda_const:
+        params['lambda_const_lh'], params['lambda_a_lh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_lhe, ds.temp_atm)
+        params['lambda_const_sh'], params['lambda_a_sh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_t, -ds.temp_atm)
+        params['lambda_const_lw'], params['lambda_a_lw'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
+                                                                       ds.lwup_sfc - ds.lwdn_sfc, ds.temp_atm)
+    else:
+        # dont need RH for this
+        ds_use = ds.mean(dim='time')
+        params['lambda_const_lh'] = get_sensitivity_lh(ds_use.temp_surf, ds_use.temp_atm, 0, ds_use.wind_drag_av, 1,
+                                                       ds_use.p_surf, ds_use.sigma_atm)['temp_surf']
+        params['lambda_const_sh'] = get_sensitivity_sh(ds_use.temp_surf, ds_use.temp_atm, ds_use.wind_drag_av, 1,
+                                                       ds_use.p_surf, ds_use.sigma_atm)['temp_surf']
+        # dont need radiative temp for this
+        params['lambda_const_lw'] = get_sensitivity_lw_surf(ds_use.temp_surf, 0, 0)['temp_surf']
+
+        flux_lhe_resid = ds.flux_lhe - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_lh'])
+        params['lambda_a_lh'] = fit_linear_zero_mean_xr(ds.temp_atm, flux_lhe_resid)
+        flux_t_resid = ds.flux_t - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_sh'])
+        params['lambda_a_sh'] = fit_linear_zero_mean_xr(-ds.temp_atm, flux_t_resid)
+        flux_lw_resid = ds.lwup_sfc - ds.lwdn_sfc - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_lw'])
+        params['lambda_a_lw'] = fit_linear_zero_mean_xr(ds.temp_atm, flux_lw_resid)
     params['lambda_const'] = params['lambda_const_lh'] + params['lambda_const_sh'] + params['lambda_const_lw']  # for temp_s - temp_a     # for temp_a
 
     # Deal with phase delay of LH, and combine the temp_a fitting into single lambda_a coefficient
