@@ -21,7 +21,7 @@ from jobs.thesis_season.column.utils import get_fit_coef_complex_xr, lat_min, la
 from jobs.thesis_season.thesis_figs.utils import smooth_n_days
 
 var_keep = ['temp', 'ps', 'sphum', 'olr', 'swdn_toa', 'swdn_sfc', 'lwdn_sfc', 'lwup_sfc', 'flux_t',
-            'flux_lhe', 't_surf']  # just the fluxes, no variables
+            'flux_lhe', 't_surf', 'precipitation']  # just the fluxes, no variables
 
 
 def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
@@ -80,6 +80,7 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
     ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf',
                          'lev_sigma': 'sigma_atm', 'sphum': 'q_atm'})
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_surf * ds.sigma_atm)
+    ds['precip_minus_evap'] = ds.precipitation - ds.flux_lhe/L_v
     return ds
 
 
@@ -127,8 +128,13 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     # Atmospheric energy budget components: mse_tend = flux + adv
     ds['mse_tend_atmos'] = spline_deriv_periodic_xr(ds.time * day_seconds,
                                                     (c_p * ds.temp_col + L_v * ds.sphum_col) * ds.p_integ_calc / g)
+    ds['sphum_col_tend'] = spline_deriv_periodic_xr(ds.time * day_seconds,
+                                                    ds.sphum_col * ds.p_integ_calc / g)
     ds['flux_atmos'] = frierson_atmospheric_heating(ds, ds.albedo) + ds.flux_t + ds.flux_lhe
     ds['adv_atmos'] = ds['mse_tend_atmos'] - ds['flux_atmos']
+    # Advection term such that adv_atmos_moist + L_v(E-P) equals moisture component of MSE tendency
+    ds['adv_atmos_moist'] = L_v * (ds['sphum_col_tend'] + ds['precip_minus_evap'])
+    ds['adv_atmos_dry'] = ds['adv_atmos'] - ds['adv_atmos_moist']
 
     # Surface fluxes excluding SW
     ds['flux_surf'] = ds.flux_t + ds.flux_lhe - ds.lwdn_sfc + ds.lwup_sfc
@@ -251,6 +257,7 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
         params['mu'] = \
             fit_linear_zero_mean_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
                                     spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col)) * L_v / c_p
+        params['coef_amp_col_sphum'] = fit_linear_zero_mean_xr(ds.temp_atm, ds.temp_col_sphum)
         # Account for column mean temp differing from lowest model level
         params['coef_amp_col'], params['coef_phase_col'] = \
             get_fit_coef_complex_xr(ds["temp_col"], ds.temp_atm, ds.time)
@@ -259,6 +266,9 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
             fit_linear_zero_mean_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
                                     spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col * ds.p_integ_calc)
                                     ) * L_v / c_p / ds.p_integ_calc.mean(dim='time')
+        params['coef_amp_col_sphum'] = fit_linear_zero_mean_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
+                                                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col_sphum * ds.p_integ_calc))
+        params['coef_amp_col_sphum'] /= ds.p_integ_calc.mean(dim='time')
         params['coef_amp_col'], params['coef_phase_col'] = \
             get_fit_coef_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col * ds.p_integ_calc),
                                     spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm), ds.time)
@@ -310,7 +320,9 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
 
     # Advection params
     params['lambda_adv'], params['coef_phase_adv'] = get_fit_coef_complex_xr(ds.adv_atmos, -ds.temp_atm, ds.time)
-
+    params['lambda_adv_dry'], params['coef_phase_adv_dry'] = get_fit_coef_complex_xr(ds.adv_atmos_dry, -ds.temp_atm, ds.time)
+    params['lambda_adv_moist'], params['coef_phase_adv_moist'] = get_fit_coef_complex_xr(ds.adv_atmos_moist, -ds.temp_atm,
+                                                                                         ds.time)
     return params
 
 
