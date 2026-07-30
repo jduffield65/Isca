@@ -421,3 +421,45 @@ def periodic_rolling_mean(
 
     # Restore exactly the original coordinate extent.
     return smoothed.isel({dim: slice(pad_width, pad_width + da.sizes[dim])})
+
+def select_coord_window(
+    ds: Union[xr.DataArray, xr.Dataset],
+    target: float,
+    dim: str,
+    n: int = 1,
+):
+    """Select a clipped coordinate window around a target value.
+
+    Finds the coordinate value along ``dim`` nearest to ``target`` and selects
+    that grid cell plus up to ``n`` neighbouring cells on either side. The
+    selection is clipped at the dimension boundaries, so it may contain fewer
+    than ``2 * n + 1`` values near either endpoint.
+
+    Args:
+        ds (xarray.Dataset): Dataset containing the coordinate and dimension.
+        target (float): Target coordinate value in the same units as
+            ``ds[dim]``.
+        dim (str): Name of the one-dimensional coordinate and dimension to
+            select along, for example ``"lat"``, ``"lon"``, or ``"lev"``.
+        n (int, optional): Number of neighbouring grid cells to retain on each
+            side of the closest coordinate value. Defaults to 1.
+
+    Returns:
+        xarray.Dataset: Dataset restricted to the selected coordinate window.
+
+    Raises:
+        ValueError: If ``n`` is negative, ``dim`` is not a dataset dimension,
+            or the coordinate is not one-dimensional.
+    """
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    if dim not in ds.dims:
+        raise ValueError(f"{dim!r} is not a dimension in ds")
+    if dim not in ds.coords or ds[dim].ndim != 1:
+        raise ValueError(f"{dim!r} must be a one-dimensional coordinate")
+
+    i_dim = abs(ds[dim] - target).argmin().item()
+    start = max(0, i_dim - n)
+    stop = min(ds.sizes[dim], i_dim + n + 1)
+
+    return ds.isel({dim: slice(start, stop)})

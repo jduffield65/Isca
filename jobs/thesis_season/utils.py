@@ -13,7 +13,7 @@ from isca_tools.utils.numerical import get_var_shift
 from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_atmospheric_heating
 from isca_tools import load_dataset, load_namelist
 from isca_tools.utils.constants import c_p_ocean, rho_ocean, c_p, L_v, g, Stefan_Boltzmann
-from isca_tools.utils.xarray import wrap_with_apply_ufunc
+from isca_tools.utils.xarray import wrap_with_apply_ufunc, select_coord_window
 
 from jobs.thesis_season.column.utils import get_fit_coef_complex_xr, lat_min, lat_max, get_annual_zonal_mean, \
     get_temp_from_sphum_sat_xr, get_sw_abs_amp_xr, spline_deriv_periodic_xr, day_seconds, get_fourier_fit_xr, \
@@ -27,13 +27,18 @@ var_keep = ['temp', 'ps', 'sphum', 'olr', 'swdn_toa', 'swdn_sfc', 'lwdn_sfc', 'l
 def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
             lat_min: float = lat_min, lat_max: float = lat_max,
             first_month_file: Optional[int] = None,
-            verbose: bool = False) -> xr.Dataset:
+            verbose: bool = False, lat_target: Optional[float] = None,
+            n_lat: int = 0) -> xr.Dataset:
     # Load all info required for empirical approximation of 2 layer energy budget
     # Will need to update later to add that required analytically such as
     # temp_col_sphum, temp_rad_surf, temp_rad_atm
     exp_path = os.path.join(exp_dir, exp_name)
 
-    ds = load_dataset(exp_path, first_month_file=first_month_file).sel(lat=slice(lat_min, lat_max))[var_keep]
+    ds = load_dataset(exp_path, first_month_file=first_month_file)[var_keep]
+    if lat_target is None:
+        ds = ds.sel(lat=slice(lat_min, lat_max))
+    else:
+        ds = select_coord_window(ds, lat_target, 'lat', n_lat)
     ds = ds.load()
 
     # Load info from namelist and add to attributes
