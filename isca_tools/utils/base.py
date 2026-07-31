@@ -498,3 +498,20 @@ def insert_to_array(x_values: Union[np.ndarray, xr.DataArray], y_values: Union[n
         x_combined = x_combined.assign_coords({dim: x_combined})
 
     return x_combined, y_combined
+
+
+def validate_params(params: List, allowed: List, name: str = 'List') -> None:
+    r"""Validate that all supplied parameters are in an allowed collection.
+
+    Args:
+        params (Iterable[str]): Parameter names to validate.
+        name (str): Name of the argument being validated, used in error messages.
+        allowed (Iterable[str]): Valid parameter names.
+
+    Raises:
+        ValueError: If one or more values in ``params`` are not in ``allowed``.
+    """
+    invalid = set(params) - set(allowed)
+
+    if invalid:
+        raise ValueError(f"Invalid {name}: {sorted(invalid)}")

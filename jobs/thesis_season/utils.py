@@ -1,12 +1,12 @@
 import xarray as xr
 import numpy as np
 import os
-from typing import List, Optional, Union, Literal
+from typing import List, Optional, Union, Literal, Tuple
 from tqdm import tqdm
 
 from isca_tools.thesis.surface_flux_taylor_2layer import get_p_eff, get_sensible_heat, get_sensitivity_lh, \
     get_sensitivity_sh, get_sensitivity_lw_surf
-from isca_tools.utils.base import mass_weighted_vertical_integral
+from isca_tools.utils.base import mass_weighted_vertical_integral, validate_params
 from isca_tools.utils.fourier import coef_conversion
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.numerical import get_var_shift
@@ -85,7 +85,7 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
     ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf',
                          'lev_sigma': 'sigma_atm', 'sphum': 'q_atm'})
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_surf * ds.sigma_atm)
-    ds['precip_minus_evap'] = ds.precipitation - ds.flux_lhe/L_v
+    ds['precip_minus_evap'] = ds.precipitation - ds.flux_lhe / L_v
     return ds
 
 
@@ -121,9 +121,9 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     """
     # Add wind multiplied by drag coef extracted from sensible heat - use to find lambda_const
     flux_t_norm = get_sensible_heat(ds.temp_surf, ds.temp_atm, 1, 1, ds.p_surf,
-                                 ds.p_surf * ds.sigma_atm)
+                                    ds.p_surf * ds.sigma_atm)
     # take av over time as want single value for each sim/location - median to avoid outliers.
-    ds['wind_drag_av'] = (ds.flux_t/flux_t_norm).median(dim='time')
+    ds['wind_drag_av'] = (ds.flux_t / flux_t_norm).median(dim='time')
 
     ds = get_annual_zonal_mean(ds, smooth_n_days=smooth_n_days, smooth_time=smooth_time)
     ds['p_eff'] = get_p_eff(ds.p_surf.mean(dim='time'))
@@ -157,9 +157,59 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     return ds
 
 
+def get_fit_complex_xr(x: xr.DataArray, y: xr.DataArray, time: Optional[xr.DataArray] = None,
+                       include_phase: bool = False,
+                       x2: Optional[xr.DataArray] = None) -> Tuple[xr.DataArray, xr.DataArray]:
+    r"""Fit one or two coefficients relating predictor and response DataArrays.
+
+    When ``include_phase`` is True, fit amplitude and phase coefficients using
+    ``get_fit_coef_complex_xr``. When ``include_phase`` is False and ``x2`` is
+    not provided, fit a single zero-mean linear amplitude coefficient and
+    return a zero-valued phase coefficient. When ``x2`` is provided, fit
+    separate zero-mean linear amplitude coefficients for ``x`` and ``x2``.
+
+    ``include_phase`` and ``x2`` are mutually exclusive.
+
+    Args:
+        x (xr.DataArray): Primary predictor data array.
+        y (xr.DataArray): Response data array.
+        time (Optional[xr.DataArray]): Time coordinate or array used for the
+            complex fit. Ignored unless ``include_phase`` is True. Defaults to
+            None.
+        include_phase (bool): Whether to fit an amplitude and phase
+            coefficient using a complex fit. Cannot be True when ``x2`` is
+            provided. Defaults to False.
+        x2 (Optional[xr.DataArray]): Optional second predictor data array. If
+            provided, the second returned value is its fitted amplitude
+            coefficient rather than a phase coefficient. Defaults to None.
+
+    Returns:
+        ``coef_amp``: Amplitude coefficient associated with ``x``.
+        ``coef_phase``: Phase coefficient associated with ``x`` when
+            ``include_phase`` is True; zero when neither ``include_phase``
+            nor ``x2`` is supplied; otherwise, the amplitude coefficient
+            associated with ``x2``.
+
+    Raises:
+        ValueError: If both ``include_phase`` is True and ``x2`` is provided.
+    """
+    if include_phase and x2 is not None:
+        raise ValueError('Not valid for include_phase and x2 provided.')
+    if include_phase:
+        coef_amp, coef_phase = get_fit_coef_complex_xr(y, x, time)
+    else:
+        if x2 is None:
+            coef_amp = fit_linear_zero_mean_xr(x, y)
+            coef_phase = coef_amp * 0
+        else:
+            coef_amp, coef_phase = fit_linear_zero_mean_xr(x, y, x2)
+    return coef_amp, coef_phase
+
+
 def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
-                         include_phase_lh: bool = False,
-                         empirical_lambda_const: bool = False) -> dict:
+                         empirical_lambda_const: bool = False,
+                         include_params: Optional[List] = None,
+                         exclude_params: Optional[List] = None) -> dict:
     r"""Fit empirical parameters for the seasonal surface--atmosphere model.
 
     The fitted parameters correspond to the coupled surface and atmospheric
@@ -256,35 +306,66 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
         seasonal relationships and are implemented as time shifts when
         reconstructing budget terms.
     """
+    # Get a list of all parameters to find
+    _allowed_params = ['mu', 'coef_amp_col', 'coef_phase_col',
+                       'lambda_const', 'lambda_a', 'coef_phase_a', 'B',
+                       'coef_phase_olr', 'lambda_lw', 'lambda_adv', 'coef_phase_adv',
+                       'lambda_const_lh', 'lambda_const_sh', 'lambda_const_lw',
+                       'lambda_a_lh', 'lambda_a_sh', 'lambda_a_lw', 'coef_phase_a_lh', 'coef_amp_col_sphum',
+                       'lambda_adv_dry', 'coef_phase_adv_dry', 'lambda_adv_moist', 'coef_phase_adv_moist']
+
+    if include_params is not None:
+        # Add intermediate variables if specify include_params
+        if 'mu' in include_params:
+            include_params += ['coef_amp_col_sphum']
+        for key2 in ['lambda_const', 'lambda_a', 'coef_phase_a', 'lambda_adv', 'coef_phase_adv']:
+            if key2 in include_params:
+                include_params += [key for key in _allowed_params if f"{key2}_" in key]
+        include_params = list(set(include_params))      # remove duplicates
+    include_params = _allowed_params.copy() if include_params is None else include_params
+    validate_params(include_params, _allowed_params, "include_params")
+
+    if exclude_params is not None:
+        validate_params(exclude_params, _allowed_params, "exclude_params")
+        include_params = [x for x in include_params if x not in exclude_params]
+
     params = {}
     if const_p:
         # mu accounts for atmospheric heat capacity dependence on sphum
         params['mu'] = \
-            fit_linear_zero_mean_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-                                    spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col)) * L_v / c_p
-        params['coef_amp_col_sphum'] = fit_linear_zero_mean_xr(ds.temp_atm, ds.temp_col_sphum)
+            get_fit_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
+                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col))[0] * L_v / c_p
+        params['coef_amp_col_sphum'] = get_fit_complex_xr(ds.temp_atm, ds.temp_col_sphum)[0]
         # Account for column mean temp differing from lowest model level
         params['coef_amp_col'], params['coef_phase_col'] = \
-            get_fit_coef_complex_xr(ds["temp_col"], ds.temp_atm, ds.time)
+            get_fit_complex_xr(ds.temp_atm, ds.temp_col, ds.time, 'coef_phase_col' in include_params)
     else:
         params['mu'] = \
-            fit_linear_zero_mean_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-                                    spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col * ds.p_integ_calc)
-                                    ) * L_v / c_p / ds.p_integ_calc.mean(dim='time')
-        params['coef_amp_col_sphum'] = fit_linear_zero_mean_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-                                                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col_sphum * ds.p_integ_calc))
+            get_fit_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
+                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col * ds.p_integ_calc)
+                               )[0] * L_v / c_p / ds.p_integ_calc.mean(dim='time')
+        params['coef_amp_col_sphum'] = get_fit_complex_xr(
+            spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
+            spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col_sphum * ds.p_integ_calc))[0]
         params['coef_amp_col_sphum'] /= ds.p_integ_calc.mean(dim='time')
         params['coef_amp_col'], params['coef_phase_col'] = \
-            get_fit_coef_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col * ds.p_integ_calc),
-                                    spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm), ds.time)
+            get_fit_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
+                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col * ds.p_integ_calc),
+                               ds.time, 'coef_phase_col' in include_params)
         params['coef_amp_col'] /= ds.p_integ_calc.mean(dim='time')
 
     # LH, SH, LW params
     if empirical_lambda_const:
-        params['lambda_const_lh'], params['lambda_a_lh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_lhe, ds.temp_atm)
-        params['lambda_const_sh'], params['lambda_a_sh'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, ds.flux_t, -ds.temp_atm)
-        params['lambda_const_lw'], params['lambda_a_lw'] = fit_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
-                                                                       ds.lwup_sfc - ds.lwdn_sfc, ds.temp_atm)
+        params['lambda_const_lh'], params['lambda_a_lh'] = \
+            get_fit_complex_xr(ds.temp_surf - ds.temp_atm, ds.flux_lhe,
+                               x2=ds.temp_atm if 'lambda_a' in include_params else None)
+        params['coef_phase_a_lh'] = params['lambda_a_lh'] * 0
+        params['lambda_const_sh'], params['lambda_a_sh'] = \
+            get_fit_complex_xr(ds.temp_surf - ds.temp_atm, ds.flux_t,
+                               x2=-ds.temp_atm if 'lambda_a' in include_params else None)
+        params['lambda_const_lw'], params['lambda_a_lw'] = \
+            get_fit_complex_xr(ds.temp_surf - ds.temp_atm, ds.lwup_sfc - ds.lwdn_sfc,
+                               x2=ds.temp_atm if 'lambda_a' in include_params else None)
     else:
         # dont need RH for this
         ds_use = ds.mean(dim='time')
@@ -295,39 +376,44 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
         # dont need radiative temp for this
         params['lambda_const_lw'] = get_sensitivity_lw_surf(ds_use.temp_surf, 0, 0)['temp_surf']
 
-        flux_lhe_resid = ds.flux_lhe - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_lh'])
-        params['lambda_a_lh'] = fit_linear_zero_mean_xr(ds.temp_atm, flux_lhe_resid)
         flux_t_resid = ds.flux_t - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_sh'])
-        params['lambda_a_sh'] = fit_linear_zero_mean_xr(-ds.temp_atm, flux_t_resid)
-        flux_lw_resid = ds.lwup_sfc - ds.lwdn_sfc - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_lw'])
-        params['lambda_a_lw'] = fit_linear_zero_mean_xr(ds.temp_atm, flux_lw_resid)
-    params['lambda_const'] = params['lambda_const_lh'] + params['lambda_const_sh'] + params['lambda_const_lw']  # for temp_s - temp_a     # for temp_a
+        params['lambda_a_sh'] = get_fit_complex_xr(-ds.temp_atm, flux_t_resid)[0]
+        flux_lw_resid = ds.lwup_sfc - ds.lwdn_sfc - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
+                                                                              params['lambda_const_lw'])
+        params['lambda_a_lw'] = get_fit_complex_xr(ds.temp_atm, flux_lw_resid)[0]
+    params['lambda_const'] = params['lambda_const_lh'] + params['lambda_const_sh'] + params[
+        'lambda_const_lw']  # for temp_s - temp_a     # for temp_a
 
     # Deal with phase delay of LH, and combine the temp_a fitting into single lambda_a coefficient
-    if include_phase_lh:
+    if ('coef_phase_a' in include_params) or ('lambda_a_lh' not in params):
         # Get what is left of LH after the temp_surf-temp_atm fit
         flux_lhe_resid = ds.flux_lhe - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_lh'])
         # Refind the residual atmospheric effect taking into account of phase delay
-        params['lambda_a_lh'], params['coef_phase_a_lh'] = get_fit_coef_complex_xr(flux_lhe_resid, ds.temp_atm, ds.time)
-        params['lambda_a'], params['coef_phase_a'] = \
-            coef_conversion(cos_coef=params['lambda_a_lh']*np.cos(params['coef_phase_a_lh']) + params['lambda_a_lw'] -
-                                     params['lambda_a_sh'],
-                            sin_coef=params['lambda_a_lh']*np.sin(params['coef_phase_a_lh']), take_cos_sign=True)
-    else:
-        params['coef_phase_a_lh'] = 0
-        params['coef_phase_a'] = 0
-        params['lambda_a'] = params['lambda_a_lh'] + params['lambda_a_lw'] - params['lambda_a_sh']
+        params['lambda_a_lh'], params['coef_phase_a_lh'] = get_fit_complex_xr(ds.temp_atm, flux_lhe_resid, ds.time,
+                                                                              'coef_phase_a' in include_params)
+    params['lambda_a'], params['coef_phase_a'] = \
+        coef_conversion(cos_coef=params['lambda_a_lh'] * np.cos(params['coef_phase_a_lh']) + params['lambda_a_lw'] -
+                                 params['lambda_a_sh'],
+                        sin_coef=params['lambda_a_lh'] * np.sin(params['coef_phase_a_lh']), take_cos_sign=True)
 
     # OLR params
     olr_surf_cont = Stefan_Boltzmann * np.exp(-ds.odp_surf) * ds.temp_surf ** 4
-    params['lambda_lw'] = fit_linear_zero_mean_xr(ds.temp_surf, olr_surf_cont)
-    params['B'], params['coef_phase_olr'] = get_fit_coef_complex_xr(ds.olr - olr_surf_cont, ds.temp_atm, ds.time)
+    params['lambda_lw'] = get_fit_complex_xr(ds.temp_surf, olr_surf_cont)[0]
+    params['B'], params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, ds.olr - olr_surf_cont, ds.time,
+                                                               'coef_phase_olr' in include_params)
 
     # Advection params
-    params['lambda_adv'], params['coef_phase_adv'] = get_fit_coef_complex_xr(ds.adv_atmos, -ds.temp_atm, ds.time)
-    params['lambda_adv_dry'], params['coef_phase_adv_dry'] = get_fit_coef_complex_xr(ds.adv_atmos_dry, -ds.temp_atm, ds.time)
-    params['lambda_adv_moist'], params['coef_phase_adv_moist'] = get_fit_coef_complex_xr(ds.adv_atmos_moist, -ds.temp_atm,
-                                                                                         ds.time)
+    params['lambda_adv'], params['coef_phase_adv'] = \
+        get_fit_complex_xr(-ds.temp_atm, ds.adv_atmos, ds.time, 'coef_phase_adv' in include_params)
+    params['lambda_adv_dry'], params['coef_phase_adv_dry'] = \
+        get_fit_complex_xr(-ds.temp_atm, ds.adv_atmos_dry, ds.time, 'coef_phase_adv' in include_params)
+    params['lambda_adv_moist'], params['coef_phase_adv_moist'] = \
+        get_fit_complex_xr(-ds.temp_atm, ds.adv_atmos_moist, ds.time, 'coef_phase_adv' in include_params)
+    for key in _allowed_params:
+        if key not in include_params:
+            params[key] *= 0
+            if key == 'coef_amp_col':
+                params[key] += 1        # default value for this param is 1
     return params
 
 
@@ -377,7 +463,7 @@ def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
     return c_a * (temp_col_tend + sphum_tend)
 
 
-def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn_toa: xr.DataArray,
+def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr.DataArray, swdn_toa: xr.DataArray,
                           sw_abs: xr.DataArray, lambda_const: xr.DataArray, lambda_a: xr.DataArray,
                           B: xr.DataArray, lambda_lw: xr.DataArray, coef_phase_olr: xr.DataArray,
                           coef_phase_a: Optional[xr.DataArray] = None) -> xr.DataArray:
@@ -412,7 +498,7 @@ def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn
             surface-flux term, $\Lambda$.
         B: Amplitude of the atmospheric contribution to outgoing longwave
             radiation.
-        lambda_lw1: Coefficient for the surface-temperature-dependent
+        lambda_lw: Coefficient for the surface-temperature-dependent
             longwave contribution to outgoing longwave radiation.
         coef_phase_olr: Phase correction for the atmospheric outgoing
             longwave-radiation contribution, $\phi_{\mathrm{olr}}$.
@@ -430,7 +516,7 @@ def get_approx_flux_atmos(temp_atm: xr.DataArray, temp_surf: xr. DataArray, swdn
     temp_surf = temp_surf - temp_surf.mean(dim='time')
     flux_abs = sw_abs * (swdn_toa - swdn_toa.mean(dim='time'))
 
-    flux_linear = apply_linear_zero_mean_xr(temp_surf - temp_atm, lambda_const, temp_atm, lambda_a, coef_phase_a)  \
+    flux_linear = apply_linear_zero_mean_xr(temp_surf - temp_atm, lambda_const, temp_atm, lambda_a, coef_phase_a) \
                   - lambda_lw * temp_surf
 
     flux_shift = apply_fit_complex_xr(temp_atm, -B, coef_phase_olr)
