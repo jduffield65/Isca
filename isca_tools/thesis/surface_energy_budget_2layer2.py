@@ -161,7 +161,7 @@ def combine_amplitude_phase_factor(
 
     Notes:
         Where ``amplitude_final`` is zero, ``b_final`` is undefined and is
-        returned as ``NaN``.
+        returned as ``0``.
     """
     if len(amplitude) != len(phase):
         raise ValueError("`amplitude` and `phase` must have equal lengths.")
@@ -181,7 +181,7 @@ def combine_amplitude_phase_factor(
             amp * np.sin(phi) for amp, phi in zip(amplitude, phase)
         )
 
-    b_final = (imaginary_factor / real_part).where(real_part != 0)
+    b_final = (imaginary_factor / real_part).where(real_part != 0, 0)       # if real part = 0 set imag = 0 too
 
     return real_part, b_final
 
