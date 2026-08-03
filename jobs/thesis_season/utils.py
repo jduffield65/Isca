@@ -209,7 +209,8 @@ def get_fit_complex_xr(x: xr.DataArray, y: xr.DataArray, time: Optional[xr.DataA
 def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
                          empirical_lambda_const: bool = False,
                          include_params: Optional[List] = None,
-                         exclude_params: Optional[List] = None) -> dict:
+                         exclude_params: Optional[List] = None,
+                         include_olr_surf_cont: bool = True) -> dict:
     r"""Fit empirical parameters for the seasonal surface--atmosphere model.
 
     The fitted parameters correspond to the coupled surface and atmospheric
@@ -251,11 +252,36 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
             $\phi_{\mathrm{col}}$ without accounting for seasonal variation
             in the atmospheric pressure integral. If `False`, pressure-weight
             column quantities are used before fitting.
-        include_phase_lh: Whether to fit a phase delay in the atmospheric
-            temperature dependence of latent heating. If `True`, the
-            resulting latent-heat phase is combined with sensible- and
-            longwave-flux contributions to give $\Lambda[1 + i\phi_a]$.
-            If `False`, `coef_phase_a_lh` and `coef_phase_a` are zero.
+        empirical_lambda_const: Whether to estimate the coefficient
+            multiplying $T_s - T_a$, $\lambda$, directly from the seasonal
+            flux data. If `True`, the latent-, sensible-, and surface-longwave
+            flux contributions are jointly fitted as linear functions of
+            $T_s - T_a$ and, where requested, $T_a$. If `False`, the
+            $T_s - T_a$ sensitivities are instead calculated from the
+            mean-state physical parameterisations; the residual
+            atmospheric-temperature dependence is then fitted empirically.
+        include_params: Optional list of parameter names to fit and return.
+            Parameters not included are set to their default values: zero for
+            most coefficients and one for `coef_amp_col`. Specifying a
+            composite parameter automatically includes the component
+            parameters required to calculate it; for example,
+            `lambda_const` includes its latent-, sensible-, and longwave-flux
+            components.
+        exclude_params: Optional list of parameter names to omit after
+            applying `include_params`. Excluded parameters are set to their
+            default values: zero for most coefficients and one for
+            `coef_amp_col`. This can be used to suppress individual
+            components of an otherwise included composite parameter.
+        include_olr_surf_cont: Whether to explicitly include the direct
+            surface-emitted contribution to outgoing longwave radiation (OLR).
+            If `True`, OLR is decomposed into a surface contribution,
+            $\sigma \exp(-\tau_{\mathrm{sfc}}) T_s^4$, and a residual
+            atmospheric contribution. The linearised surface-temperature
+            sensitivity is returned as `lambda_lw`, while `B` and
+            `coef_phase_olr` describe the residual atmospheric component. If
+            `False`, all OLR variability is assumed to arise from the
+            atmospheric component; `lambda_lw` is set to zero and `B` is
+            fitted directly to total OLR.
 
     Returns:
         Dictionary containing the fitted empirical model parameters:
@@ -397,10 +423,15 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
                         sin_coef=params['lambda_a_lh'] * np.sin(params['coef_phase_a_lh']), take_cos_sign=True)
 
     # OLR params
-    olr_surf_cont = Stefan_Boltzmann * np.exp(-ds.odp_surf) * ds.temp_surf ** 4
-    params['lambda_lw'] = get_fit_complex_xr(ds.temp_surf, olr_surf_cont)[0]
-    params['B'], params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, ds.olr - olr_surf_cont, ds.time,
-                                                               'coef_phase_olr' in include_params)
+    if include_olr_surf_cont:
+        olr_surf_cont = Stefan_Boltzmann * np.exp(-ds.odp_surf) * ds.temp_surf ** 4
+        params['lambda_lw'] = get_fit_complex_xr(ds.temp_surf, olr_surf_cont)[0]
+        params['B'], params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, ds.olr - olr_surf_cont, ds.time,
+                                                                   'coef_phase_olr' in include_params)
+    else:
+        params['B'], params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, ds.olr, ds.time,
+                                                                   'coef_phase_olr' in include_params)
+        params['lambda_lw'] = params['B'] * 0
 
     # Advection params
     params['lambda_adv'], params['coef_phase_adv'] = \
