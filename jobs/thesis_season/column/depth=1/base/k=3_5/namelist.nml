@@ -4,8 +4,8 @@
 
 ! This section gives info to give to Slurm when running experiment
 &experiment_details
-   name = 'thesis_season/column/depth=20/sw_dry'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
-   input_dir = '/home/jamd1/Isca/jobs/thesis_season/column/depth=20/sw_dry'
+   name = 'thesis_season/column/depth=1/base/k=3_5'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
+   input_dir = '/home/jamd1/Isca/jobs/thesis_season/column/depth=1/base/k=3_5'
    n_months_total = 2         ! Total duration of simulation in months. Usual is 180, but made 2 outputs of 10 years
    n_months_job = 2           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
@@ -14,7 +14,7 @@
    resolution = 'T42'           ! Horizontal resolution of experiment ('T21', 'T42' or 'T85').
    partition = 'small-short'          ! Queue to submit job to (Slurm info).
    overwrite_data = .false.     ! If .true. and data already exists in $GFDL_DATA/name, it will be overwritten.
-   compile = .true.            ! If .true. it will recompile the codebase before running the experiment.
+   compile = .false.            ! If .true. it will recompile the codebase before running the experiment.
    max_walltime = '24:00:00'    ! Maximum time that job can run e.g. '01:00:00' would be 1 hour (Slurm info).
    delete_restart_files = .true.        ! Only need final restart file.
 /
@@ -43,7 +43,7 @@
     roughness_moist = 3.21e-05
     roughness_mom = 3.21e-05
     two_stream_gray = .true.
-    convection_scheme = 'DRY'       ! Dry convection means no lscalecond specified
+    convection_scheme = 'SIMPLE_BETTS_MILLER'
 /
 
 &vert_turb_driver_nml
@@ -63,8 +63,7 @@
     do_simple = .true.
     old_dtaudv = .true.
     use_virtual_temp = .false.
-    drag_const = 0              ! Turn off turbulent surface fluxes
-    rh_flux_q = 0               ! Fix the RH value used in computation of latent heat flux
+    drag_const = 0.0009              ! this is for no-WISHE | Only difference from normal case
 /
 
 &atmosphere_nml
@@ -73,16 +72,28 @@
 
 &mixed_layer_nml
     albedo_value = 0.31
-    depth = 20.0                                ! different from frierson_test_case value of 2.5
-    evaporation = .false.                       ! Turn evaporation off as well, keep as dry as possible
+    depth = 1.0                                ! different from frierson_test_case value of 2.5
+    evaporation = .true.                      ! Makes column specific humidity zero. Not sure if need to set this true for non zero flux_lhe
     prescribe_initial_dist = .true.
     tconst = 285.0
 /
 
-! Gamma=1 means use dry adiabat
-&dry_convection_nml
-    tau = 7200
-    gamma = 1
+&qe_moist_convection_nml
+    tmax = 350.0
+    tmin = 110.0            ! Had to lower from 160 because got error
+    rhbm = 0.7
+/
+
+! Not sure why we need this namelist as we are doing simple betts miller which uses qe_moist_convection_nml
+&betts_miller_nml
+    rhbm = 0.7
+    do_simp = .false.
+    do_shallower = .true.
+/
+
+&lscale_cond_nml
+    do_evap = .true.
+    do_simple = .true.
 /
 
 &sat_vapor_pres_nml
@@ -101,15 +112,12 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 1                       ! FRIERSON kappa optical depth parameter
-    ir_tau_eq = 6
-    ir_tau_pole = 6                 ! force same odp at all latitudes
+    odp = 3.5                         ! FRIERSON kappa optical depth parameter
 /
 
 &diag_manager_nml
     mix_snapshot_average_fields = .false.       ! time avg fields are labelled with time in middle of window
 /
-
 
 &fms_io_nml
     fileset_write = 'single'        ! default is multi
@@ -124,7 +132,6 @@
 ! column_nml does not allow for setting damping_order or water_correction_limit
 &column_nml
     lon_max = 1                         ! All longitudes the same, so only consider 1 for speed
-    lat_max = 16                        ! Number of columns in latitude - Just use a range, so test different temp and insolation
     reference_sea_level_press = 1.0e5   ! This and below is just same value set in spectral_dynamics_nml for previous experiments
     num_levels = 25                     ! How many pressure levels to use
     valid_range_t = 100.0, 800.0
@@ -136,12 +143,13 @@
     robert_coeff = 0.03
 /
 
-
+&column_grid_nml
+    lat_value = 43.25                      ! The single latitude to run model at
 
 &column_init_cond_nml
     initial_temperature = 264           ! initial atmospheric temperature
     surf_geopotential = 0
-    surface_wind = 0                    ! Turn off turbulent surface fluxes
+    surface_wind = 5                    ! Turn off turbulent surface fluxes
 /
 
 ! Specify vertical levels from Frierson 2006
