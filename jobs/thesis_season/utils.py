@@ -48,6 +48,11 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
     ds['lev_sigma'] = (ds.pfull * 0 + sigma_levels_full).squeeze()
     ds.attrs['albedo'] = namelist['mixed_layer_nml']['albedo_value']
     ds.attrs['depth'] = namelist['mixed_layer_nml']['depth']
+    try:
+        # Ref pressure used for optical depth calculations
+        ds.attrs['p_ref'] = namelist['constants_nml']['pstd_mks']
+    except KeyError:
+        ds.attrs['p_ref'] = 101325.0        # default value
     ds.attrs['heat_cap_surf'] = get_heat_capacity(c_p_ocean, rho_ocean, ds.attrs['depth'])
 
     # Get longwave optical depth at surface - is a function of latitude

@@ -21,6 +21,8 @@
 
 &constants_nml
     omega = 7.2921150e-05         ! Default Earth value
+    pstd = 1e6                    ! Ref pressure in units of "dynes/cm^2". Make same as ref_sea_level_pressure
+    pstd_mks = 1e5                ! Ref pressure in units of "Newtons/m^2". Make same as ref_sea_level_pressure
 /
 
 &main_nml

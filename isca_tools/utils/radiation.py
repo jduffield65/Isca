@@ -251,7 +251,7 @@ def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_dep
 
 def opd_lw_gray(lat: np.ndarray, pressure: Optional[float] = None,
                 kappa: float = 1, tau_eq: float = 6, tau_pole: float = 1.5,
-                pressure_ref: float = 10 ** 5, frac_linear: float = 0.1, k_exponent: float = 4) -> np.ndarray:
+                pressure_ref: float = 101325, frac_linear: float = 0.1, k_exponent: float = 4) -> np.ndarray:
     """
     Returns the longwave optical depth used in the
     [Frierson](https://execlim.github.io/Isca/modules/two_stream_gray_rad.html#frierson-byrne-schemes)
