@@ -736,6 +736,7 @@ subroutine surface_flux_1d (                                           &
       where (avail)
           q_surf = q_atm + flux_q / (rho*cd_q*w_atm_const)   ! surface specific humidity
       end where
+      w_atm = w_atm * 0 + w_atm_const      ! JD 06/10/2026 set w_atm to the constant for output as a sanity check
   else
       where (avail)
           q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
