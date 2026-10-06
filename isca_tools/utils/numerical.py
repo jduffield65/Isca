@@ -931,33 +931,50 @@ def apply_linear_zero_mean(x1: np.ndarray, a: float,
 
 def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp: bool = True) -> Tuple[float, float]:
     r"""
-    Compute the complex fitting coefficient between two variables.
+    Compute the ratio of the first-harmonic complex amplitudes of y and x.
 
-    This estimates the complex coefficient $\beta$ in the relationship:
-        $y \approx \beta \cdot x$
+    The first harmonic of each variable is represented as
+        $f_1(t) = A_f \cos(\omega t - \phi_f)$,
 
-    using the first harmonic of a Fourier fit. The coefficient is represented
-    in amplitude and phase form:
-        $\beta = A_{y} / A_{x} \cdot e^{i(\phi_{y} - \phi_{x})}$
+    with corresponding complex representation
+        $\widetilde{f}_1(t) = A_f \exp(i(\omega t - \phi_f))$.
 
-    where $A$ and $\phi$ denote the amplitude and phase of the first harmonic.
+    The coefficient satisfying
+        $\widetilde{y}_1(t) = \beta \widetilde{x}_1(t)$
+
+    is therefore
+        $\beta = \Gamma \exp(-i\Phi)$,
+
+    where $\Gamma = A_y / A_x$ and $\Phi = \phi_y - \phi_x$.
+
+    With nonnegative amplitudes, a positive phase difference, interpreted
+    modulo $2\pi$, represents a lag of y relative to x. The returned phase
+    difference is not wrapped to a principal interval.
 
     Args:
-        pos_amp:
         y:
-            Target variable to fit.
+            Target time series.
         x:
-            Reference variable.
+            Reference time series with a nonzero first-harmonic amplitude.
         time:
-            Time coordinate corresponding to `y` and `x`.
-        pos_amp: Used in `get_fourier_coef`. If True, Fourier amplitude coefficient found will always be positive
-            with phase_coef in $[-\\i, \pi]$, Otherwise will choose the sign of amp_coef to minimize the magnitude of
-            phase_coef i.e., keep phase_coef in range between $[-\pi/2, \pi/2]$.
+            Time coordinate corresponding to y and x, satisfying the
+            sampling assumptions of get_fourier_coef.
+        pos_amp:
+            Passed to get_fourier_coef. If True, harmonic amplitudes are
+            nonnegative and individual phases lie in $[-\pi, \pi]$.
+            Otherwise, amplitudes may be signed, with individual phases
+            chosen to lie in $[-\pi/2, \pi/2]$.
 
     Returns:
-        amp_ratio: Amplitude component of $\\beta$,
-              given by $A_{y} / A_{x}$.
-        phase_diff: Phase difference $\\phi_{y} - \\phi_{x}$.
+        amp_ratio:
+            Amplitude ratio $\Gamma = A_y / A_x$.
+            May be negative if pos_amp=False.
+        phase_diff:
+            Phase difference $\Phi = \phi_y - \phi_x$, in radians.
+            Reconstruct the complex coefficient as
+            beta = amp_ratio * np.exp(-1j * phase_diff).
+            With signed amplitudes, this value alone does not determine
+            the phase lag.
     """
     # Perform Fourier fit for var and extract first harmonic amplitude and phase
     y_amp_coef, y_phase_coef = get_fourier_coef(time, y, n=1, pos_amp=pos_amp)
