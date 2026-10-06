@@ -952,15 +952,11 @@ def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp
     difference is not wrapped to a principal interval.
 
     Args:
-        y:
-            Target time series.
-        x:
-            Reference time series with a nonzero first-harmonic amplitude.
-        time:
-            Time coordinate corresponding to y and x, satisfying the
+        y: Target time series.
+        x: Reference time series with a nonzero first-harmonic amplitude.
+        time: Time coordinate corresponding to y and x, satisfying the
             sampling assumptions of get_fourier_coef.
-        pos_amp:
-            Passed to get_fourier_coef. If True, harmonic amplitudes are
+        pos_amp: Passed to get_fourier_coef. If True, harmonic amplitudes are
             nonnegative and individual phases lie in $[-\pi, \pi]$.
             Otherwise, amplitudes may be signed, with individual phases
             chosen to lie in $[-\pi/2, \pi/2]$.
@@ -986,41 +982,38 @@ def get_fit_coef_complex(y: np.ndarray, x: np.ndarray, time: np.ndarray, pos_amp
     return y_amp_coef / x_amp_coef, y_phase_coef - x_phase_coef
 
 def apply_fit_complex(x: np.ndarray, coef_amp: float, coef_phase: float) -> np.ndarray:
-    r"""Apply a complex Fourier-fit coefficient to a reference variable.
+    r"""
+    Apply a fitted first-harmonic amplitude ratio and phase difference to x.
 
-    Estimates the fitted target variable from a reference variable using the
-    amplitude ratio and phase difference returned by `get_fit_coef_complex`.
-    The transformation is
+    The coefficients returned by get_fit_coef_complex define
+        $\beta = \Gamma \exp(-i\Phi)$,
 
-    $$
-    \hat{y}(t) = A_{\beta} x(t + \Delta \phi),
-    $$
+    where $\Gamma = A_y / A_x$ and $\Phi = \phi_y - \phi_x$.
 
-    where $A_{\beta}$ is the fitted amplitude ratio and $\Delta \phi$ is the
-    fitted phase difference. The phase shift is applied using
-    `get_var_shift`.
+    The fitted time series is constructed by scaling and shifting x:
+        $\hat{y}(t) = \Gamma x(t - \tau)$,
+
+    where $\tau = T\Phi / (2\pi)$ and $T$ is the period of x.
+    A positive coef_phase therefore delays x.
 
     Args:
-        x: Reference variable to which the fitted complex coefficient is
-            applied.
-        coef_amp: Amplitude component of the fitted complex coefficient,
-            typically the first output of `get_fit_coef_complex`.
-        coef_phase: Phase component of the fitted complex coefficient in
-            radians, typically the second output of `get_fit_coef_complex`.
+        x: One-dimensional reference time series, sampled uniformly over
+            one complete period without a repeated endpoint.
+        coef_amp: Amplitude ratio $\Gamma$, typically the first output of
+            get_fit_coef_complex. May be signed.
+        coef_phase: Phase difference $\Phi = \phi_y - \phi_x$, in radians,
+            typically the second output of get_fit_coef_complex.
 
     Returns:
-        Estimated target variable, with the same shape as `x`.
+        Fitted time series with the same shape as x.
 
     Notes:
-        This operation applies the complex relationship
+        The operation reproduces the fitted first-harmonic relationship,
+        subject to interpolation accuracy.
 
-        $$
-        \hat{y} \approx \beta x,
-        \qquad
-        \beta = A_{\beta} e^{i \Delta \phi}.
-        $$
-
-        The sign convention for `coef_phase` follows `get_var_shift`.
+        It also scales the mean and shifts all higher harmonics by the
+        same time displacement. These additional transformations are
+        not determined by the first-harmonic fit.
     """
     if x.ndim != 1:
         raise ValueError("`x` must be a 1D array.")

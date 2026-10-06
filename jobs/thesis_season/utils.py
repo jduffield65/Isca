@@ -215,7 +215,7 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
                          empirical_lambda_const: bool = False,
                          include_params: Optional[List] = None,
                          exclude_params: Optional[List] = None,
-                         include_olr_surf_cont: bool = True) -> dict:
+                         include_olr_surf_cont: bool = False) -> dict:
     r"""Fit empirical parameters for the seasonal surface--atmosphere model.
 
     The fitted parameters correspond to the coupled surface and atmospheric
@@ -225,27 +225,24 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
     C_s \frac{\partial T_s}{\partial t}
     = (1 - \alpha)(1 - \xi)F(t)
     + \lambda(T_a - T_s)
-    - \Lambda\left[1 + i\phi_a\right]T_a,
+    - \lambda_a\exp(-i\phi_a)T_a,
     $$
 
     $$
-    C_a\left[\beta_{\mathrm{col}} + \mu
-    - i\beta_{\mathrm{col}}\phi_{\mathrm{col}}\right]
+    C_a\left[\beta_{\mathrm{col}}\exp(-i\phi_{\mathrm{col}}) + \mu \right]
     \frac{\partial T_a}{\partial t}
     = \xi F(t)
     + \lambda(T_s - T_a)
-    + \Lambda\left[1 + i\phi_a\right]T_a
-    - B\left[1 - i\phi_{\mathrm{olr}}\right]
+    + \lambda_a\exp(-i\phi_a)T_a
+    - B\exp(-i\phi_{\mathrm{olr}})
     (T_a - \chi_{\mathrm{olr}}T_s)
-    - \lambda_{\mathrm{adv}}\left[1 - i\phi_{\mathrm{adv}}\right]T_a.
+    - \lambda_{\mathrm{adv}}\exp(-i\phi_{\mathrm{adv}})T_a.
     $$
 
     The atmospheric heat-capacity correction is represented by $\mu$, while
     $\beta_{\mathrm{col}}$ and $\phi_{\mathrm{col}}$ account for amplitude
     and phase differences between column-mean and near-surface atmospheric
-    temperature tendencies. If `include_phase_lh` is `True`, the latent-heat
-    contribution to $\Lambda$ may lag atmospheric temperature, producing the
-    combined phase coefficient $\phi_a$.
+    temperature tendencies.
 
     Args:
         ds: Processed dataset containing time-varying surface and atmospheric
@@ -408,7 +405,7 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
         params['lambda_const_lw'] = get_sensitivity_lw_surf(ds_use.temp_surf, 0, 0)['temp_surf']
 
         flux_t_resid = ds.flux_t - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm, params['lambda_const_sh'])
-        params['lambda_a_sh'] = get_fit_complex_xr(-ds.temp_atm, flux_t_resid)[0]
+        params['lambda_a_sh'] = get_fit_complex_xr(-ds.temp_atm, flux_t_resid)[0]       # sign is so lambda_a_sh is positive
         flux_lw_resid = ds.lwup_sfc - ds.lwdn_sfc - apply_linear_zero_mean_xr(ds.temp_surf - ds.temp_atm,
                                                                               params['lambda_const_lw'])
         params['lambda_a_lw'] = get_fit_complex_xr(ds.temp_atm, flux_lw_resid)[0]
