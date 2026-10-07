@@ -10,7 +10,7 @@ from isca_tools.utils.base import mass_weighted_vertical_integral, validate_para
 from isca_tools.utils.fourier import coef_conversion
 from isca_tools.utils.moist_physics import sphum_sat
 from isca_tools.utils.numerical import get_var_shift
-from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_atmospheric_heating
+from isca_tools.utils.radiation import get_heat_capacity, opd_lw_gray, frierson_atmospheric_heating, get_frierson_sw_abs
 from isca_tools import load_dataset, load_namelist
 from isca_tools.utils.constants import c_p_ocean, rho_ocean, c_p, L_v, g, Stefan_Boltzmann
 from isca_tools.utils.xarray import wrap_with_apply_ufunc, select_coord_window
@@ -133,7 +133,10 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     ds = get_annual_zonal_mean(ds, smooth_n_days=smooth_n_days, smooth_time=smooth_time)
     ds['p_eff'] = get_p_eff(ds.p_surf.mean(dim='time'))
     ds['temp_col_sphum'] = get_temp_from_sphum_sat_xr(ds.sphum_col / ds.rh_col, ds.p_eff)
-    ds['sw_abs'] = get_sw_abs_amp_xr(ds.swdn_sfc, ds.swdn_toa, ds.time, albedo=ds.albedo)
+    ds['sw_abs_harmonic'] = get_sw_abs_amp_xr(ds.swdn_sfc, ds.swdn_toa, ds.time, albedo=ds.albedo)
+    ds['sw_abs_analytic'] = get_frierson_sw_abs(ds.atm_abs, ds.p_surf.mean(dim='time'), p_ref=ds.p_ref, albedo=ds.albedo)
+    ds['sw_abs'] = ds['sw_abs_analytic']        # use analytic one as simpler, even though difference if p_surf not constant
+                                                # p_surf smaller in summer so sw_abs_analytic > sw_abs_harmonic
 
     # Atmospheric energy budget components: mse_tend = flux + adv
     ds['mse_tend_atmos'] = spline_deriv_periodic_xr(ds.time * day_seconds,
