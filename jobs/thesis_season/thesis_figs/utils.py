@@ -23,6 +23,7 @@ from isca_tools.utils.xarray import wrap_with_apply_ufunc, update_dim_slice, rai
     periodic_rolling_mean
 from isca_tools import load_namelist, load_dataset
 from jobs.theory_lapse.cesm.thesis_figs.scripts.utils import convert_ds_of_dicts
+from jobs.thesis_season.publish_figs.load import get_annual_zonal_mean
 
 # Plotting info
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
@@ -189,76 +190,6 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', reduced_evap: bool = False, 
     ds['temp_rad'] = get_temp_rad(ds.lwdn_sfc, ds.odp_surf)
     ds['temp_diseqb_r'] = ds.temp_atm - ds.temp_rad
     return ds
-
-
-def get_annual_zonal_mean(ds, combine_abs_lat=False, lat_name='lat', smooth_n_days=smooth_n_days,
-                          smooth_center=True, keep_attrs: bool = True,
-                          smooth_time: Literal['start', 'end'] = 'end'):
-    """Compute annual-mean zonal mean, optionally combining ±latitudes.
-
-    This function:
-    1) Computes the annual mean via `annual_mean(ds)`,
-    2) Takes the zonal mean over longitude,
-    3) Optionally averages fields at latitudes with the same absolute value
-       (e.g., $(+30^\circ)$ and $(-30^\circ)$) using a groupby on $(|\mathrm{lat}|)$,
-    4) Resets the time coordinate to start at 0 (integer years since the first).
-
-    Args:
-        ds: An xarray Dataset or DataArray with dimensions including `lon` and
-            typically `time` and `lat`.
-        combine_abs_lat: If True, combine values at +lat and -lat by averaging
-            them together into a single latitude coordinate \(|\mathrm{lat}|\).
-            The equator (0) remains unchanged. Defaults to False.
-        lat_name: Name of the latitude dimension/coordinate. Defaults to 'lat'.
-        smooth_n_days: Optional integer window length for time smoothing (in
-            number of time steps, e.g. days). If None or <= 1, no smoothing.
-        smooth_center: If True, use a centered window for smoothing.
-        keep_attrs: Optional boolean flag for keeping attributes. Defaults to True.
-        smooth_time: If 'start', will do smoothing before taking annual mean, otherwise will do it after.
-            Get more smoothed result if do at the end.
-
-    Returns:
-        An xarray Dataset or DataArray containing the annual-mean zonal mean.
-        If `combine_abs_lat` is True, the latitude coordinate will be nonnegative
-        and sorted (e.g., 0, 30, 60, ...).
-
-    Raises:
-        ValueError: If `combine_abs_lat` is True but `lat_name` is not a
-            dimension of the input after zonal averaging.
-    """
-    attrs = ds.attrs.copy()
-    if 'lon' in ds.dims:
-        ds = ds.mean(dim='lon')
-    else:
-        print('no lon dimension')
-    if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'start'):
-        ds = ds.rolling(time=int(smooth_n_days), center=smooth_center).mean()
-    ds_av = annual_mean(ds)
-    # ds_av = annual_mean(ds.mean(dim='lon'))           # order does not matter, I checked gives same result
-
-    if combine_abs_lat:
-        if lat_name not in ds_av.dims:
-            raise ValueError(f"Expected latitude dim '{lat_name}' in {ds_av.dims}")
-
-        abs_lat = ds_av[lat_name].astype(float).copy()
-        ds_av = (
-            ds_av.assign_coords(abs_lat=abs_lat.abs())
-            .groupby('abs_lat')
-            .mean(dim=lat_name)
-            .rename({'abs_lat': lat_name})
-            .sortby(lat_name)
-        )
-
-    ds_av = ds_av.assign_coords(time=(ds_av.time - ds_av.time.min()).astype(int))
-    if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'end'):
-        ds_av = periodic_rolling_mean(ds_av, int(smooth_n_days), 'time')
-    for key in ds:
-        # Get rid of time dimension of variables that dont have time dimension initially
-        if 'time' not in ds[key].dims:
-            ds_av[key] = ds_av[key].isel(time=0)
-    if keep_attrs:
-        ds_av.attrs = attrs
-    return ds_av
 
 
 get_fourier_fit_xr = wrap_with_apply_ufunc(fourier.get_fourier_fit, input_core_dims=[['time'], ['time']],

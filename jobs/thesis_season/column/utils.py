@@ -4,6 +4,7 @@ import inspect
 from typing import Union, Literal, Optional, Tuple, List, Callable
 import scipy.optimize
 
+from isca_tools.thesis.season_annual_harmonic import get_phase_amp
 from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_rad_atm, reconstruct_lh, reconstruct_sh, \
     reconstruct_lw_atm, \
     name_square, name_nl, get_latent_heat, get_sensible_heat, get_lw_atm, get_sensitivity_lh, \
@@ -26,7 +27,6 @@ from jobs.thesis_season.thesis_figs.utils import get_annual_zonal_mean, month_ti
 var_keep = ['temp', 't_surf', 'swdn_sfc', 'lwup_sfc', 'lwdn_sfc',
             'flux_lhe', 'flux_t', 'q_surf', 'ps', 'q_surf', 'w_atm', 'q_atm', 'olr']
 exp_dir = lambda x: f'thesis_season/column/depth={x}/fix_rh'
-
 
 
 
@@ -155,62 +155,6 @@ def load_ds(depth: Literal[5, 20, 'both'] = 'both', var_keep: List = var_keep,
     ds['temp_rad_atm'] = get_temp_rad_atm(ds.olr, ds.temp_surf, ds.odp_surf)
     ds['temp_diseqb_atm'] = ds.temp_atm - ds.temp_rad_atm
     return ds
-
-
-def get_phase_amp(coef_sw_amp: xr.DataArray, omega: float, heat_cap_eff: Optional[xr.DataArray]=None,
-                  lambda_eff: Optional[xr.DataArray]=None, coef_phase: Optional[xr.DataArray]=None,
-                  coef_amp: Optional[xr.DataArray]=None) -> Tuple[xr.DataArray, xr.DataArray]:
-    r"""Convert between harmonic temperature response and energy-budget parameters.
-
-    Uses the linear surface energy budget:
-        C_eff * dT'/dt = Q'_SW - lambda_eff * T'
-
-    The forcing and steady periodic temperature response are defined as:
-        Q'_SW(t) = coef_sw_amp * cos(omega * t)
-        T'(t) = coef_amp * cos(omega * t - coef_phase)
-
-    Positive coef_phase denotes a temperature lag relative to the forcing.
-    Positive lambda_eff denotes damping.
-
-    Args:
-        coef_sw_amp: First-harmonic amplitude of absorbed shortwave forcing
-            [W m^-2].
-        omega: Angular frequency [rad s^-1], equal to 2*pi / period.
-        heat_cap_eff: Effective heat capacity per unit area [J m^-2 K^-1].
-            Supply with lambda_eff to calculate temperature phase and amplitude.
-        lambda_eff: Effective linear damping coefficient [W m^-2 K^-1].
-            Supply with heat_cap_eff.
-        coef_phase: First-harmonic temperature phase lag relative to the
-            shortwave forcing [rad]. Supply with coef_amp to infer effective
-            heat capacity and damping.
-        coef_amp: First-harmonic temperature amplitude [K]. Supply with
-            coef_phase.
-
-    Returns:
-        A tuple of DataArrays containing either:
-            (coef_phase, coef_amp), when heat_cap_eff and lambda_eff are supplied.
-            (heat_cap_eff, lambda_eff), when coef_phase and coef_amp are supplied.
-
-    Raises:
-        ValueError: If neither complete input pair is supplied, or if inputs
-            from both pairs are supplied.
-
-    Notes:
-        Assumes time-independent coefficients and a steady periodic response.
-        Phase is relative to the forcing, not an absolute calendar phase.
-        The corresponding time lag is coef_phase / omega.
-        Inversion requires nonzero omega and coef_amp.
-    """
-    if (coef_phase is None) and (coef_amp is None):
-        coef_phase = np.arctan2(omega * heat_cap_eff, lambda_eff)
-        coef_amp = coef_sw_amp / np.sqrt(omega ** 2 * heat_cap_eff ** 2 + lambda_eff ** 2)
-        return coef_phase, coef_amp
-    elif (lambda_eff is None) and (heat_cap_eff is None):
-        heat_cap_eff = np.sin(coef_phase) / omega / (coef_amp/coef_sw_amp)
-        lambda_eff = coef_sw_amp * np.cos(coef_phase) / coef_amp
-        return heat_cap_eff, lambda_eff
-    else:
-        raise ValueError('Incorrect arguments for get_phase_amp')
 
 
 def get_flux(ds: xr.Dataset, flux_name: Literal['lh', 'sh', 'lw_atm', 'lw_surf'] = 'lh',

@@ -1,6 +1,7 @@
 from typing import Optional, Callable, Any, Sequence, Literal, Union
 import xarray as xr
 import numpy as np
+from functools import wraps
 
 
 def print_ds_var_list(ds: xr.Dataset, phrase: Optional[str] = None) -> None:
@@ -200,6 +201,7 @@ def wrap_with_apply_ufunc(
         A callable that behaves like ``func`` but operates on xarray objects.
     """
 
+    @wraps(func)        # copy docstrings etc
     def wrapped(*args: Any, **kwargs: Any):
         # Default: one empty core-dim list for each input argument
         if input_core_dims is None:
