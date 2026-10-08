@@ -21,11 +21,13 @@ from .xr_funcs import get_sw_abs_amp_xr, get_temp_from_sphum_sat_xr, spline_deri
 save_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'processed_data')
 complevel = 4
 
+
 var_keep = ['temp', 'ps', 'sphum', 'olr', 'swdn_toa', 'swdn_sfc', 'lwdn_sfc', 'lwup_sfc', 'flux_t',
             'flux_lhe', 't_surf', 'precipitation', 'convflag']  # just the fluxes, no variables
 lat_target = 43
 smooth_n_days = 49  # default smoothing window in days
 day_seconds = 86400
+width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
 
 
 def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
@@ -306,6 +308,7 @@ def get_annual_zonal_mean(ds: xr.Dataset, combine_abs_lat: bool = False, lat_nam
 
 def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
                 var_keep: List = var_keep, verbose: bool = False,
+                sw_abs_method: Literal['analytic', 'harmonic'] = 'harmonic',
                 save: bool = False) -> xr.Dataset:
     """Load and process an experiment across its optical-depth simulations.
 
@@ -322,6 +325,9 @@ def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
             directly to `load_ds`.
         verbose: Whether to display progress for column calculations within
             `load_ds`. The progress bar over simulations is always shown.
+        sw_abs_method: Method for computing shortwave absorption. 'analytic' means the theoretical value,
+            'harmonic' means that computed from annual harmonic of insolation and surface shortwave.
+            Should be the same for single column simulations, but will differ if surface pressure varies with time.
         save: Whether to save newly processed data as a compressed NetCDF4
             file. Does not control whether an existing cached file is loaded.
 
@@ -393,4 +399,5 @@ def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
                          encoding={var: {"zlib": True, "complevel": complevel} for var in
                                    ds.data_vars})
             print(f"Processed dataset save at:\n{out_path}")
+    ds['sw_abs'] = ds[f"sw_abs_{sw_abs_method}"]
     return ds
