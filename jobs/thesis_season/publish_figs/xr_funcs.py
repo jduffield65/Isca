@@ -242,3 +242,4 @@ fourier_series_xr = wrap_with_apply_ufunc(
     fourier.fourier_series,
     input_core_dims=[['time'], ['harmonic'], ['harmonic']],
     output_core_dims=[['time']])
+
