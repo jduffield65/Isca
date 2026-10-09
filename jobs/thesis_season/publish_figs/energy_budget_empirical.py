@@ -7,6 +7,7 @@ from isca_tools.thesis.surface_flux_taylor_2layer import get_sensitivity_lh, \
     get_sensitivity_sh, get_sensitivity_lw_surf
 from isca_tools.utils.base import validate_params
 from isca_tools.utils.constants import L_v, c_p, g
+from isca_tools.utils.numerical import sum_complex
 from .xr_funcs import apply_linear_zero_mean_xr, apply_fit_complex_xr, get_fit_complex_xr, spline_deriv_periodic_xr
 from .load import day_seconds
 
@@ -481,3 +482,32 @@ Union[float, np.ndarray, xr.DataArray]]:
     y_eff = y_eff0 * sw_effect_y
 
     return lambda_const * y_eff, lambda_const * x_s_eff / omega
+
+
+def mse_tend_params_decompose(temp_atm: xr.DataArray, temp_col: xr.DataArray, sphum_col: xr.DataArray,
+                              p_integ_calc: xr.DataArray, time: xr.DataArray,
+                              dry_phase: bool = False, moist_phase: bool = False)->Tuple[dict, dict]:
+    # Decompose dry beta and coef_phase_col parameters
+    amp_coef = {'dry': {}, 'moist': {}}
+    phase_coef = {'dry': {}, 'moist': {}}
+    amp_coef['dry']['base'], phase_coef['dry']['base'] = get_fit_complex_xr(temp_atm, temp_col, time, dry_phase)
+    amp_coef['dry']['p'], phase_coef['dry']['p'] = get_fit_complex_xr(temp_atm, p_integ_calc, time)
+    amp_coef['dry']['p'] *= temp_col.mean(dim='time')/p_integ_calc.mean(dim='time')
+    var = (temp_col-temp_col.mean(dim='time')) * (p_integ_calc/p_integ_calc.mean(dim='time')-1)
+    amp_coef['dry']['nl'], phase_coef['dry']['nl'] = get_fit_complex_xr(temp_atm, var, time, dry_phase)
+    amp_coef['dry']['total'], phase_coef['dry']['total'] = sum_complex(
+        (amp_coef['dry']['base'], phase_coef['dry']['base']),
+        (amp_coef['dry']['p'], phase_coef['dry']['p']), (amp_coef['dry']['nl'], phase_coef['dry']['nl']))
+
+    # Decompose moist mu and coef_phase_mu parameters
+    amp_coef['moist']['base'], phase_coef['moist']['base'] = get_fit_complex_xr(temp_atm, sphum_col, time, moist_phase)
+    amp_coef['moist']['base'] *= L_v / c_p
+    amp_coef['moist']['p'], phase_coef['moist']['p'] = get_fit_complex_xr(temp_atm, p_integ_calc, time)
+    amp_coef['moist']['p'] *= sphum_col.mean(dim='time') * L_v / c_p / p_integ_calc.mean(dim='time')
+    var = (sphum_col-sphum_col.mean(dim='time')) * (p_integ_calc/p_integ_calc.mean(dim='time')-1)
+    amp_coef['moist']['nl'], phase_coef['moist']['nl'] = get_fit_complex_xr(temp_atm, var, time)
+    amp_coef['moist']['nl'] *= L_v / c_p
+    amp_coef['moist']['total'], phase_coef['moist']['total'] = sum_complex(
+        (amp_coef['moist']['base'], phase_coef['moist']['base']),
+        (amp_coef['moist']['p'], phase_coef['moist']['p']), (amp_coef['moist']['nl'], phase_coef['moist']['nl']))
+    return amp_coef, phase_coef

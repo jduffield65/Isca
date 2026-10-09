@@ -1021,3 +1021,47 @@ def apply_fit_complex(x: np.ndarray, coef_amp: float, coef_phase: float) -> np.n
     # I.e., get_var_shift does not require the Fourier coefficient.
     x_shift = get_var_shift(x, shift_phase=coef_phase/(2*np.pi), time=np.arange(x.size))
     return coef_amp * x_shift
+
+import numpy as np
+
+
+def sum_complex(*amp_phase_pairs):
+    """Sum contributions expressed as amplitude * exp(-1j * phase).
+
+    So returned is reconstructed as
+    `z_combined = amp_combined * np.exp(-1j * phase_combined)`.
+
+    Args:
+        *amp_phase_pairs: Any number of (amplitude, phase) pairs.
+            Amplitudes must be nonnegative and phases must be in radians.
+            Values may be scalars, NumPy arrays, or xarray DataArrays.
+            Arrays must be broadcast-compatible. xarray inputs are aligned
+            by their dimension names and coordinate labels.
+
+    Returns:
+        tuple: (amplitude, phase) of the sum, with nonnegative amplitude
+            and phase in radians in [-pi, pi]. The sum is represented as
+            amplitude * exp(-1j * phase). For xarray inputs, both outputs
+            retain xarray dimensions and coordinates.
+
+            Phase is undefined wherever the combined amplitude is zero.
+
+    Raises:
+        ValueError: If no amplitude-phase pairs are provided.
+
+    Examples:
+        >>> amplitude, phase = sum_complex(
+        ...     (2.0, 0.0),
+        ...     (1.0, np.pi / 2),
+        ...     (0.5, np.pi),
+        ... )
+    """
+    if not amp_phase_pairs:
+        raise ValueError("Provide at least one (amplitude, phase) pair.")
+
+    z = sum(
+        amplitude * np.exp(-1j * phase)
+        for amplitude, phase in amp_phase_pairs
+    )
+
+    return np.abs(z), -np.arctan2(z.imag, z.real)

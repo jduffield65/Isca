@@ -19,7 +19,7 @@ def get_phase_amp(coef_sw_amp: xr.DataArray, omega: float, heat_cap_eff: Optiona
     Positive lambda_eff denotes damping.
 
     Args:
-        coef_sw_amp: First-harmonic amplitude of absorbed shortwave forcing
+        coef_sw_amp: First-harmonic amplitude of absorbed surface shortwave forcing
             [W m^-2].
         omega: Angular frequency [rad s^-1], equal to 2*pi / period.
         heat_cap_eff: Effective heat capacity per unit area [J m^-2 K^-1].
