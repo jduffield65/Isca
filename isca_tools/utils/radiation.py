@@ -129,10 +129,11 @@ def frierson_atmospheric_heating(ds: Dataset, albedo: float = 0) -> xr.DataArray
     return flux_surf - flux_toa
 
 
-def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.DataArray] = None,
+def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[Union[np.ndarray, xr.DataArray]] = None,
                         sw_diff: float = 0, solar_exponent: float = 4, p_ref: float = 101325,
-                        swdn_sfc: Optional[xr.DataArray] = None, swdn_toa: Optional[xr.DataArray] = None,
-                        albedo: float = 0) -> xr.DataArray:
+                        swdn_sfc: Optional[Union[np.ndarray, xr.DataArray]] = None,
+                        swdn_toa: Optional[Union[np.ndarray, xr.DataArray]] = None,
+                        albedo: float = 0) -> Union[np.ndarray, xr.DataArray]:
     r"""Calculates the fraction of incoming shortwave radiation absorbed by the atmosphere.
 
     Calculates atmospheric shortwave absorption either from supplied downward
@@ -151,8 +152,9 @@ def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.Dat
             shortwave optical depth. This is the name in Isca namelist.
         p_ref: Reference pressure for the optical-depth parameterization, in
             Pa.
-        swdn_sfc: Downward shortwave flux at the surface.
-        swdn_toa: Downward shortwave flux at the top of the atmosphere.
+        swdn_sfc: Downward shortwave flux at the surface, $F_{\mathrm{sfc}}$.
+            Note this is the shortwave absorbed by the surface i.e., (1-albedo) * incident.
+        swdn_toa: Downward shortwave flux at the top of the atmosphere i.e., insolation.
         albedo: Surface albedo used to infer atmospheric absorption from the
             fluxes.
 
@@ -181,11 +183,12 @@ def get_frierson_sw_abs(atm_abs: Optional[float] = None, p_surf: Optional[xr.Dat
     """
     if (swdn_sfc is not None) and (swdn_toa is not None):
         # I think this method may have problems with diurnal cycle if using daily average data
-        sw_abs = 1 - swdn_sfc / swdn_toa / (1 - albedo)
+        swdn_sfc_incident = swdn_sfc / (1-albedo)
+        return get_sw_abs(swdn_sfc_incident, swdn_toa, albedo=albedo, absorb_down_only=True)
     else:
         odp_sw = frierson_sw_optical_depth(p_surf, atm_abs, sw_diff, solar_exponent, p_ref)
         sw_abs = 1 - np.exp(-odp_sw)  # fraction of sw absorbed
-    return sw_abs
+        return sw_abs
 
 def get_sw_abs_amp(swdn_sfc: np.ndarray, swdn_toa: np.ndarray, time: np.ndarray, albedo: float) -> float:
     r"""Compute the atmospheric shortwave absorption from annual-harmonic amplitudes.
@@ -226,6 +229,79 @@ def get_sw_abs_amp(swdn_sfc: np.ndarray, swdn_toa: np.ndarray, time: np.ndarray,
     amp_toa = get_fourier_coef(time, swdn_toa, 1, pos_amp=True)[0]
     sw_abs = 1 - amp_sfc / amp_toa / (1 - albedo)
     return sw_abs
+
+def get_sw_abs(swdn_sfc_incident: Union[np.ndarray, xr.DataArray], swdn_toa: Union[np.ndarray, xr.DataArray],
+               swup_sfc: Optional[Union[np.ndarray, xr.DataArray]]=None,
+               swup_toa: Optional[Union[np.ndarray, xr.DataArray]]=None,
+               albedo: Optional[float]=None, absorb_down_only: bool=False) -> Union[np.ndarray, xr.DataArray]:
+    """
+    Calculate the fraction of incoming TOA shortwave radiation absorbed
+    by the atmosphere.
+
+    All fluxes must use the same units and be supplied as positive magnitudes
+    in their indicated directions. Inputs must have broadcast-compatible shapes.
+
+    Args:
+        swdn_sfc_incident: Downward shortwave radiation approaching the surface.
+        swdn_toa: Downward shortwave radiation at the top of the atmosphere
+            (TOA), i.e., incoming insolation.
+        swup_sfc: Upward shortwave radiation at the surface. If omitted,
+            calculated as `albedo * swdn_sfc`.
+        swup_toa: Upward shortwave radiation at TOA. If omitted and
+            `absorb_down_only=True`, set equal to `swup_sfc`.
+        albedo: Surface shortwave albedo, used to infer `swup_sfc` when
+            it is omitted. Ignored if `swup_sfc` is supplied.
+        absorb_down_only: If True, assume `swup_toa = swup_sfc`, so there
+            is no net atmospheric modification of upward shortwave flux.
+            This represents downward-only absorption in a model without
+            atmospheric shortwave reflection. Under this assumption, the
+            fraction absorbed is `1 - swdn_sfc / swdn_toa`.
+            Supplied upward fluxes must agree within `np.allclose` tolerances.
+
+    Returns:
+        Elementwise fraction of incoming TOA insolation absorbed by the
+        atmosphere.
+
+    Raises:
+        ValueError: If both `swup_sfc` and `albedo` are omitted; if
+            `swup_toa` is omitted with `absorb_down_only=False`; or if
+            upward fluxes differ with `absorb_down_only=True`.
+    """
+    if swup_sfc is None:
+        if albedo is not None:
+            swup_sfc = albedo * swdn_sfc_incident
+        else:
+            raise ValueError(
+                "Provide either swup_sfc or albedo to determine the "
+                "upward shortwave radiation at the surface."
+            )
+    if swup_toa is None:
+        if absorb_down_only:
+            swup_toa = swup_sfc
+        else:
+            raise ValueError(
+                "Provide swup_toa when absorb_down_only=False."
+            )
+
+    if absorb_down_only and not np.allclose(swup_toa, swup_sfc):
+        raise ValueError(
+            "swup_toa and swup_sfc must be equal within np.allclose "
+            "tolerances when absorb_down_only=True."
+        )
+
+    # Net shortwave radiation absorbed by the atmosphere and surface together.
+    absorb_atmos_and_sfc = swdn_toa - swup_toa
+
+    # Net shortwave radiation absorbed by the surface.
+    absorb_sfc = swdn_sfc_incident - swup_sfc
+
+    # Atmospheric absorption is TOA net flux minus surface net flux.
+    absorb_atmos = absorb_atmos_and_sfc - absorb_sfc
+
+    # Normalize by incoming insolation, not total absorbed solar radiation.
+    # If swup_toa == swup_sfc, this reduces to 1 - swdn_sfc / swdn_toa.
+    return absorb_atmos / swdn_toa
+
 
 def get_heat_capacity(c_p: float, density: float, layer_depth: float, return_depth: bool = False) -> float:
     """

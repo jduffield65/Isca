@@ -5,16 +5,11 @@ import xarray as xr
 from typing import Optional, Tuple
 from isca_tools.thesis.surface_flux_taylor_2layer import get_temp_from_sphum_sat
 import isca_tools.utils.numerical as numerical
-from isca_tools.utils.radiation import get_sw_abs_amp
+from isca_tools.utils.radiation import get_sw_abs
 import isca_tools.utils.fourier as fourier
 from isca_tools.utils.xarray import wrap_with_apply_ufunc
 
 # Physical variable functions
-get_sw_abs_amp_xr = wrap_with_apply_ufunc(
-    get_sw_abs_amp,
-    input_core_dims=[['time'], ['time'], ['time']],
-    output_core_dims=[[]])
-
 get_temp_from_sphum_sat_xr = wrap_with_apply_ufunc(
     get_temp_from_sphum_sat,
     input_core_dims=[[], []],

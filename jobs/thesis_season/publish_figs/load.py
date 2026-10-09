@@ -14,7 +14,7 @@ from isca_tools import load_dataset, load_namelist
 from isca_tools.utils.constants import c_p_ocean, rho_ocean, c_p, L_v, g
 from isca_tools.utils.xarray import select_coord_window, periodic_rolling_mean
 from isca_tools.utils import annual_mean
-from .xr_funcs import get_sw_abs_amp_xr, get_temp_from_sphum_sat_xr, spline_deriv_periodic_xr, get_fourier_fit_xr
+from .xr_funcs import get_temp_from_sphum_sat_xr, spline_deriv_periodic_xr, get_fourier_fit_xr
 
 
 # Info for saving directories
@@ -210,10 +210,10 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     ds = get_annual_zonal_mean(ds, smooth_n_days=smooth_n_days, smooth_time=smooth_time)
     ds['p_eff'] = get_p_eff(ds.p_surf.mean(dim='time'))
     ds['temp_col_sphum'] = get_temp_from_sphum_sat_xr(ds.sphum_col / ds.rh_col, ds.p_eff)
-    ds['sw_abs_harmonic'] = get_sw_abs_amp_xr(ds.swdn_sfc, ds.swdn_toa, ds.time, albedo=ds.albedo)
-    ds['sw_abs_analytic'] = get_frierson_sw_abs(ds.atm_abs, ds.p_surf.mean(dim='time'), p_ref=ds.p_ref,
+    # Both are arrays, one value for all time steps
+    ds['sw_abs_direct'] = get_frierson_sw_abs(swdn_sfc=ds.swdn_sfc, swdn_toa=ds.swdn_toa, albedo=ds.albedo)
+    ds['sw_abs_analytic'] = get_frierson_sw_abs(ds.atm_abs, ds.p_surf, p_ref=ds.p_ref,
                                                 albedo=ds.albedo)
-    ds['sw_abs'] = ds['sw_abs_analytic']  # use analytic one as simpler, even though difference if p_surf not constant
     # p_surf smaller in summer so sw_abs_analytic > sw_abs_harmonic
 
     # Atmospheric energy budget components: mse_tend = flux + adv
@@ -306,7 +306,7 @@ def get_annual_zonal_mean(ds: xr.Dataset, combine_abs_lat: bool = False, lat_nam
     if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'end'):
         ds_av = periodic_rolling_mean(ds_av, int(smooth_n_days), 'time')
     for key in ds:
-        # Get rid of time dimension of variables that dont have time dimension initially
+        # Get rid of time dimension of variables that don't have time dimension initially
         if 'time' not in ds[key].dims:
             ds_av[key] = ds_av[key].isel(time=0)
     if keep_attrs:
@@ -316,7 +316,7 @@ def get_annual_zonal_mean(ds: xr.Dataset, combine_abs_lat: bool = False, lat_nam
 
 def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
                 var_keep: List = var_keep, verbose: bool = False,
-                sw_abs_method: Literal['analytic', 'harmonic'] = 'harmonic',
+                sw_abs_method: Literal['analytic', 'direct'] = 'analytic',
                 save: bool = False) -> xr.Dataset:
     """Load and process an experiment across its optical-depth simulations.
 
@@ -334,8 +334,10 @@ def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
         verbose: Whether to display progress for column calculations within
             `load_ds`. The progress bar over simulations is always shown.
         sw_abs_method: Method for computing shortwave absorption. 'analytic' means the theoretical value,
-            'harmonic' means that computed from annual harmonic of insolation and surface shortwave.
-            Should be the same for single column simulations, but will differ if surface pressure varies with time.
+            'direct' means that computed from TOA and Surface shortwave radiation directly.
+            To get a single value, we take the mean over time.
+            Should be the same, is exactly for single column and basically the same if surface
+            pressure varies with time.
         save: Whether to save newly processed data as a compressed NetCDF4
             file. Does not control whether an existing cached file is loaded.
 
@@ -372,7 +374,7 @@ def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
     out_path = os.path.join(save_dir, f"ds_{exp_name}.nc")
     if os.path.exists(out_path):
         ds = xr.load_dataset(out_path)
-        ds['sw_abs'] = ds[f"sw_abs_{sw_abs_method}"]
+        ds['sw_abs'] = ds[f"sw_abs_{sw_abs_method}"].mean(dim='time')
         print(f"Loaded dataset from:\n{out_path}")
         return ds
 
@@ -408,5 +410,5 @@ def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',
                          encoding={var: {"zlib": True, "complevel": complevel} for var in
                                    ds.data_vars})
             print(f"Processed dataset save at:\n{out_path}")
-    ds['sw_abs'] = ds[f"sw_abs_{sw_abs_method}"]
+    ds['sw_abs'] = ds[f"sw_abs_{sw_abs_method}"].mean(dim='time')
     return ds
