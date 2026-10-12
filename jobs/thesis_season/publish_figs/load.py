@@ -67,6 +67,8 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
             `lat_max`.
         n_lat: Latitude-window parameter passed to `select_coord_window`
             when `lat_target` is provided.
+        keep_pfull_dim: If `False`, `ds` will also have `temp`, `sphum`, and `lev_sigma
+            on model levels (`pfull` dimension).
 
     Returns:
         Dataset containing the selected data at the lowest model level,
@@ -144,28 +146,31 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
                                  tau_pole=odp_info['ir_tau_pole'], frac_linear=odp_info['linear_tau'],
                                  k_exponent=odp_info['wv_exponent'])  # optical depth as function of latitude
 
-    # Get column quantities - very important to use simpson integral method
+    # Get column quantities - very important to use simpson integral method over sigma coordinates
+    # Norm = True hence why units turn out as correct
     if verbose:
         pbar = tqdm(total=3, desc="Computing column temp, sphum, and rh")
     p_lev = ds.ps * ds.lev_sigma
-    ds['temp_col'] = mass_weighted_vertical_integral(ds.temp, p_lev, 'pfull', simpson_method=True)
+    ds['temp_col'] = mass_weighted_vertical_integral(ds.temp, ds.lev_sigma, 'pfull', simpson_method=True)
     if verbose:
         pbar.update()
-    ds['sphum_col'] = mass_weighted_vertical_integral(ds.sphum, p_lev, 'pfull', simpson_method=True)
+    ds['sphum_col'] = mass_weighted_vertical_integral(ds.sphum, ds.lev_sigma, 'pfull', simpson_method=True)
     if verbose:
         pbar.update()
     ds['rh_col'] = ds['sphum_col'] / mass_weighted_vertical_integral(sphum_sat(ds.temp, p_lev),
-                                                                     p_lev, 'pfull', simpson_method=True)
+                                                                     ds.lev_sigma, 'pfull', simpson_method=True)
     if verbose:
         pbar.update()
 
-    # Only keep the lowest model level
-    ds = ds.sel(pfull=np.inf, method='nearest')
     ds['p_integ_calc'] = ds.ps * (sigma_levels_full[-1] - sigma_levels_full[0])  # keep track of p range for integration
 
-    # Rename temp vars to used in surface flux functions
-    ds = ds.rename_vars({'temp': 'temp_atm', 't_surf': 'temp_surf', 'ps': 'p_surf',
-                         'lev_sigma': 'sigma_atm', 'sphum': 'q_atm'})
+    ds = ds.rename_vars({'t_surf': 'temp_surf', 'ps': 'p_surf'})
+
+    # Rename lowest model lev variables - lev variables kept though as require for MSE tendency computation
+    ds['temp_atm'] = ds.temp.sel(pfull=np.inf, method='nearest')
+    ds['q_atm'] = ds.sphum.sel(pfull=np.inf, method='nearest')
+    ds['sigma_atm'] = ds.lev_sigma.sel(pfull=np.inf, method='nearest')
+
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_surf * ds.sigma_atm)
     ds['precip_minus_evap'] = ds.precipitation - ds.flux_lhe / L_v
     return ds
@@ -217,10 +222,18 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     # p_surf smaller in summer so sw_abs_analytic > sw_abs_harmonic
 
     # Atmospheric energy budget components: mse_tend = flux + adv
-    ds['mse_tend_atmos'] = spline_deriv_periodic_xr(ds.time * day_seconds,
-                                                    (c_p * ds.temp_col + L_v * ds.sphum_col) * ds.p_integ_calc / g)
-    ds['sphum_col_tend'] = spline_deriv_periodic_xr(ds.time * day_seconds,
-                                                    ds.sphum_col * ds.p_integ_calc / g)
+    # Do direct integral of a derivative, so correct order according to donohoe 2013
+    mse_tend_lev = spline_deriv_periodic_xr(ds.time * day_seconds,
+                                            (c_p * ds.temp + L_v * ds.sphum))
+    ds['mse_tend_atmos'] = mass_weighted_vertical_integral(mse_tend_lev, ds.lev_sigma, 'pfull',
+                                                           simpson_method=True, norm=False) * ds.p_surf
+    sphum_tend_lev = spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum)
+    ds['sphum_col_tend'] = mass_weighted_vertical_integral(sphum_tend_lev, ds.lev_sigma, 'pfull',
+                                                           simpson_method=True, norm=False) * ds.p_surf
+    # ds['mse_tend_atmos'] = spline_deriv_periodic_xr(ds.time * day_seconds,            # Old - wrong order of deriv
+    #                                                 (c_p * ds.temp_col + L_v * ds.sphum_col) * ds.p_integ_calc / g)
+    # ds['sphum_col_tend'] = spline_deriv_periodic_xr(ds.time * day_seconds,            # Old - wrong order of deriv
+    #                                                 ds.sphum_col * ds.p_integ_calc / g)
     ds['flux_atmos'] = frierson_atmospheric_heating(ds, ds.albedo) + ds.flux_t + ds.flux_lhe
     ds['adv_atmos'] = ds['mse_tend_atmos'] - ds['flux_atmos']
     # Advection term such that adv_atmos_moist + L_v(E-P) equals moisture component of MSE tendency
