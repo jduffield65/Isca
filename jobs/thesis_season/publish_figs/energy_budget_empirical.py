@@ -157,7 +157,7 @@ def get_approx_mse_tend(temp_atm: xr.DataArray, coef_amp_col: xr.DataArray,
     return c_a * (temp_col_tend + sphum_tend)
 
 
-def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
+def get_empirical_params(ds: xr.Dataset,
                          include_params: Optional[List] = None,
                          exclude_params: Optional[List] = None) -> dict:
     r"""Fit empirical parameters for the seasonal surface--atmosphere model.
@@ -193,10 +193,6 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
             turbulent and radiative fluxes, outgoing longwave radiation, and
             atmospheric advection. It must have been processed by
             `process_ds`.
-        const_p: If `True`, fit $\mu$, $\beta_{\mathrm{col}}$, and
-            $\phi_{\mathrm{col}}$ without accounting for seasonal variation
-            in the atmospheric pressure integral. If `False`, pressure-weight
-            column quantities are used before fitting.
         include_params: Optional list of parameter names to fit and return.
             Parameters not included are set to their default values: zero for
             most coefficients and one for `coef_amp_col`. Specifying a
@@ -283,31 +279,24 @@ def get_empirical_params(ds: xr.Dataset, const_p: bool = False,
         include_params = [x for x in include_params if x not in exclude_params]
 
     params = {}
-    if const_p:
-        # mu accounts for atmospheric heat capacity dependence on sphum
-        params['mu'], params['coef_phase_mu'] = \
-            get_fit_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col))
-        params['mu'] *= L_v / c_p
-        params['coef_amp_col_sphum'] = get_fit_complex_xr(ds.temp_atm, ds.temp_col_sphum)[0]
-        # Account for column mean temp differing from lowest model level
-        params['coef_amp_col'], params['coef_phase_col'] = \
-            get_fit_complex_xr(ds.temp_atm, ds.temp_col, ds.time, 'coef_phase_col' in include_params)
-    else:
-        params['mu'], params['coef_phase_mu'] = \
-            get_fit_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col * ds.p_integ_calc)
-                               )
-        params['mu'] *= L_v / c_p / ds.p_integ_calc.mean(dim='time')
-        params['coef_amp_col_sphum'] = get_fit_complex_xr(
-            spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-            spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col_sphum * ds.p_integ_calc))[0]
-        params['coef_amp_col_sphum'] /= ds.p_integ_calc.mean(dim='time')
-        params['coef_amp_col'], params['coef_phase_col'] = \
-            get_fit_complex_xr(spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm),
-                               spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col * ds.p_integ_calc),
-                               ds.time, 'coef_phase_col' in include_params)
-        params['coef_amp_col'] /= ds.p_integ_calc.mean(dim='time')
+    # Fitting directly
+    params['mu'], params['coef_phase_mu'] = get_fit_complex_xr(ds.temp_atm, ds.sphum_col, ds.time,
+                                                               'coef_phase_mu' in include_params)
+    params['mu'] *= L_v / c_p
+    params['coef_amp_col_sphum'] = get_fit_complex_xr(ds.temp_atm, ds.temp_col_sphum)[0]
+    params['coef_amp_col'], params['coef_phase_col'] = \
+        get_fit_complex_xr(ds.temp_atm, ds.temp_col, ds.time, 'coef_phase_col' in include_params)
+
+    # Fitting from tendencies - makes little difference and more complicated
+    # temp_atm_tend = spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_atm)
+    # params['mu'], params['coef_phase_mu'] = \
+    #     get_fit_complex_xr(temp_atm_tend, spline_deriv_periodic_xr(ds.time * day_seconds, ds.sphum_col), ds.time,
+    #                        'coef_phase_mu' in include_params)
+    # params['mu'] *= L_v / c_p
+    # params['coef_amp_col_sphum'] = get_fit_complex_xr(ds.temp_atm, ds.temp_col_sphum)[0]
+    # params['coef_amp_col'], params['coef_phase_col'] = \
+    #     get_fit_complex_xr(temp_atm_tend, spline_deriv_periodic_xr(ds.time * day_seconds, ds.temp_col), ds.time,
+    #                        'coef_phase_col' in include_params)
 
     # LH, SH, LW params
     # dont need RH for this
@@ -482,32 +471,3 @@ Union[float, np.ndarray, xr.DataArray]]:
     y_eff = y_eff0 * sw_effect_y
 
     return lambda_const * y_eff, lambda_const * x_s_eff / omega
-
-
-def mse_tend_params_decompose(temp_atm: xr.DataArray, temp_col: xr.DataArray, sphum_col: xr.DataArray,
-                              p_integ_calc: xr.DataArray, time: xr.DataArray,
-                              dry_phase: bool = False, moist_phase: bool = False)->Tuple[dict, dict]:
-    # Decompose dry beta and coef_phase_col parameters
-    amp_coef = {'dry': {}, 'moist': {}}
-    phase_coef = {'dry': {}, 'moist': {}}
-    amp_coef['dry']['base'], phase_coef['dry']['base'] = get_fit_complex_xr(temp_atm, temp_col, time, dry_phase)
-    amp_coef['dry']['p'], phase_coef['dry']['p'] = get_fit_complex_xr(temp_atm, p_integ_calc, time)
-    amp_coef['dry']['p'] *= temp_col.mean(dim='time')/p_integ_calc.mean(dim='time')
-    var = (temp_col-temp_col.mean(dim='time')) * (p_integ_calc/p_integ_calc.mean(dim='time')-1)
-    amp_coef['dry']['nl'], phase_coef['dry']['nl'] = get_fit_complex_xr(temp_atm, var, time, dry_phase)
-    amp_coef['dry']['total'], phase_coef['dry']['total'] = sum_complex(
-        (amp_coef['dry']['base'], phase_coef['dry']['base']),
-        (amp_coef['dry']['p'], phase_coef['dry']['p']), (amp_coef['dry']['nl'], phase_coef['dry']['nl']))
-
-    # Decompose moist mu and coef_phase_mu parameters
-    amp_coef['moist']['base'], phase_coef['moist']['base'] = get_fit_complex_xr(temp_atm, sphum_col, time, moist_phase)
-    amp_coef['moist']['base'] *= L_v / c_p
-    amp_coef['moist']['p'], phase_coef['moist']['p'] = get_fit_complex_xr(temp_atm, p_integ_calc, time)
-    amp_coef['moist']['p'] *= sphum_col.mean(dim='time') * L_v / c_p / p_integ_calc.mean(dim='time')
-    var = (sphum_col-sphum_col.mean(dim='time')) * (p_integ_calc/p_integ_calc.mean(dim='time')-1)
-    amp_coef['moist']['nl'], phase_coef['moist']['nl'] = get_fit_complex_xr(temp_atm, var, time)
-    amp_coef['moist']['nl'] *= L_v / c_p
-    amp_coef['moist']['total'], phase_coef['moist']['total'] = sum_complex(
-        (amp_coef['moist']['base'], phase_coef['moist']['base']),
-        (amp_coef['moist']['p'], phase_coef['moist']['p']), (amp_coef['moist']['nl'], phase_coef['moist']['nl']))
-    return amp_coef, phase_coef
