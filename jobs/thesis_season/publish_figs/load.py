@@ -35,7 +35,7 @@ label_temp = r'Mean surface temperature, $\overline{T}_s$ [K]'
 params_all = ['lambda_const', 'B', 'coef_phase_olr', 'lambda_a', 'coef_phase_a', 'lambda_adv', 'coef_phase_adv',
               'mu', 'sw_abs', 'coef_amp_col', 'coef_phase_col', 'coef_phase_mu']  # Order matters for error.ipynb figures
 exclude_params = {'advect': ['coef_phase_adv', 'coef_phase_mu'],
-                  'column': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu']}
+                  'base': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu']}
 
 
 def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,

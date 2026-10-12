@@ -148,6 +148,7 @@
 
 &column_grid_nml
     lat_value = 43.25                      ! The single latitude to run model at
+/
 
 &column_init_cond_nml
     initial_temperature = 264           ! initial atmospheric temperature
