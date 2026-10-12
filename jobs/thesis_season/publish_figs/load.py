@@ -210,6 +210,7 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     flux_t_norm = get_sensible_heat(ds.temp_surf, ds.temp_atm, 1, 1, ds.p_surf,
                                     ds.p_surf * ds.sigma_atm)
     # take av over time as want single value for each sim/location - median to avoid outliers.
+    # Should be approx equal to w_atm * drag_const
     ds['wind_drag_av'] = (ds.flux_t / flux_t_norm).median(dim='time')
 
     ds = get_annual_zonal_mean(ds, smooth_n_days=smooth_n_days, smooth_time=smooth_time)
