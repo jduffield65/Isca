@@ -127,6 +127,13 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
     ds['lev_sigma'] = (ds.pfull * 0 + sigma_levels_full).squeeze()
     ds.attrs['albedo'] = namelist['mixed_layer_nml']['albedo_value']
     ds.attrs['depth'] = namelist['mixed_layer_nml']['depth']
+    ds.attrs['drag_const'] = namelist['surface_flux_nml']['drag_const']
+    if 'w_atm_const' in namelist['surface_flux_nml']:
+        ds.attrs['w_atm'] = namelist['surface_flux_nml']['w_atm_const']
+    elif 'column_init_cond_nml' in namelist:
+        ds.attrs['w_atm'] = namelist['column_init_cond_nml']['surface_wind']
+    else:
+        raise ValueError('Neither w_atm nor w_atm_const defined')
     try:
         # Ref pressure used for optical depth calculations
         ds.attrs['p_ref'] = namelist['constants_nml']['pstd_mks']
