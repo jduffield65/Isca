@@ -6,7 +6,7 @@ from isca_tools.thesis.surface_energy_budget_2layer2 import combine_amplitude_ph
 from isca_tools.thesis.surface_flux_taylor_2layer import get_sensitivity_lh, \
     get_sensitivity_sh, get_sensitivity_lw_surf
 from isca_tools.utils.base import validate_params
-from isca_tools.utils.constants import L_v, c_p, g
+from isca_tools.utils.constants import L_v, c_p, g, Stefan_Boltzmann
 from isca_tools.utils.numerical import sum_complex
 from .xr_funcs import apply_linear_zero_mean_xr, apply_fit_complex_xr, get_fit_complex_xr, spline_deriv_periodic_xr
 from .load import day_seconds
@@ -350,6 +350,80 @@ def get_empirical_params(ds: xr.Dataset,
             params[key] *= 0
             if key == 'coef_amp_col':
                 params[key] += 1  # default value for this param is 1
+    return params
+
+def get_analytic_params(ds: xr.Dataset, odp_ref: float = 1.5, alpha: float=0.07) -> dict:
+    r"""Estimate a subset of the seasonal-model parameters analytically.
+
+    Unlike `get_empirical_params`, which fits each coefficient directly to the
+    corresponding budget term, these parameters are computed from the
+    linearised physical formulae for the fluxes (bulk latent heat flux,
+    Stefan--Boltzmann OLR and Clausius--Clapeyron scaling of humidity). The
+    only quantities fitted from the data are the amplitude and phase of the
+    seasonal relationship between atmospheric temperature and the
+    intermediate variables (relative humidity and OLR brightness temperature).
+    The results can be compared with the empirical values to test how well
+    the simple physical arguments explain the fitted parameters.
+
+    Args:
+        ds: Processed dataset containing time-varying surface and atmospheric
+            temperatures, relative humidity, outgoing longwave radiation,
+            surface optical depth, column specific humidity, surface
+            pressure, wind drag and atmospheric sigma level. It must have
+            been processed by `process_ds`.
+        odp_ref: Reference longwave optical depth at which the OLR sensitivity
+            is evaluated. It must be a value in the `odp` coordinate of `ds`.
+        alpha: Fractional change in saturation specific humidity per kelvin
+            (the Clausius--Clapeyron parameter, approximately 0.07 K^{-1}).
+            Used for the moisture heat-capacity correction, `mu`.
+
+    Returns:
+        Dictionary containing the analytic parameters:
+
+        - `coef_amp_rh`: Amplitude of the relative-humidity seasonal cycle
+          per unit atmospheric temperature.
+        - `coef_phase_rh`: Phase correction of the relative-humidity response
+          to atmospheric temperature.
+        - `lambda_a_lh`: Amplitude of the atmospheric-temperature-dependent
+          latent-heat-flux contribution, combining the direct temperature
+          dependence and the relative-humidity response.
+        - `coef_phase_a_lh`: Phase correction of the combined `lambda_a_lh`
+          term.
+        - `coef_phase_olr`: Phase correction for the atmospheric outgoing
+          longwave-radiation contribution.
+        - `B`: Amplitude of the atmospheric contribution to outgoing
+          longwave radiation. Sensitivity evaluated at `odp_ref` so
+          only variation with `odp` is from fitting the radiative temperature
+          to the lowest model level temperature.
+        - `mu`: Moisture-related correction to atmospheric heat capacity,
+          assuming constant relative humidity.
+    """
+    params = {}
+    ds_av = ds.mean(dim='time')
+
+
+    # LH contribution to lambda_a
+    lambda_const_lh = get_sensitivity_lh(ds_av.temp_surf, ds_av.temp_atm, 0, ds_av.wind_drag_av, 1,
+                                         ds_av.p_surf, ds_av.sigma_atm)['temp_surf'] # same as empirical above
+    sens_lh = get_sensitivity_lh(ds_av.temp_surf, ds_av.temp_atm, ds_av.rh_atm, ds_av.wind_drag_av, 1,
+                                 ds_av.p_surf, ds_av.sigma_atm)
+    params['coef_amp_rh'], params['coef_phase_rh'] = \
+        get_fit_complex_xr(ds.temp_atm, ds.rh_atm, ds.time, True)
+    params['lambda_a_lh'], params['coef_phase_a_lh'] = \
+        sum_complex((lambda_const_lh, 0), (sens_lh['temp_atm'], 0),
+                    (sens_lh['rh_atm'] * params['coef_amp_rh'], params['coef_phase_rh']))
+
+    # OLR feedback param, B
+    emiss_factor = 1 - np.exp(-ds.odp_surf)
+    temp_olr = (ds.olr / (Stefan_Boltzmann * emiss_factor)) ** 0.25
+    coef_amp_temp_olr, params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, temp_olr, ds.time,
+                                                                                     True)
+    params['B'] = (4 * Stefan_Boltzmann * emiss_factor * temp_olr.mean(dim='time') ** 3
+                   ).sel(odp=odp_ref) * coef_amp_temp_olr        # only thing that varies with odp is coef_amp_temp_olr
+
+    # Moist MSE tendency - assumes constant column RH with warming
+    # Also take a reference value of clausius clapeyron parameter except for
+    params['mu'] = L_v/c_p * alpha * ds_av.sphum_col
     return params
 
 

@@ -29,6 +29,7 @@ smooth_n_days = 49  # default smoothing window in days
 day_seconds = 86400
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
 label_temp = r'Mean surface temperature, $\overline{T}_s$ [K]'
+unit_lambda = r'Wm$^{-2}$K$^{-1}$'
 
 # Params required for empirical fit, and those not fit for advect and single column simulations
 # Note sw_abs is not fit empirically so unlikely to change with warming
