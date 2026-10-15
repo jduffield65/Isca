@@ -6,7 +6,8 @@ from isca_tools.thesis.surface_energy_budget_2layer2 import combine_amplitude_ph
 from isca_tools.thesis.surface_flux_taylor_2layer import get_sensitivity_lh, \
     get_sensitivity_sh, get_sensitivity_lw_surf
 from isca_tools.utils.base import validate_params
-from isca_tools.utils.constants import L_v, c_p, g, Stefan_Boltzmann
+from isca_tools.utils.constants import L_v, c_p, g, Stefan_Boltzmann, R_v
+from isca_tools.utils.moist_physics import clausius_clapeyron_factor
 from isca_tools.utils.numerical import sum_complex
 from .xr_funcs import apply_linear_zero_mean_xr, apply_fit_complex_xr, get_fit_complex_xr, spline_deriv_periodic_xr
 from .load import day_seconds
@@ -423,6 +424,7 @@ def get_analytic_params(ds: xr.Dataset, odp_ref: float = 1.5, alpha: float=0.07)
 
     # Moist MSE tendency - assumes constant column RH with warming
     # Also take a reference value of clausius clapeyron parameter except for
+    alpha = L_v/R_v/ds_av.temp_atm**2
     params['mu'] = L_v/c_p * alpha * ds_av.sphum_col
     return params
 

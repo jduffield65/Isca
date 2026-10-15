@@ -257,7 +257,7 @@ def isel_float(var: xr.DataArray, ind_float: xr.DataArray, dim='lev') -> xr.Data
     )
 
     # now do the "fractional isel" via interp along lev
-    return var.interp(lev=lev_k)
+    return var.interp({dim:lev_k})
 
 
 def update_dim_slice(obj: Union[xr.DataArray, xr.Dataset], dim: str, dim_val,
