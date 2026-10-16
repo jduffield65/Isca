@@ -339,13 +339,14 @@ def get_empirical_params(ds: xr.Dataset,
     params['B'], params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, ds.olr, ds.time,
                                                                'coef_phase_olr' in include_params)
 
-    # Advection params
+    # Advection params - note all adv_atmos terms are positive for divergence: quantitiy leaving column
+    # They are subtracted from RHS of energy budget if tendency on LHS.
     params['lambda_adv'], params['coef_phase_adv'] = \
-        get_fit_complex_xr(-ds.temp_atm, ds.adv_atmos, ds.time, 'coef_phase_adv' in include_params)
+        get_fit_complex_xr(ds.temp_atm, ds.adv_atmos, ds.time, 'coef_phase_adv' in include_params)
     params['lambda_adv_dry'], params['coef_phase_adv_dry'] = \
-        get_fit_complex_xr(-ds.temp_atm, ds.adv_atmos_dry, ds.time, 'coef_phase_adv' in include_params)
+        get_fit_complex_xr(ds.temp_atm, ds.adv_atmos_dry, ds.time, 'coef_phase_adv' in include_params)
     params['lambda_adv_moist'], params['coef_phase_adv_moist'] = \
-        get_fit_complex_xr(-ds.temp_atm, ds.adv_atmos_moist, ds.time, 'coef_phase_adv' in include_params)
+        get_fit_complex_xr(ds.temp_atm, ds.adv_atmos_moist, ds.time, 'coef_phase_adv' in include_params)
     for key in _allowed_params:
         if key not in include_params:
             params[key] *= 0

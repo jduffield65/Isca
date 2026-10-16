@@ -245,9 +245,10 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     # ds['sphum_col_tend'] = spline_deriv_periodic_xr(ds.time * day_seconds,            # Old - wrong order of deriv
     #                                                 ds.sphum_col * ds.p_integ_calc / g)
     ds['flux_atmos'] = frierson_atmospheric_heating(ds, ds.albedo) + ds.flux_t + ds.flux_lhe
-    ds['adv_atmos'] = ds['mse_tend_atmos'] - ds['flux_atmos']
+    # Note that adv_atmos is positive for divergence, so it is subtracted from RHS of atmospheric energy budget
+    ds['adv_atmos'] = ds['flux_atmos'] - ds['mse_tend_atmos']
     # Advection term such that adv_atmos_moist + L_v(E-P) equals moisture component of MSE tendency
-    ds['adv_atmos_moist'] = L_v * (ds['sphum_col_tend'] + ds['precip_minus_evap'])
+    ds['adv_atmos_moist'] = -L_v * (ds['sphum_col_tend'] + ds['precip_minus_evap'])
     ds['adv_atmos_dry'] = ds['adv_atmos'] - ds['adv_atmos_moist']
 
     # Surface fluxes excluding SW
