@@ -390,6 +390,8 @@ def get_analytic_params(ds: xr.Dataset, odp_ref: float = 1.5, alpha: float=0.07)
           dependence and the relative-humidity response.
         - `coef_phase_a_lh`: Phase correction of the combined `lambda_a_lh`
           term.
+        - `coef_amp_temp_olr`: Amplitude of OLR radiative temperature relative to
+          near-surface.
         - `coef_phase_olr`: Phase correction for the atmospheric outgoing
           longwave-radiation contribution.
         - `B`: Amplitude of the atmospheric contribution to outgoing
@@ -417,10 +419,10 @@ def get_analytic_params(ds: xr.Dataset, odp_ref: float = 1.5, alpha: float=0.07)
     # OLR feedback param, B
     emiss_factor = 1 - np.exp(-ds.odp_surf)
     temp_olr = (ds.olr / (Stefan_Boltzmann * emiss_factor)) ** 0.25
-    coef_amp_temp_olr, params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, temp_olr, ds.time,
+    params['coef_amp_temp_olr'], params['coef_phase_olr'] = get_fit_complex_xr(ds.temp_atm, temp_olr, ds.time,
                                                                                      True)
     params['B'] = (4 * Stefan_Boltzmann * emiss_factor * temp_olr.mean(dim='time') ** 3
-                   ).sel(odp=odp_ref) * coef_amp_temp_olr        # only thing that varies with odp is coef_amp_temp_olr
+                   ).sel(odp=odp_ref) * params['coef_amp_temp_olr']    # only thing that varies with odp is coef_amp_temp_olr
 
     # Moist MSE tendency - assumes constant column RH with warming
     # Also take a reference value of clausius clapeyron parameter except for
