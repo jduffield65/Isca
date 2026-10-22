@@ -37,7 +37,8 @@ label_simulations = {'base': 'SCM', 'advect': 'GCM'}
 params_all = ['lambda_const', 'B', 'coef_phase_olr', 'lambda_a', 'coef_phase_a', 'lambda_adv', 'coef_phase_adv',
               'mu', 'sw_abs', 'coef_amp_col', 'coef_phase_col', 'coef_phase_mu']  # Order matters for error.ipynb figures
 exclude_params = {'advect': ['coef_phase_adv', 'coef_phase_mu'],
-                  'base': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu']}
+                  'base': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu'],
+                  'dry': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu', 'mu']}
 
 
 def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
@@ -124,6 +125,13 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
 
     # Load info from namelist and add to attributes
     namelist = load_namelist(exp_path)
+    if not namelist['mixed_layer_nml']['evaporation']:
+        ds['flux_lhe'] = ds.flux_lhe * 0        # if no evaporation, then no latent heat
+        ds.attrs['evap_prefactor'] = 0
+    elif 'land_evap_prefactor' in namelist['surface_flux_nml']:
+        ds.attrs['evap_prefactor'] = namelist['surface_flux_nml']['land_evap_prefactor']
+    else:
+        ds.attrs['evap_prefactor'] = 1
     sigma_levels_half = np.asarray(namelist['vert_coordinate_nml']['bk'])
     sigma_levels_full = np.convolve(sigma_levels_half, np.ones(2) / 2, 'valid')
     ds['lev_sigma'] = (ds.pfull * 0 + sigma_levels_full).squeeze()

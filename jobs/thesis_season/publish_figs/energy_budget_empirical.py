@@ -302,8 +302,12 @@ def get_empirical_params(ds: xr.Dataset,
     # LH, SH, LW params
     # dont need RH for this
     ds_use = ds.mean(dim='time')
-    params['lambda_const_lh'] = get_sensitivity_lh(ds_use.temp_surf, ds_use.temp_atm, 0, ds_use.wind_drag_av, 1,
-                                                   ds_use.p_surf, ds_use.sigma_atm)['temp_surf']
+    if 'evap_prefactor' in ds.attrs:
+        evap_prefactor = ds.attrs['evap_prefactor']
+    else:
+        evap_prefactor = 1
+    params['lambda_const_lh'] = get_sensitivity_lh(ds_use.temp_surf, ds_use.temp_atm, 0, ds_use.wind_drag_av,
+                                                   1, ds_use.p_surf, ds_use.sigma_atm, evap_prefactor)['temp_surf']
     params['lambda_const_sh'] = get_sensitivity_sh(ds_use.temp_surf, ds_use.temp_atm, ds_use.wind_drag_av, 1,
                                                    ds_use.p_surf, ds_use.sigma_atm)['temp_surf']
     # dont need radiative temp for this
@@ -573,7 +577,8 @@ def get_heat_cap_lambda_eff(mu: Union[float, np.ndarray, xr.DataArray],
                             albedo: Union[float, np.ndarray, xr.DataArray] = 0,
                             n_year_days: int = 360,
                             day_seconds: int = 86400,
-                            infinite_lambda_approx: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+                            infinite_lambda_approx: bool = False,
+                            no_phase_approx: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
 Union[float, np.ndarray, xr.DataArray], dict]:
     r"""Calculate effective surface feedback and heat capacity for the two-layer model.
 
@@ -622,6 +627,7 @@ Union[float, np.ndarray, xr.DataArray], dict]:
             forcing frequency.
         day_seconds: Number of seconds per day.
         infinite_lambda_approx: In this case, a simplified version of the theory is used.
+        no_phase_approx: Set all phase parameters to zero.
 
     Returns:
         lambda_eff: Effective surface feedback, $\lambda_{\mathrm{eff}}$.
@@ -632,6 +638,12 @@ Union[float, np.ndarray, xr.DataArray], dict]:
         `day_seconds` may be scalars, NumPy arrays, or `xarray.DataArray`
         objects. The returned values retain compatible array dimensions.
     """
+    if infinite_lambda_approx or no_phase_approx:
+        # In infinite lambda approx, also set all phase params to zero
+        coef_phase_olr = coef_phase_olr * 0
+        coef_phase_a = coef_phase_a * 0
+        coef_phase_adv = coef_phase_adv * 0
+        coef_phase_col = coef_phase_col * 0
     f = 1 / (n_year_days * day_seconds)
     omega = 2 * np.pi * f
     heat_cap_atmos_dry = c_p * pressure_heat_cap_atmos_calc / g
@@ -665,15 +677,17 @@ Union[float, np.ndarray, xr.DataArray], dict]:
     sw_abs_factor_full = (1 + sw_abs_mod * (1 - Lambda_r_dim + 1j * Lambda_i_dim)
                           * (y - 1j * x_a) / (x_a ** 2 + y ** 2)
                           )
-    # When the atmospheric heat capacity is squared, assume small compared to feedback parameter y term
+
     error = {'small_heat_cap_atmos': x_a**2/y**2 * 100,
              'sw_abs':  (np.abs(sw_abs_factor_full - sw_abs_factor)/
-                         np.abs(sw_abs_factor_full))*100}
+                         np.abs(sw_abs_factor_full))*100,
+             'b': (B+lambda_adv-lambda_a)/lambda_const*100, # Magnitude of b compared to lambda, neglect phase
+             'lambda_a': lambda_a/lambda_const*100}         # Magnitude of Lambda compared to lambda, neglect phase
 
     if infinite_lambda_approx:
         # Simple approximation
         # Multiply by zero first just so they have correct shape
         C_eff = C_eff * 0 + (heat_cap_surf + heat_cap_atmos_dry * (coef_amp_col + mu)) / (1 + sw_abs_mod)
-        lambda_eff = lambda_eff * 0 + B + lambda_adv / (1 + sw_abs_mod)
+        lambda_eff = lambda_eff * 0 + (B + lambda_adv) / (1 + sw_abs_mod)
 
     return lambda_eff, C_eff, error
