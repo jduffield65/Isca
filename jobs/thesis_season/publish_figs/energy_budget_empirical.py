@@ -432,6 +432,131 @@ def get_analytic_params(ds: xr.Dataset, odp_ref: float = 1.5, alpha: float=0.07)
     return params
 
 
+# def get_heat_cap_lambda_eff(mu: Union[float, np.ndarray, xr.DataArray],
+#                             lambda_const: Union[float, np.ndarray, xr.DataArray],
+#                             B: Union[float, np.ndarray, xr.DataArray],
+#                             lambda_a: Union[float, np.ndarray, xr.DataArray],
+#                             heat_cap_surf: Union[float, np.ndarray, xr.DataArray],
+#                             pressure_heat_cap_atmos_calc: float,
+#                             coef_amp_col: Union[float, np.ndarray, xr.DataArray] = 1,
+#                             coef_phase_col: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             coef_phase_olr: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             coef_phase_a: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             lambda_adv: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             coef_phase_adv: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             sw_abs: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             albedo: Union[float, np.ndarray, xr.DataArray] = 0,
+#                             n_year_days: int = 360,
+#                             day_seconds: int = 86400) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+# Union[float, np.ndarray, xr.DataArray]]:
+#     r"""Calculate effective surface feedback and heat capacity for the two-layer model.
+#
+#     Reduces the seasonally forced coupled surface--atmosphere model to an
+#     effective one-layer surface-temperature equation,
+#
+#     $$
+#     C_{\mathrm{eff}}\frac{\partial T_s}{\partial t}
+#     = (1 - \alpha)(1 - f)F(t) - \lambda_{\mathrm{eff}}T_s.
+#     $$
+#
+#     The calculation accounts for atmospheric heat storage, column-temperature and
+#     moisture corrections, surface--atmosphere coupling, outgoing longwave
+#     radiation, atmospheric advection, and atmospheric shortwave absorption.
+#     Complex amplitude--phase terms are combined at the annual frequency before
+#     deriving the real effective feedback $\lambda_{\mathrm{eff}}$ and heat
+#     capacity $C_{\mathrm{eff}}$.
+#
+#     Args:
+#         mu: Moisture-related correction to atmospheric heat capacity, $\mu$.
+#         lambda_const: Surface--atmosphere exchange coefficient multiplying
+#             $T_s - T_a$, $\lambda$.
+#         B: Amplitude of the atmospheric contribution to outgoing longwave
+#             radiation.
+#         lambda_a: Amplitude of the atmospheric-temperature-dependent
+#             surface-flux term, $\Lambda$.
+#         heat_cap_surf: Surface heat capacity, $C_s$.
+#         pressure_heat_cap_atmos_calc: Atmospheric pressure thickness used to
+#             calculate heat capacity, such that $C_a = c_p p / g$.
+#         coef_amp_col: Amplitude factor relating column-mean and near-surface
+#             atmospheric temperature tendencies, $\beta_{\mathrm{col}}$.
+#         coef_phase_col: Phase correction for the column-temperature tendency,
+#             $\phi_{\mathrm{col}}$.
+#         coef_phase_olr: Phase correction for the atmospheric outgoing-longwave
+#             radiation contribution, $\phi_{\mathrm{olr}}$.
+#         coef_phase_a: Phase correction for the combined
+#             atmospheric-temperature-dependent surface-flux term, $\phi_a$.
+#         lambda_adv: Amplitude of the atmospheric advection response,
+#             $\lambda_{\mathrm{adv}}$.
+#         coef_phase_adv: Phase correction for atmospheric advection,
+#             $\phi_{\mathrm{adv}}$.
+#         sw_abs: Fraction of top-of-atmosphere shortwave radiation absorbed by the
+#             atmosphere.
+#         albedo: Surface albedo, $\alpha$.
+#         n_year_days: Number of days in the model year used to define the annual
+#             forcing frequency.
+#         day_seconds: Number of seconds per day.
+#
+#     Returns:
+#         lambda_eff: Effective surface feedback, $\lambda_{\mathrm{eff}}$.
+#         heat_cap_eff: Effective surface heat capacity, $C_{\mathrm{eff}}$.
+#
+#     Notes:
+#         All inputs except `pressure_heat_cap_atmos_calc`, `n_year_days`, and
+#         `day_seconds` may be scalars, NumPy arrays, or `xarray.DataArray`
+#         objects. The returned values retain compatible array dimensions.
+#     """
+#     # Different way with everything dimensionless, and add advection
+#     f = 1 / (n_year_days * day_seconds)
+#     omega = 2 * np.pi * f
+#     heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
+#
+#     # Combine complex parameters in simple way
+#     # For coef_col just get real and imaginary parts: real is coef_amp_col * np.cos(coef_phase_col)
+#     # Imaginary is coef_amp_col * np.sin(coef_phase_col)
+#     coef_real_col, coef_imag_col = combine_amplitude_phase_factor([coef_amp_col], [coef_phase_col])
+#     coef_imag_col = coef_real_col * coef_imag_col
+#     # For b, sum up contributions from B, lambda_adv, lambda_a. Final form is b*(1-i*coef_phase_b)
+#     b, coef_phase_b = combine_amplitude_phase_factor([B, lambda_adv, -lambda_a],
+#                                                      [coef_phase_olr, coef_phase_adv, coef_phase_a])
+#
+#     # Make all parameters dimensionless by dividing by lambda_const
+#     x_a = omega * heat_cap_atmos / lambda_const
+#     x_s = omega * heat_cap_surf / lambda_const
+#     lambda_a = lambda_a / lambda_const
+#     b = b / lambda_const
+#
+#     # In between parameters useful for final answer
+#     x_a_mod = x_a * (coef_real_col + mu - b * coef_phase_b / x_a)
+#     y = 1 + b + x_a * coef_imag_col
+#     eta = (1 - lambda_a) / (x_a_mod ** 2 + y ** 2)
+#     # eta = (1 - lambda_a) / (y ** 2)         # atmos heat cap is small compared to feedback param
+#     eta_phase = lambda_a * coef_phase_a / (x_a_mod ** 2 + y ** 2)
+#
+#     # Heat cap and lambda with no sw_abs
+#     x_s_eff0 = x_s + eta * x_a_mod - eta_phase * y
+#     y_eff0 = 1 - (eta * y + eta_phase * x_a_mod)
+#
+#     # Account for sw_abs
+#     eta_phase = 0  # no more correction for the coef_phase_a parameter in simple approximation. Makes little diff
+#     sw_abs_mod = sw_abs * eta / (1 - albedo) / (1 - sw_abs)
+#     sw_abs_phase_mod = sw_abs * eta_phase / (1 - albedo) / (1 - sw_abs)
+#
+#     sw_effect_real = 1 - y * sw_abs_mod + (y ** 2 - x_a_mod ** 2) * sw_abs_mod ** 2 - x_a_mod * sw_abs_phase_mod
+#     sw_effect_imag = (sw_abs_mod - 2 * y * sw_abs_mod ** 2) * x_a_mod - y * sw_abs_phase_mod
+#     # Quick estimate - ignore imaginary component
+#     # sw_effect_imag = 0
+#     # sw_effect_real = 1/(1+y*sw_abs_mod)
+#
+#
+#     sw_effect_x = sw_effect_real + y_eff0 / x_s_eff0 * sw_effect_imag
+#     sw_effect_y = sw_effect_real - x_s_eff0 / y_eff0 * sw_effect_imag
+#
+#     x_s_eff = x_s_eff0 * sw_effect_x
+#     y_eff = y_eff0 * sw_effect_y
+#
+#     return lambda_const * y_eff, lambda_const * x_s_eff / omega
+
+
 def get_heat_cap_lambda_eff(mu: Union[float, np.ndarray, xr.DataArray],
                             lambda_const: Union[float, np.ndarray, xr.DataArray],
                             B: Union[float, np.ndarray, xr.DataArray],
@@ -447,8 +572,9 @@ def get_heat_cap_lambda_eff(mu: Union[float, np.ndarray, xr.DataArray],
                             sw_abs: Union[float, np.ndarray, xr.DataArray] = 0,
                             albedo: Union[float, np.ndarray, xr.DataArray] = 0,
                             n_year_days: int = 360,
-                            day_seconds: int = 86400) -> Tuple[Union[float, np.ndarray, xr.DataArray],
-Union[float, np.ndarray, xr.DataArray]]:
+                            day_seconds: int = 86400,
+                            infinite_lambda_approx: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+Union[float, np.ndarray, xr.DataArray], dict]:
     r"""Calculate effective surface feedback and heat capacity for the two-layer model.
 
     Reduces the seasonally forced coupled surface--atmosphere model to an
@@ -495,6 +621,7 @@ Union[float, np.ndarray, xr.DataArray]]:
         n_year_days: Number of days in the model year used to define the annual
             forcing frequency.
         day_seconds: Number of seconds per day.
+        infinite_lambda_approx: In this case, a simplified version of the theory is used.
 
     Returns:
         lambda_eff: Effective surface feedback, $\lambda_{\mathrm{eff}}$.
@@ -505,48 +632,48 @@ Union[float, np.ndarray, xr.DataArray]]:
         `day_seconds` may be scalars, NumPy arrays, or `xarray.DataArray`
         objects. The returned values retain compatible array dimensions.
     """
-    # Different way with everything dimensionless, and add advection
     f = 1 / (n_year_days * day_seconds)
     omega = 2 * np.pi * f
-    heat_cap_atmos = c_p * pressure_heat_cap_atmos_calc / g
+    heat_cap_atmos_dry = c_p * pressure_heat_cap_atmos_calc / g
 
-    # Combine complex parameters in simple way
-    # For coef_col just get real and imaginary parts: real is coef_amp_col * np.cos(coef_phase_col)
-    # Imaginary is coef_amp_col * np.sin(coef_phase_col)
-    coef_real_col, coef_imag_col = combine_amplitude_phase_factor([coef_amp_col], [coef_phase_col])
-    coef_imag_col = coef_real_col * coef_imag_col
-    # For b, sum up contributions from B, lambda_adv, lambda_a. Final form is b*(1-i*coef_phase_b)
-    b, coef_phase_b = combine_amplitude_phase_factor([B, lambda_adv, -lambda_a],
-                                                     [coef_phase_olr, coef_phase_adv, coef_phase_a])
+    # Split parameters into real and imaginary parts
+    beta_r = coef_amp_col * np.cos(coef_phase_col)
+    beta_i = coef_amp_col * np.sin(coef_phase_col)
+    Lambda_r = lambda_a * np.cos(coef_phase_a)
+    Lambda_i = lambda_a * np.sin(coef_phase_a)
+    b_r = B * np.cos(coef_phase_olr) + lambda_adv * np.cos(coef_phase_adv) - Lambda_r
+    b_i = B * np.sin(coef_phase_olr) + lambda_adv * np.sin(coef_phase_adv) - Lambda_i
 
-    # Make all parameters dimensionless by dividing by lambda_const
-    x_a = omega * heat_cap_atmos / lambda_const
-    x_s = omega * heat_cap_surf / lambda_const
-    lambda_a = lambda_a / lambda_const
-    b = b / lambda_const
+    # Get dimensionless parameters
+    C_s_dim = heat_cap_surf / lambda_const
+    Lambda_r_dim = Lambda_r / lambda_const
+    Lambda_i_dim = Lambda_i / lambda_const
+    b_r_dim = b_r / lambda_const
+    b_i_dim = b_i / lambda_const
+    C_a_dry_dim = heat_cap_atmos_dry / lambda_const
+    x_a = C_a_dry_dim * omega * (beta_r + mu) - b_i_dim
+    y = 1 + b_r_dim + omega * C_a_dry_dim * beta_i
+    sw_abs_mod = sw_abs / (1 - albedo) / (1 - sw_abs)
+    sw_abs_factor = 1 + sw_abs_mod * (1-Lambda_r_dim)/y
 
-    # In between parameters useful for final answer
-    x_a_mod = x_a * (coef_real_col + mu - b * coef_phase_b / x_a)
-    y = 1 + b + x_a * coef_imag_col
-    eta = (1 - lambda_a) / (x_a_mod ** 2 + y ** 2)
-    eta_phase = lambda_a * coef_phase_a / (x_a_mod ** 2 + y ** 2)
+    # Final equations for effective heat cap and feedback parameters
+    C_eff = lambda_const * (C_s_dim + ((1-Lambda_r_dim)*x_a - Lambda_i_dim*y)/(omega*y**2))/sw_abs_factor
+    lambda_eff = lambda_const * (1 - ((1-Lambda_r_dim)*y + Lambda_i_dim*x_a)/y**2)/sw_abs_factor
 
-    # Heat cap and lambda with no sw_abs
-    x_s_eff0 = x_s + eta * x_a_mod - eta_phase * y
-    eta_phase = 0  # no more correction for the coef_phase_a parameter in simple approximation. Makes little diff
-    y_eff0 = 1 - (eta * y + eta_phase * x_a_mod)
+    # Give relative Error of the approximations used in percentage terms
+    # Neglect imaginary and real cross term in sw_abs
+    sw_abs_factor_full = (1 + sw_abs_mod * (1 - Lambda_r_dim + 1j * Lambda_i_dim)
+                          * (y - 1j * x_a) / (x_a ** 2 + y ** 2)
+                          )
+    # When the atmospheric heat capacity is squared, assume small compared to feedback parameter y term
+    error = {'small_heat_cap_atmos': x_a**2/y**2 * 100,
+             'sw_abs':  (np.abs(sw_abs_factor_full - sw_abs_factor)/
+                         np.abs(sw_abs_factor_full))*100}
 
-    # Account for sw_abs
-    sw_abs_mod = sw_abs * eta / (1 - albedo) / (1 - sw_abs)
-    sw_abs_phase_mod = sw_abs * eta_phase / (1 - albedo) / (1 - sw_abs)
+    if infinite_lambda_approx:
+        # Simple approximation
+        # Multiply by zero first just so they have correct shape
+        C_eff = C_eff * 0 + (heat_cap_surf + heat_cap_atmos_dry * (coef_amp_col + mu)) / (1 + sw_abs_mod)
+        lambda_eff = lambda_eff * 0 + B + lambda_adv / (1 + sw_abs_mod)
 
-    sw_effect_real = 1 - y * sw_abs_mod + (y ** 2 - x_a_mod ** 2) * sw_abs_mod ** 2 - x_a_mod * sw_abs_phase_mod
-    sw_effect_imag = (sw_abs_mod - 2 * y * sw_abs_mod ** 2) * x_a_mod - y * sw_abs_phase_mod
-
-    sw_effect_x = sw_effect_real + y_eff0 / x_s_eff0 * sw_effect_imag
-    sw_effect_y = sw_effect_real - x_s_eff0 / y_eff0 * sw_effect_imag
-
-    x_s_eff = x_s_eff0 * sw_effect_x
-    y_eff = y_eff0 * sw_effect_y
-
-    return lambda_const * y_eff, lambda_const * x_s_eff / omega
+    return lambda_eff, C_eff, error
