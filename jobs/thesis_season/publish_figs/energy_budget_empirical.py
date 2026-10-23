@@ -578,7 +578,8 @@ def get_heat_cap_lambda_eff(mu: Union[float, np.ndarray, xr.DataArray],
                             n_year_days: int = 360,
                             day_seconds: int = 86400,
                             infinite_lambda_approx: bool = False,
-                            no_phase_approx: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
+                            no_phase_approx: bool = False,
+                            simple_lambda_a: bool = False) -> Tuple[Union[float, np.ndarray, xr.DataArray],
 Union[float, np.ndarray, xr.DataArray], dict]:
     r"""Calculate effective surface feedback and heat capacity for the two-layer model.
 
@@ -628,6 +629,7 @@ Union[float, np.ndarray, xr.DataArray], dict]:
         day_seconds: Number of seconds per day.
         infinite_lambda_approx: In this case, a simplified version of the theory is used.
         no_phase_approx: Set all phase parameters to zero.
+        simple_lambda_a: Same as infinite_lambda_approx, but with additional $\Lambda/\lambda$ contribution
 
     Returns:
         lambda_eff: Effective surface feedback, $\lambda_{\mathrm{eff}}$.
@@ -687,7 +689,11 @@ Union[float, np.ndarray, xr.DataArray], dict]:
     if infinite_lambda_approx:
         # Simple approximation
         # Multiply by zero first just so they have correct shape
-        C_eff = C_eff * 0 + (heat_cap_surf + heat_cap_atmos_dry * (coef_amp_col + mu)) / (1 + sw_abs_mod)
+        heat_cap_atmos = heat_cap_atmos_dry * (coef_amp_col + mu)
+        if simple_lambda_a:
+            sw_abs_mod = sw_abs_mod * (1-Lambda_r_dim)
+            heat_cap_atmos = heat_cap_atmos * (1-Lambda_r_dim)
+        C_eff = C_eff * 0 + (heat_cap_surf + heat_cap_atmos) / (1 + sw_abs_mod)
         lambda_eff = lambda_eff * 0 + (B + lambda_adv) / (1 + sw_abs_mod)
 
     return lambda_eff, C_eff, error

@@ -30,15 +30,31 @@ day_seconds = 86400
 width = {'one_col': 3.2, 'two_col': 5.5}  # width in inches
 label_temp = r'Mean surface temperature, $\overline{T}_s$ [K]'
 unit_lambda = r'Wm$^{-2}$K$^{-1}$'
-label_simulations = {'base': 'SCM', 'advect': 'GCM'}
+label_simulations = {'base': 'SCM', 'advect': 'GCM', 'dry': 'Dry', 'fix_rh': 'Fix RH', 'ocean': 'Ocean',
+                     'sw_abs_high': 'High SW abs', 'sw_abs_low': 'Low SW abs', 'wind_high': 'High Wind',
+                     'wind_low': 'Low Wind'}
+color_simulations = {
+    "base":        "k",
+    "advect":      "C3",        # green
+    "dry":         "C2",        # red
+    "fix_rh":      "#8C564B",   # dark brown
+    "ocean": "C0",              # blue
+    "sw_abs_high": "#D95F02",   # dark orange
+    "sw_abs_low":  "#FDB863",   # light orange
+    "wind_high":   "#6A3D9A",   # dark purple
+    "wind_low":    "#B2ABD2"    # light purple
+}
 
 # Params required for empirical fit, and those not fit for advect and single column simulations
 # Note sw_abs is not fit empirically so unlikely to change with warming
 params_all = ['lambda_const', 'B', 'coef_phase_olr', 'lambda_a', 'coef_phase_a', 'lambda_adv', 'coef_phase_adv',
               'mu', 'sw_abs', 'coef_amp_col', 'coef_phase_col', 'coef_phase_mu']  # Order matters for error.ipynb figures
-exclude_params = {'advect': ['coef_phase_adv', 'coef_phase_mu'],
-                  'base': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu'],
+exclude_params = {'base': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu'],
+                  'advect': ['coef_phase_adv', 'coef_phase_mu'],
                   'dry': ['lambda_adv', 'coef_phase_adv', 'coef_phase_mu', 'mu']}
+for key in ['fix_rh', 'ocean', 'sw_abs_high', 'sw_abs_low', 'wind_high', 'wind_low']:
+    exclude_params[key] = exclude_params['base'].copy()
+
 
 
 def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
@@ -189,6 +205,9 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
     ds['sigma_atm'] = ds.lev_sigma.sel(pfull=np.inf, method='nearest')
 
     ds['rh_atm'] = ds.q_atm / sphum_sat(ds.temp_atm, ds.p_surf * ds.sigma_atm)
+    if 'rh_flux_q' in namelist['surface_flux_nml']:
+        ds['rh_atm'] =  ds['rh_atm'] * 0 + namelist['surface_flux_nml']['rh_flux_q']
+        ds.attrs['rh_flux_q'] = namelist['surface_flux_nml']['rh_flux_q']
     ds['precip_minus_evap'] = ds.precipitation - ds.flux_lhe / L_v
     return ds
 
