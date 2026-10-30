@@ -7,8 +7,8 @@
 &experiment_details
    name = 'thesis_season/publish_exp/dry/k=2'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    input_dir = '/home/jamd1/Isca/jobs/thesis_season/publish_exp/dry/k=2'
-   n_months_total = 2         ! Total duration of simulation in months. Usual is 180, but made 2 outputs of 10 years
-   n_months_job = 2           ! Approximate duration of each job of the simulation in months.
+   n_months_total = 65         ! Total duration of simulation in months. Usual is 180, but made 2 outputs of 10 years
+   n_months_job = 65           ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
    n_cores = 1                  ! Number of cores for each node to run job on (Slurm info) - SINGLE COLUMN ONLY WORKS WITH 1 core

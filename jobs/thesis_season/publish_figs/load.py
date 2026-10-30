@@ -131,8 +131,13 @@ def load_ds(exp_name: str, exp_dir: str, var_keep: List = var_keep,
     # Will need to update later to add that required analytically such as
     # temp_col_sphum, temp_rad_surf, temp_rad_atm
     exp_path = os.path.join(exp_dir, exp_name)
+    namelist = load_namelist(exp_path)
+    if 'column_nml' in namelist:
+        ignore_lonb = True      # To prevent errors
+    else:
+        ignore_lonb = False
 
-    ds = load_dataset(exp_path, first_month_file=first_month_file)[var_keep]
+    ds = load_dataset(exp_path, first_month_file=first_month_file, ignore_lonb=ignore_lonb)[var_keep]
     if lat_target is None:
         ds = ds.sel(lat=slice(lat_min, lat_max))
     else:

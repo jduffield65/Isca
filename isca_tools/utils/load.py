@@ -26,7 +26,8 @@ def get_file_suffix(dir: str, suffix: str) -> List[str]:
 def load_dataset(exp_name: str, run_no: Optional[int] = None,
                  data_dir: Optional[str] = None, decode_times: bool = False,
                  use_cftime: bool = True,
-                 first_month_file: Optional[int] = None) -> xr.Dataset:
+                 first_month_file: Optional[int] = None,
+                 ignore_lonb: bool = False) -> xr.Dataset:
     """
     This loads a dataset produced by Isca containing all the diagnostics specified.
 
@@ -43,6 +44,10 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
             Useful if using 360 day calendar.
         first_month_file: Can specify the index of first month in dataset to suppress warning.
             If first month is not equal to this, will hit error.
+        ignore_lonb: If `True`, will ignore longitude boundaries. Useful for single column simulations
+            where can get:
+            `ValueError: cannot reindex or align along dimension 'lonb' because the (pandas)
+            index has duplicate values`.
 
     Returns:
         Dataset containing all diagnostics specified for the experiment.
@@ -68,7 +73,9 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
     if run_no is None:
         data_file = os.path.join(exp_dir, 'run*', file_name)
         d = xr.open_mfdataset(data_file, concat_dim='time', combine='nested',
-                              decode_times=decode_times, use_cftime=use_cftime)
+                              decode_times=decode_times, use_cftime=use_cftime,
+                              preprocess=(lambda ds: ds.drop_vars("lonb", errors="ignore"))
+                              if ignore_lonb else None)
     else:
         data_file = os.path.join(exp_dir, 'run%04d' % run_no, file_name)
         d = xr.open_dataset(data_file, decode_times=decode_times, use_cftime=use_cftime)
