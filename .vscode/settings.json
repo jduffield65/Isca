@@ -1,4 +1,35 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "cSpell.words": [
+        "cbar",
+        "cmap",
+        "colorbar",
+        "downarrow",
+        "edgecolors",
+        "facecolors",
+        "figheight",
+        "frameon",
+        "hspace",
+        "imshow",
+        "isca",
+        "linestyle",
+        "markersize",
+        "mathrm",
+        "ncol",
+        "ndenumerate",
+        "polyfit",
+        "pycache",
+        "sharex",
+        "sharey",
+        "vmax",
+        "vmin",
+        "xlabel",
+        "xticklabels",
+        "xticks",
+        "ylabel",
+        "yticklabels",
+        "yticks",
+        "zorder"
+    ]
 }
