@@ -7,6 +7,8 @@ def suite_thesis() -> unittest.TestSuite:
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     suite.addTests(loader.loadTestsFromTestCase(thesis.TestLapseIntegral))
+    suite.addTests(loader.loadTestsFromTestCase(thesis.TestFitting))
+    suite.addTests(loader.loadTestsFromTestCase(thesis.TestFourierAnalytic))
     return suite
 
 def suite_all():

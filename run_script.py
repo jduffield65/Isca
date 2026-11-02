@@ -15,23 +15,48 @@ import os
 
 # When calling the script with no arguments, it just runs the experiment.
 jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved here - CHANGE FOR EACH EXPERIMENT
-# exp_dir = os.path.join(jobs_dir, 'tau_sweep/aquaplanet/depth=1/no_conv/k=1')  # specific experiment - CHANGE FOR EACH EXPERIMENT
-# exp_dir = os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/depth=1/bucket_evap/ras_conv/k=1_5')  # specific experiment - CHANGE FOR EACH EXPERIMENT
-# exp_dir = os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/evap/evap=0/k=0_6')
-# exp_dir = os.path.join(jobs_dir, 'aquaplanet/vary_depth/depth=25')
-# exp_dir = os.path.join(jobs_dir, 'aquaplanet/vary_obliquity/5')
-# exp_dir = os.path.join(jobs_dir, 'aquaplanet/vary_depth/depth=1/k=0_3')
-# exp_dir = os.path.join(jobs_dir, 'play/temp_tendency/k=3_5')
-# exp_dir = os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/evap/evap=0/k=1_5')
+# exp_dir = os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/depth=1/bucket_evap')
+# exp_dir = os.path.join(jobs_dir, 'tau_sweep/aquaplanet/depth=1/k=1_5/')
 # exp_dir = os.path.join(jobs_dir, 'play/bucket/depth=5/k=1_5')
 # exp_dir = os.path.join(jobs_dir, 'rossbypalooza/depth=20/lat_10/rough')
-exp_dir = os.path.join(jobs_dir, 'aquaplanet/latent_heat_temp_only/base')
-# exp_dir = os.path.join(jobs_dir, 'rossbypalooza/depth=20/all_nh/lat_10/rot_6x')
+# exp_dir = os.path.join(jobs_dir, 'rossbypalooza/depth=20/all_nh/lat_10/no_wishe/socrates/bucket')
+# exp_dir= os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/depth=1/bucket_file/evap=1/k=1_5')
+# exp_dir= os.path.join(jobs_dir, 'sqe_profile/column/day150/ras_conv/')
+# exp_dir = os.path.join(jobs_dir, 'aquaplanet/latent_heat_temp_only/base')
+# exp_dir= os.path.join(jobs_dir, 'tau_sweep/land/meridional_band/bucket_file/evap=0_1/k=1_5')
+# exp_dir = os.path.join(jobs_dir, 'rossbypalooza/sst_observation/test_vary_time')
 # exp_dir = os.path.join(jobs_dir, 'aquaplanet/latent_heat_temp_only/k=0_6')
+# exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
+# exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
+exp_dir = os.path.join(jobs_dir, 'thesis_season/column/depth=1/base/k=1')
+
 
 namelist_file = os.path.join(exp_dir, 'namelist.nml')
 diag_table_file = os.path.join(exp_dir, 'diag_table')
-run_experiment(namelist_file, diag_table_file, slurm=True)
+# diag_table_file = os.path.join(exp_dir, 'diag_table_6_hours')
+# run_experiment(namelist_file, diag_table_file, slurm=True)
+
+# Run multiple simulations
+# for kappa in ['3']:
+# for exp in os.listdir(os.path.join(jobs_dir, f'thesis_season/publish_exp/')):
+#     if exp == 'advect':
+#         continue
+exp = 'sw_abs_low'
+#for kappa in ['0_6', '0_8', '1', '1_5', '2', '2_5', '3', '3_5']:
+for kappa in ['0_6']:
+    exp_dir = os.path.join(jobs_dir, f'thesis_season/publish_exp/{exp}/k={kappa}/')
+    namelist_file = os.path.join(exp_dir, 'namelist.nml')
+    diag_table_file = os.path.join(exp_dir, 'diag_table')
+    # diag_table_file = os.path.join(exp_dir, 'diag_table_6_hours')
+    run_experiment(namelist_file, diag_table_file, slurm=True)
+
+# for kappa in ['0_6', '0_8', '2', '2_5', '3', '3_5']:
+# for lat in ['0', '23', '70', '90']:
+# for lat in ['90']:
+#     namelist_file = os.path.join(exp_dir, f'lat={lat}', 'namelist.nml')
+#     diag_table_file = os.path.join(exp_dir, f'lat={lat}', 'diag_table_hourly')
+#     run_experiment(namelist_file, diag_table_file, slurm=True)
+
 
 # For creating co2 timeseries .nc file
 # from isca_tools.time_series.base import create_time_series_file

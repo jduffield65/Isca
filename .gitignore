@@ -6,3 +6,23 @@
 __pycache__/
 /site
 *.idx
+/.idea/
+
+# Ignore isca_output
+/isca_output/
+
+# Ignore everything inside isca_source, except directories and small code files e.g., .f90.
+/isca_source/**
+!/isca_source/**/
+!/isca_source/**/*.f90
+!/isca_source/**/*.F90
+!/isca_source/**/*.txt
+!/isca_source/**/*.py
+
+# Ignore everything inside isca_source_kennedy, except directories and small code files e.g., .f90.
+/isca_source_kennedy/**
+!/isca_source_kennedy/**/
+!/isca_source_kennedy/**/*.f90
+!/isca_source_kennedy/**/*.F90
+!/isca_source_kennedy/**/*.txt
+!/isca_source_kennedy/**/*.py

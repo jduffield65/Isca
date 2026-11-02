@@ -10,6 +10,9 @@ from scipy import stats
 
 __author__='Stephen Thomson'
 
+import isca_tools.run.create_files
+
+
 def read_data( base_dir, exp_name, start_file, end_file, avg_or_daily, use_interpolated_pressure_level_data, model='fms13', file_name=None):
 
     if model=='fms13':
@@ -273,7 +276,7 @@ def output_nc_file(dataset, field_name, model_params, output_dict):
             is_climatology=False
         num_years=output_dict['num_years']
 
-    time_arr,day_number,ntime,time_units,time_bounds=cts.create_time_arr(num_years,is_climatology,output_dict['time_spacing_days'])
+    time_arr,day_number,ntime,time_units,time_bounds= isca_tools.run.create_files.create_time_arr(num_years, is_climatology, output_dict['time_spacing_days'])
 
     #Output it to a netcdf file. 
     file_name=output_dict['file_name']
