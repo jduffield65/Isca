@@ -118,7 +118,7 @@ Union[float, np.ndarray, xr.DataArray]]:
 
 def lapse_moist(temp: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray],
                 pressure_coords: bool = False) -> Union[float, np.ndarray]:
-    """
+    r"""
     Returns the saturated moist adiabatic lapse rate, $\Gamma_s = -dT/dz$, at a given temperature.
 
     Comes from equation D.10 in Holton 2004.

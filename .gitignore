@@ -26,3 +26,8 @@ __pycache__/
 !/isca_source_kennedy/**/*.F90
 !/isca_source_kennedy/**/*.txt
 !/isca_source_kennedy/**/*.py
+
+# Generated Python packaging files.
+*.egg-info/
+build/
+dist/

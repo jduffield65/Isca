@@ -35,8 +35,8 @@ label_simulations = {'base': 'SCM', 'advect': 'GCM', 'dry': 'Dry', 'fix_rh': 'Fi
                      'wind_low': 'Low Wind'}
 color_simulations = {
     "base":        "k",
-    "advect":      "C3",        # green
-    "dry":         "C2",        # red
+    "advect":      "C2",        # red
+    "dry":         "C3",        # green
     "fix_rh":      "#8C564B",   # dark brown
     "ocean": "C0",              # blue
     "sw_abs_high": "#D95F02",   # dark orange

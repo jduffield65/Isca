@@ -9,7 +9,7 @@ import warnings
 
 
 def lcl_temp(temp_start: float, p_start: float, sphum_start: float, p_ref: float = 1e5) -> float:
-    """
+    r"""
     Function to replicate the way
     [LCL temperature is computed](https://github.com/ExeClim/Isca/blob/9560521e1ba5ce27a13786ffdcb16578d0bd00da/src/
     atmos_param/qe_moist_convection/qe_moist_convection.F90#L1092-L1130)
