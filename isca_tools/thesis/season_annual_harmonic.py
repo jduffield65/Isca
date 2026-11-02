@@ -8,15 +8,22 @@ def get_phase_amp(coef_sw_amp: xr.DataArray, omega: float, heat_cap_eff: Optiona
                   coef_amp: Optional[xr.DataArray]=None) -> Tuple[xr.DataArray, xr.DataArray]:
     r"""Convert between harmonic temperature response and energy-budget parameters.
 
-    Uses the linear surface energy budget:
-        C_eff * dT'/dt = Q'_SW - lambda_eff * T'
+    Uses the linear surface energy budget
 
-    The forcing and steady periodic temperature response are defined as:
-        Q'_SW(t) = coef_sw_amp * cos(omega * t)
-        T'(t) = coef_amp * cos(omega * t - coef_phase)
+    $$
+    C_{\mathrm{eff}}\,\frac{dT'}{dt} = Q'_{\mathrm{SW}} - \lambda_{\mathrm{eff}} T'.
+    $$
 
-    Positive coef_phase denotes a temperature lag relative to the forcing.
-    Positive lambda_eff denotes damping.
+    The forcing and steady periodic temperature response are defined as
+
+    $$
+    Q'_{\mathrm{SW}}(t) = A_{\mathrm{SW}}\cos(\omega t),
+    \qquad
+    T'(t) = A_T\cos(\omega t - \phi).
+    $$
+
+    Here, positive $\phi$ denotes a temperature lag relative to the forcing,
+    and positive $\lambda_{\mathrm{eff}}$ denotes damping.
 
     Args:
         coef_sw_amp: First-harmonic amplitude of absorbed surface shortwave forcing
