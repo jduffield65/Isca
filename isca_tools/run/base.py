@@ -52,11 +52,12 @@ def get_file_suffix(dir: str, suffix: str) -> List[str]:
     return file_name
 
 
-def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False):
+def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False,
+                   scheduler: str = 'slurm'):
     """
     This splits the total simulation up into jobs based on info specified in `namelist_file` and
     then runs `run_job` for each job. If `slurm==True`, then each job will be submitted to a *Slurm*
-    queue through the `run_slurm.sh` script.
+    queue. Alternatively, `scheduler='pbs'` submits jobs to Imperial's PBS scheduler.
 
     Args:
         namelist_file: File path to namelist `nml` file for the experiment.
@@ -69,21 +70,27 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             - `n_months_job`: *int*. Approximate duration of each job of the simulation in months.
             E.g. if `n_months_total=12` and `n_months_job=6`, the experiment would be split up into 2 jobs each
             of length 6 months.
-            - `n_nodes`: *int*. Number of nodes to run job on (*Slurm* info).
-            - `n_cores`: *int*. Number of cores for each node to run job on (*Slurm* info).
+            - `n_nodes`: *int*. Number of nodes to run the job on.
+            - `n_cores`: *int*. Number of cores for each node to run the job on.
+            - `memory_per_node`: *string*. Optional memory request per node for PBS, e.g. `'16gb'`.
             - `resolution`: *string*. Horizontal resolution of experiment (options are `T21`, `T42` or `T85`).
-            - `partition`: *string*. *Slurm* queue to submit job to.
+            - `partition`: *string*. *Slurm* queue to submit the job to. Ignored for PBS.
             - `overwrite_data`: *bool*. If this is `True` and data already exists in `$GFDL_DATA/{name}`,
                 then it will be overwritten. If it is `False` and the data exists, an error will occur.
             - `compile`: *bool*. If `True`, it will recompile the codebase before running the experiment.
-            - `max_walltime`: *string*. Maximum time that job can run on *Slurm*. E.g. 1 hour would be '01:00:00'.
+            - `max_walltime`: *string*. Maximum job walltime; PBS on Imperial uses `HH:MM:SS` format.
             - `delete_restart_files`: *bool*. If `True`, only the restart file for the final month will be kept.
                 Otherwise, a restart file will be generated for every month.
         diag_table_file: File path to the diagnostic table file for the experiment.
             This specifies the outputs of the experiment.
         slurm: If `True`, will split each job to a *Slurm* queue. Otherwise, it will just loop over each
             job locally.
+        scheduler: Scheduler to use when submitting jobs. Set to `'pbs'` for Imperial HPC; Slurm remains
+            the default scheduler for backward compatibility.
     """
+    if scheduler not in ('slurm', 'pbs'):
+        raise ValueError(f"Unsupported scheduler {scheduler!r}; expected 'slurm' or 'pbs'.")
+
     exp_details = f90nml.read(namelist_file)['experiment_details']
 
     if exp_details['n_months_total'] % exp_details['n_months_job'] == 0:
@@ -96,17 +103,20 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     # month_jobs[i] are the months to simulate in job i.
     month_jobs = np.array_split(np.arange(1, exp_details['n_months_total'] + 1), n_jobs)
 
-    # Specify which node to run
-    if 'nodelist' not in exp_details:
+    run_dir = os.path.dirname(os.path.realpath(__file__))
+    if scheduler == 'pbs':
+        submit_script = os.path.join(run_dir, 'imperial', 'run_pbs.sh')
+        exp_details.setdefault('nodelist', '-')
+    elif 'nodelist' not in exp_details:
         # if not given, allow all available nodes
-        slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm_no_namelist.sh')
+        submit_script = os.path.join(run_dir, 'run_slurm_no_namelist.sh')
         exp_details['nodelist'] = ''    # just set to empty string
     else:
         print(f"Submitting to node: {exp_details['nodelist']}")
-        slurm_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run_slurm.sh')
-    # Run this base.py script aas main if using slurm
+        submit_script = os.path.join(run_dir, 'run_slurm.sh')
+    # Run this base.py script as main if using a batch scheduler
     # Because doing this, cannot have any relative imports in this file
-    run_job_script = os.path.realpath(__file__)     # run this script as main if using slurm
+    run_job_script = os.path.realpath(__file__)
 
     # Get directory name to save debugging and timing info
     # If directory already exists, will add a number e.g. console_output_1 until finds one that exists.
@@ -114,17 +124,23 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
     dir_output = get_unique_dir_name(dir_output)
     os.makedirs(dir_output, exist_ok=False)
 
-    prev_job_id = ''     # Empty string so don't provide any argument to first slurm script
+    prev_job_id = ''
     # Iterate over all jobs
     for month_job in month_jobs:
-        if slurm:
-            # Different script for first vs subsequent scripts, as they are dependent on previous job
+        if slurm or scheduler == 'pbs':
+            # Different script for first vs subsequent scripts, as they are dependent on previous job.
+            job_submit_script = submit_script if prev_job_id == '' else submit_script.replace('.sh', '_depend.sh')
+            partition = '-' if scheduler == 'pbs' else exp_details['partition']
+            dependency_arg = prev_job_id or ('-' if scheduler == 'pbs' else '')
+            memory_request = ''
+            if scheduler == 'pbs' and exp_details.get('memory_per_node'):
+                memory_request = f":mem={exp_details['memory_per_node']}"
             cmd = (
-                f"bash {slurm_script if prev_job_id == '' else slurm_script.replace('.sh','_depend.sh')} "
+                f"bash {job_submit_script} "
                 f"{exp_details['name']} {month_job[0]} {len(month_job)} "
-                f"{exp_details['partition']} {exp_details['n_nodes']} {exp_details['n_cores']} "
+                f"{partition} {exp_details['n_nodes']} {exp_details['n_cores']} "
                 f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} {dir_output} "
-                f"{exp_details['nodelist']} {prev_job_id} "
+                f"{exp_details['nodelist']} {dependency_arg} {memory_request}"
             )
             output = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()   # get job just submitted info
             print(f"{output}{prev_job_id if prev_job_id=='' else ' (dependency: job '+prev_job_id+')'}")

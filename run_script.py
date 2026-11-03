@@ -28,27 +28,30 @@ jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved he
 # exp_dir = os.path.join(jobs_dir, 'aquaplanet/latent_heat_temp_only/k=0_6')
 # exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
 # exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
-exp_dir = os.path.join(jobs_dir, 'thesis_season/column/depth=1/base/k=1')
+exp_dir = os.path.join(jobs_dir, 'play/test/column/')
 
 
 namelist_file = os.path.join(exp_dir, 'namelist.nml')
 diag_table_file = os.path.join(exp_dir, 'diag_table')
+run_experiment(namelist_file, diag_table_file, slurm=False)
 # diag_table_file = os.path.join(exp_dir, 'diag_table_6_hours')
 # run_experiment(namelist_file, diag_table_file, slurm=True)
+
+
 
 # Run multiple simulations
 # for kappa in ['3']:
 # for exp in os.listdir(os.path.join(jobs_dir, f'thesis_season/publish_exp/')):
 #     if exp == 'advect':
 #         continue
-exp = 'sw_abs_low'
-#for kappa in ['0_6', '0_8', '1', '1_5', '2', '2_5', '3', '3_5']:
-for kappa in ['0_6']:
-    exp_dir = os.path.join(jobs_dir, f'thesis_season/publish_exp/{exp}/k={kappa}/')
-    namelist_file = os.path.join(exp_dir, 'namelist.nml')
-    diag_table_file = os.path.join(exp_dir, 'diag_table')
-    # diag_table_file = os.path.join(exp_dir, 'diag_table_6_hours')
-    run_experiment(namelist_file, diag_table_file, slurm=True)
+# exp = 'sw_abs_low'
+# #for kappa in ['0_6', '0_8', '1', '1_5', '2', '2_5', '3', '3_5']:
+# for kappa in ['0_6']:
+#     exp_dir = os.path.join(jobs_dir, f'thesis_season/publish_exp/{exp}/k={kappa}/')
+#     namelist_file = os.path.join(exp_dir, 'namelist.nml')
+#     diag_table_file = os.path.join(exp_dir, 'diag_table')
+#     # diag_table_file = os.path.join(exp_dir, 'diag_table_6_hours')
+#     run_experiment(namelist_file, diag_table_file, slurm=True)
 
 # for kappa in ['0_6', '0_8', '2', '2_5', '3', '3_5']:
 # for lat in ['0', '23', '70', '90']:

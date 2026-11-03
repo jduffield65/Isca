@@ -1,8 +1,8 @@
 # Experiment details
 
 The `experiment_details` namelist contains information on how to run the simulation, most of which is 
-relevant for submitting jobs to *Slurm*. It is an addition I made to the namelists in the *Isca* source code, and 
-all options must be specified to run the simulation using `isca_tools`.
+relevant for submitting jobs to a batch scheduler. It is an addition I made to the namelists in the *Isca* source code, and
+all required options must be specified to run the simulation using `isca_tools`.
 
 ## Options
 ### `name`
@@ -32,13 +32,18 @@ of length 6 months.</br>
 
 ### `n_nodes`
 *int*</br>
-Number of nodes to run job on (Slurm info).</br>
+Number of nodes to run the job on.</br>
 **Default:** N/A
 
 ### `n_cores`
 *int*</br>
-Number of cores for each node to run job on (Slurm info).</br>
+Number of cores for each node to run the job on.</br>
 Must be a power of $2$ so typically $8$, $16$ or $32$.</br>
+**Default:** N/A
+
+### `memory_per_node`
+*string*</br>
+Optional memory request per node for PBS jobs, e.g. `'16gb'`. If omitted, PBS uses its default.</br>
 **Default:** N/A
 
 ### `resolution`
@@ -49,7 +54,7 @@ Options are `T21`, `T42` or `T85`.</br>
 
 ### `partition`
 *string*</br>
-*Slurm* queue to submit job to.</br>
+*Slurm* queue to submit job to. Not used with PBS on Imperial HPC.</br>
 **Default:** N/A
 
 ### `overwrite_data`
@@ -70,8 +75,8 @@ Set this to `True` if you have made any changes to the underlying source code of
 
 ### `max_walltime`
 *string*</br>
-Maximum time that job can run on *Slurm*.</br> 
-$1$ hour would be `'01:00:00'` and $30$ minutes would be `'30:00'`.</br>
+Maximum time that the job can run. PBS on Imperial requires `HH:MM:SS` format, e.g. `'01:00:00'` for one hour.
+Slurm accepts additional formats.</br>
 **Default:** N/A
 
 ### `delete_restart_files`
@@ -82,10 +87,12 @@ Otherwise, a restart file will be generated for every month.</br>
 
 ### `nodelist`
 *string*</br>
-Specify node to submit to.</br>
+Specify node to submit to on Slurm.</br>
 Options on `debug` partition on St Andrews kennedy are `kennedy20`, `kennedy21` or `kennedy22`.</br>
 Number listed needs to match `n_nodes`.</br>
 `kennedy[20-22]` would request the 3 nodes `20, 21, 22`.</br>
 If not given, will just submit to default nodes. If multiple jobs, this will likely result in
 jobs being submit in the wrong order, and an error occuring.</br>
 **Default:** N/A
+
+This option is ignored when using PBS on Imperial HPC; PBS selects the nodes automatically.

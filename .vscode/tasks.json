@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "test_numpy",
+            "type": "process",
+            "command": "ssh",
+            "args": [
+                "imperial",
+                "source \"$HOME/miniforge3/etc/profile.d/conda.sh\" && conda activate isca_env && cd \"$HOME/Isca\" && exec python -u -c 'import os, sys; import numpy as np; print(\"Python:\", sys.executable); print(\"Directory:\", os.getcwd()); print(\"GFDL_BASE:\", os.environ.get(\"GFDL_BASE\")); print(\"NumPy version:\", np.__version__); print(\"NumPy test:\", np.arange(5).sum())'"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "run_script",
+            "type": "process",
+            "command": "ssh",
+            "args": [
+                "imperial",
+                "source \"$HOME/miniforge3/etc/profile.d/conda.sh\" && conda activate isca_env && cd \"$HOME/Isca\" && exec python -u run_script.py"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": true,
+                "clear": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
