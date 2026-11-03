@@ -1,6 +1,30 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.idea": true,
+        "**/.github": true,
+        "**/isca_tools.egg-info": true,
+        "**/.ipynb_checkpoints": true,
+        "**/isca_source_kennedy": true,
+        "**/modified_source_code_kennedy": true,
+    },
+    "material-icon-theme.files.associations": {
+        "*.nml": "nginx",
+        "diag_table": "d",
+        "*.mplstyle": "python-misc",
+        "*.nc": "next"
+    },
+    "material-icon-theme.folders.associations": {
+        "isca_tools": "packages",
+        "jobs": "python",
+        "isca_source/src": "../../../../icons/isca",
+        "jasmin_notebooks": "jupyter", 
+        "cesm": "../../../../icons/imperial",
+        "thesis_season": "../../../../icons/st-andrews"
+    },
     "cSpell.words": [
         "allclose",
         "aquaplanet",
