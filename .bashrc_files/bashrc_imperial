@@ -1,11 +1,5 @@
 # ~/.bashrc
-
-# Initialise Conda and activate the Isca environment
-eval "$("$HOME/miniforge3/bin/conda" shell.bash hook)"
-conda activate isca_env
-
-# Go into working directory
-cd "$HOME/Isca"
+# Keep any existing Imperial-provided configuration above this section.
 
 # ----- Isca configuration -----
 
@@ -23,3 +17,15 @@ export GFDL_DATA="$HOME/Isca/isca_output"
 
 # SOCRATES source code
 export GFDL_SOC="$GFDL_BASE/src/atmos_param/socrates/src/trunk"
+
+# ----- Interactive-shell conveniences -----
+
+if [[ $- == *i* ]]; then
+    eval "$("$HOME/miniforge3/bin/conda" shell.bash hook)"
+
+    # Explicitly enter the project and activate its environment when wanted.
+    isca_start() {
+        conda activate isca_env || return
+        cd "$HOME/Isca" || return
+    }
+fi
