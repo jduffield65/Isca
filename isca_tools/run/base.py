@@ -7,6 +7,41 @@ import numpy as np
 import datetime
 from typing import List
 import subprocess
+from pathlib import Path
+import re
+
+
+def pbs_job_name(path: str, max_length: int = 15) -> str:
+    """Convert a file path to a PBS-safe job name.
+
+    Uses the filename without its final extension, replaces unsupported
+    characters with underscores, and ensures the name starts with a letter.
+
+    Args:
+        path: File path used to generate the job name.
+        max_length: Maximum number of characters in the job name. Defaults
+            to 15. Must be positive.
+
+    Returns:
+        A non-empty job name containing only ASCII letters, digits,
+        underscores, and hyphens, starting with a letter and truncated to
+        max_length characters. Uniqueness is not guaranteed.
+
+    Raises:
+        ValueError: If max_length is less than 1.
+    """
+    path = path.replace('/','_')      # otherwise PBS will think it's a directory and only consider final part of the path
+    if max_length < 1:
+        raise ValueError("max_length must be at least 1.")
+
+    name = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(path).stem).strip("_-")
+
+    if not name:
+        name = "job"
+    elif not re.match(r"[A-Za-z]", name):
+        name = f"j_{name}"
+
+    return name[:max_length]
 
 
 def get_unique_dir_name(base_dir: str) -> str:
@@ -132,12 +167,13 @@ def run_experiment(namelist_file: str, diag_table_file: str, slurm: bool = False
             job_submit_script = submit_script if prev_job_id == '' else submit_script.replace('.sh', '_depend.sh')
             partition = '-' if scheduler == 'pbs' else exp_details['partition']
             dependency_arg = prev_job_id or ('-' if scheduler == 'pbs' else '')
+            job_name = pbs_job_name(exp_details['name'])
             memory_request = ''
             if scheduler == 'pbs' and exp_details.get('memory_per_node'):
                 memory_request = f":mem={exp_details['memory_per_node']}"
             cmd = (
                 f"bash {job_submit_script} "
-                f"{exp_details['name']} {month_job[0]} {len(month_job)} "
+                f"{job_name} {month_job[0]} {len(month_job)} "
                 f"{partition} {exp_details['n_nodes']} {exp_details['n_cores']} "
                 f"{namelist_file} {diag_table_file} {exp_details['max_walltime']} {run_job_script} {dir_output} "
                 f"{exp_details['nodelist']} {dependency_arg} {memory_request}"

@@ -33,7 +33,7 @@ exp_dir = os.path.join(jobs_dir, 'play/test/column/')
 
 namelist_file = os.path.join(exp_dir, 'namelist.nml')
 diag_table_file = os.path.join(exp_dir, 'diag_table')
-run_experiment(namelist_file, diag_table_file, slurm=False)
+run_experiment(namelist_file, diag_table_file, slurm=True, scheduler='pbs')
 # diag_table_file = os.path.join(exp_dir, 'diag_table_6_hours')
 # run_experiment(namelist_file, diag_table_file, slurm=True)
 
