@@ -1,0 +1,25 @@
+# ~/.bashrc
+
+# Initialise Conda and activate the Isca environment
+eval "$("$HOME/miniforge3/bin/conda" shell.bash hook)"
+conda activate isca_env
+
+# Go into working directory
+cd "$HOME/Isca"
+
+# ----- Isca configuration -----
+
+# Root of the Isca source repository
+export GFDL_BASE="$HOME/Isca/isca_source"
+
+# Isca compiler/library configuration
+export GFDL_ENV=ubuntu_conda
+
+# Model working directory
+export GFDL_WORK="$HOME/isca_work"
+
+# Persistent model output
+export GFDL_DATA="$HOME/Isca/isca_output"
+
+# SOCRATES source code
+export GFDL_SOC="$GFDL_BASE/src/atmos_param/socrates/src/trunk"
