@@ -57,11 +57,17 @@ def pca_on_xarray(data: xr.DataArray, n_modes: int = 4, standardize: bool = True
         else:
             reference_mean = data.where(valid).mean(dim=non_feature_dims)
         reference_mean_vals = reference_mean.values
+    elif isinstance(reference_mean, xr.DataArray):
+        if reference_mean.dims != (feature_dim_name,):
+            raise ValueError(
+                f"reference_mean must have only dimension {feature_dim_name!r}"
+            )
+        reference_mean_vals = reference_mean.reindex(
+            {feature_dim_name: data[feature_dim_name]}
+        ).values
+
     else:
-        if feature_dim_name not in reference_mean.dims:
-            raise ValueError(f"reference_mean must have dimension named {feature_dim_name}")
-        # align and extract numeric array in feature order of data
-        reference_mean_vals = reference_mean.reindex({feature_dim_name: data[feature_dim_name]}).values
+        raise TypeError("reference_mean must be True, False, or a DataArray")
 
     X_all = flatten_to_numpy(data, feature_dim_name)
     if valid is None:
