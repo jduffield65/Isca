@@ -21,9 +21,14 @@
         "isca_tools": "packages",
         "jobs": "python",
         "isca_source/src": "../../../../icons/isca",
+        "isca_source": "../../../../icons/isca",
         "jasmin_notebooks": "jupyter", 
-        "cesm": "../../../../icons/imperial",
-        "thesis_season": "../../../../icons/st-andrews"
+        "nerc_srm": "../../../../icons/imperial",
+        "nerc_srm/p1": "../../../../icons/imperial",
+        "jobs/thesis_season": "../../../../icons/st-andrews",
+        "jobs/tau_sweep": "../../../../icons/st-andrews",
+        "jobs/theory_lapse": "../../../../icons/st-andrews",
+        "modified_source_code_hypatia": "../../../../icons/st-andrews",
     },
     "cSpell.words": [
         "allclose",

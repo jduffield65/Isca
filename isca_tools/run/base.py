@@ -1,7 +1,5 @@
 import os
 import sys
-from isca import Experiment, IscaCodeBase, GFDL_BASE, SocratesCodeBase, ColumnCodeBase, SocColumnCodeBase
-from isca.diagtable import DiagTable
 import f90nml
 import numpy as np
 import datetime
@@ -9,6 +7,25 @@ from typing import List
 import subprocess
 from pathlib import Path
 import re
+
+# Import isca modules if available. 
+# If using locally, unlikely to have installed Isca hence need for this.
+try:
+    from isca import (
+        Experiment,
+        IscaCodeBase,
+        GFDL_BASE,
+        SocratesCodeBase,
+        ColumnCodeBase,
+        SocColumnCodeBase,
+    )
+    from isca.diagtable import DiagTable
+except ModuleNotFoundError as exc:
+    if exc.name != "isca":
+        raise
+    ISCA_AVAILABLE = False
+else:
+    ISCA_AVAILABLE = True
 
 
 def pbs_job_name(path: str, max_length: int = 15) -> str:
