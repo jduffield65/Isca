@@ -75,7 +75,7 @@ def load_dataset(exp_name: str, run_no: Optional[int] = None,
         d = xr.open_mfdataset(data_file, concat_dim='time', combine='nested',
                               decode_times=decode_times, use_cftime=use_cftime,
                               preprocess=(lambda ds: ds.drop_vars("lonb", errors="ignore"))
-                              if ignore_lonb else None)
+                              if ignore_lonb else None, data_vars="all")
     else:
         data_file = os.path.join(exp_dir, 'run%04d' % run_no, file_name)
         d = xr.open_dataset(data_file, decode_times=decode_times, use_cftime=use_cftime)
