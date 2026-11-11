@@ -22,7 +22,7 @@ def mod_parcel_lapse_fitting(temp_env_lev: np.ndarray,
                              sanity_check: bool = False,
                              method: Literal['add', 'multiply'] = 'add') -> Tuple[
     float, float, float]:
-    """
+    r"""
     Find the constant, $\eta$ that needs adding to parcel lapse rate such that
     $\int_{p_1}^{p_2} \Gamma_{env}(p) d\ln p = \int_{p_1}^{p_2} \Gamma_p(p, T_p(p)) + \eta d\ln p$.
     Then computes the error in this approximation:
@@ -135,7 +135,7 @@ def parcel_fitting(temp_env_lev: np.ndarray, p_lev: np.ndarray,
                    n_lev_above_upper2_integral: int = 0,
                    temp_surf_lcl_calc: float = 300,
                    return_temp_parcel_lev: bool = False):
-    """
+    r"""
     If follow parcel rising from the surface, this returns the error and integral value, of this profile
     relative to the environmental profile.
 
@@ -207,7 +207,7 @@ def fitting_2_layer(temp_env_lev: Union[xr.DataArray, np.ndarray], p_lev: Union[
                     sanity_check: bool = False,
                     p_range_calc: float = 2000) -> Tuple[
     np.ndarray, np.ndarray, np.ndarray]:
-    """
+    r"""
     Applies `const_lapse_fitting` or `mod_parcel_lapse_fitting` to each layer.
 
     Different from *lapse_integral.py* in that it computes parcel temp, $T_p(p)$ by equating
@@ -364,7 +364,7 @@ def get_lnb_ind(temp_env_lev: np.ndarray, p_lev: np.ndarray, rh_surf: float, lap
                 p_surf: Optional[float] = None,
                 temp_surf: Optional[float] = None,
                 temp_surf_lcl_calc=300) -> int:
-    """
+    r"""
     Returns a proxy for the LNB (level of neutral buoyancy): the index closest to space where
     `T_parcel - T_env` is positive i.e. buoyant.
 

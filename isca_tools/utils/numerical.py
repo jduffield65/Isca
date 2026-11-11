@@ -836,6 +836,60 @@ def spline_deriv_periodic(time, var, period=None, check=True, rtol=1e-10, atol=1
     return cs(time, 1)
 
 
+def spline_deriv_nonperiodic(
+    time,
+    var,
+    bc_type="not-a-knot",
+    check=True,
+):
+    """Differentiate an exact non-periodic cubic interpolating spline.
+
+    Args:
+        time: One-dimensional, strictly increasing numeric coordinates.
+            Use seconds to obtain a derivative per second.
+        var: One-dimensional values sampled at time.
+        bc_type: Non-periodic boundary condition accepted by CubicSpline.
+            Defaults to "not-a-knot". "natural" is another option.
+        check: Whether to validate monotonicity and finite input values.
+
+    Returns:
+        Array containing d(var)/d(time) at the original sample times.
+
+    Raises:
+        ValueError: If input shapes are invalid, there are fewer than
+            three samples, inputs fail validation, or periodic boundary
+            conditions are requested.
+    """
+    time = np.asarray(time, dtype=float)
+    var = np.asarray(var, dtype=float)
+
+    if time.ndim != 1 or var.ndim != 1:
+        raise ValueError("time and var must both be one-dimensional.")
+    if time.size != var.size:
+        raise ValueError("time and var must have the same length.")
+    if time.size < 3:
+        raise ValueError("At least three samples are required.")
+    if isinstance(bc_type, str) and bc_type == "periodic":
+        raise ValueError("Use the periodic function for periodic data.")
+
+    if check:
+        if not np.all(np.isfinite(time)) or not np.all(np.isfinite(var)):
+            raise ValueError("time and var must contain only finite values.")
+        if np.any(np.diff(time) <= 0):
+            raise ValueError("time must be strictly increasing.")
+
+    # Shift the origin without changing derivative units.
+    time_relative = time - time[0]
+
+    spline = CubicSpline(
+        time_relative,
+        var,
+        bc_type=bc_type,
+        extrapolate=False,
+    )
+    return spline(time_relative, nu=1)
+
+
 def fit_linear_zero_mean(x1: np.ndarray, y: np.ndarray, x2: Optional[np.ndarray]=None, check: bool=False,
                          atol: float=1e-10) -> Tuple[float, float]:
     """Fit y = a*x1 + b*x2 with no intercept.
