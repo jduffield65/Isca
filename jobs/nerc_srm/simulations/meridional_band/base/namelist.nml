@@ -6,7 +6,7 @@
 &experiment_details
    name = 'nerc_srm/simulations/meridional_band/base'  ! Name of experiment e.g. data saved to folder $GFDL_DATA/name.
    input_dir = '/rds/general/user/jduffiel/home/Isca/jobs/nerc_srm/simulations/meridional_band/base'
-   n_months_total = 168           ! Total duration of simulation in months.
+   n_months_total = 144           ! Total duration of simulation in months.
    n_months_job = 24             ! Approximate duration of each job of the simulation in months.
                                 ! If n_months_total=12 and n_months_job=6, would have 2 jobs, each of length 6 months.
    n_nodes = 1                  ! Number of nodes to run job on (Slurm info).
