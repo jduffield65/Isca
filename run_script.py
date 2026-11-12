@@ -28,7 +28,7 @@ jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved he
 # exp_dir = os.path.join(jobs_dir, 'aquaplanet/latent_heat_temp_only/k=0_6')
 # exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
 # exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
-exp_dir = os.path.join(jobs_dir, 'play/test/aquaplanet/')
+exp_dir = os.path.join(jobs_dir, 'nerc_srm/simulations/meridional_band/base/')
 
 
 namelist_file = os.path.join(exp_dir, 'namelist.nml')
