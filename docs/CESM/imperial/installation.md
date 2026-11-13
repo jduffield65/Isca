@@ -1,6 +1,8 @@
 # Installation on Imperial HPC
 Here, I go through the procedure for installing CESM version 2.1.5 on the Imperial HPC.
 
+!!! note "This is a different version to 2.1.3 used for [ARCHER2](../installation.md)."
+
 ## Step 1 - Upload configuration files
 
 You should have access to a set of configuration files for installing and running CESM2.1.5 on Imperial HPC. These include machine-specific porting settings, environment-setup files and model namelists.
