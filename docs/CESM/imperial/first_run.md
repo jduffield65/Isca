@@ -219,9 +219,9 @@ Now we can run the job in the same way as on [ARCHER2](../first_run.md#step-8-ru
     Check that these values match before submitting the case.
 
 ## Model Output
-The [model output](./basics.md#model-output) should be located in 
+The [model output](../basics.md#model-output) should be located in 
 `$HOME/cesm/output/archive/` if successful with files 
-corresponding to each of the [model components](./basics.md#code-components), as well as restart and
+corresponding to each of the [model components](../basics.md#code-components), as well as restart and
 log files.
 
 The PBS output file should be stored within the `$case_name` directory with a name something like `run.e.e20.ETEST.f19_g17.test.o4635723`.
