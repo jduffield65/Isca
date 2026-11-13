@@ -169,7 +169,7 @@ MODEL BUILD HAS FINISHED SUCCESSFULLY
     MODEL BUILD HAS FINISHED SUCCESSFULLY
     ```
 
-## Step 7 - Download Input data
+## Step 7 - Download input data
 The [input data](./basics.md#step-7-download-input-data) is downloaded with the command:
 
 ```bash

@@ -111,9 +111,13 @@ nav:
             - Diffusivity: namelists/turbulence/diffusivity.md
     - CESM:
         - CESM/index.md
-        - Installation: CESM/installation.md
         - Basics: CESM/basics.md
-        - First Run: CESM/first_run.md
+        - Archer2:
+            - Installation: CESM/installation.md
+            - First Run: CESM/first_run.md
+        - Imperial HPC:
+            - Installation: CESM/imperial/installation.md
+            - First Run: CESM/imperial/first_run.md
     - Code:
         - CESM:
             - Base: code/cesm/base.md
