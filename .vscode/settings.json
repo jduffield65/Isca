@@ -28,7 +28,8 @@
         "jobs/thesis_season": "../../../../icons/st-andrews",
         "jobs/tau_sweep": "../../../../icons/st-andrews",
         "jobs/theory_lapse": "../../../../icons/st-andrews",
-        "modified_source_code_hypatia": "../../../../icons/st-andrews",
+        "hypatia": "../../../../icons/st-andrews",
+        "imperial": "../../../../icons/imperial",
     },
     "cSpell.words": [
         "allclose",
