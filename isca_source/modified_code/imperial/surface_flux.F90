@@ -262,6 +262,11 @@ logical :: ncar_ocean_flux_orig  = .false. ! for backwards compatibility
 logical :: raoult_sat_vap        = .false.
 logical :: do_simple             = .false.
 
+real    :: w_atm_const           = 0.0    ! JD 11/05/2025 - Add option for no-WISHE (approx value should be 10)
+real    :: drag_const            = 0.0    ! JD 11/05/2025 - Add option for no-WISHE (approx value should be 0.0009)
+logical :: mo_drag_use_w_atm_const = .false.   ! JD 11/05/2025 - option to use constant wind to compute drag coeffs if no-WISHE
+real    :: rh_flux_q               =  0.0    ! JD 26/5/2026 - option for fixed relative humidity for latent heat calc
+
 real    :: land_humidity_prefactor  =  1.0    ! Default is that land makes no difference to evaporative fluxes
 real    :: land_evap_prefactor  =  1.0    ! Default is that land makes no difference to evaporative fluxes
 
@@ -284,6 +289,10 @@ namelist /surface_flux_nml/ no_neg_q,             &
                             ncar_ocean_flux_orig, &
                             raoult_sat_vap,       &
                             do_simple,            &
+                            w_atm_const,          &     ! JD 11/05/2025 noWISHE
+                            drag_const,           &     ! JD 11/05/2025 noWISHE
+                            mo_drag_use_w_atm_const, &  ! JD 11/05/2025 noWISHE
+                            rh_flux_q,               &   ! JD 26/5/2026 - option for fixed relative humidity for latent heat calc
                             land_humidity_prefactor, & ! Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
                             land_evap_prefactor, &     ! Added to make land 'dry', i.e. to decrease the evaporative heat flux in areas of land.
                             flux_heat_gp,         &    ! prescribed lower boundary heat flux on a giant planet
@@ -399,7 +408,9 @@ subroutine surface_flux_1d (                                           &
        t_surf0,  t_surf1,  u_dif,     v_dif,               &
        rho_drag, drag_t,    drag_m,   drag_q,    rho,      &
        q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
-       e_sat_2m, q_sat_2m
+       e_sat_2m, q_sat_2m, cd_t_ignored, cd_q_ignored,     &      ! JD 11/05/2025 - drag calc
+       cd_m_ignored, u_star_ignored, b_star_ignored,       &      ! JD 11/05/2025 - drag calc
+       e_sat_atm    ! JD 26/5/2026 - need for fixed relative humidity for latent heat calc
 
   integer :: i, nbad
 
@@ -526,18 +537,39 @@ endif
      endwhere
   endif
 
-  !  monin-obukhov similarity theory
-  if (use_frierson_mo_drag) then
+ ! JD 11/05/2025 Add option to fix w_atm in the evaporation and sensible heat equations.
+  ! drag coefficients cd_t and cd_q depend on wind so need to compute differently
+  ! if using w_atm_const.
+  if (w_atm_const > 0.0 .and. mo_drag_use_w_atm_const) then
+  ! Start by calling with constant wind speed
+  ! variables with ignored suffix are not used after this if statement
+      ! Initiaze ignore variables to be same as actual variables
+      cd_q_ignored = cd_q
+      cd_t_ignored = cd_t
+      cd_m_ignored = cd_m
+      u_star_ignored = u_star
+      b_star_ignored = b_star
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm * 0 + w_atm_const,    &
+           cd_m_ignored, cd_t, cd_q, u_star_ignored, b_star_ignored, avail             )
+  ! JD Call again using actual wind speed to set cd_m, u_star and b_star to correct values
+  ! cd_t and cd_q will remain at values computed using constant wind speed.
+  ! Do this because worried it may muck up the momentum transfer stuff if use constant
+  ! rather than actual wind
+      call mo_drag (thv_atm, thv_surf, z_atm,                  &
+           rough_mom, rough_heat, rough_moist, w_atm,    &
+           cd_m, cd_t_ignored, cd_q_ignored, u_star, b_star, avail             )
+  elseif (use_frierson_mo_drag) then
 
    call frierson_mo_drag (thv_atm, thv_surf, z_atm,                  &
          rough_mom, rough_heat, rough_moist, w_atm,          &
          cd_m, cd_t, cd_q, u_star, b_star, avail             )
   else
-
+     !  monin-obukhov similarity theory
    call mo_drag (thv_atm, thv_surf, z_atm,                  &
          rough_mom, rough_heat, rough_moist, w_atm,          &
          cd_m, cd_t, cd_q, u_star, b_star, avail             )
-  endif
+  end if
 
 ! added for 10m winds and 2m temperature add mo_profile()
 
@@ -595,26 +627,77 @@ endif
                              seawater, cd_m, cd_t, cd_q, u_star, b_star     )
   end if
 
-  where (avail)
-     ! scale momentum drag coefficient on orographic roughness
-     cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
-     ! surface layer drag coefficients
-     drag_t = cd_t * w_atm
-     drag_q = cd_q * w_atm
-     drag_m = cd_m * w_atm
+  if (drag_const > 0.0) then
+      ! JD 11/05/2025 Add option to fix drag in surface flux equations
+      where (avail)
+         cd_t = cd_t * 0 + drag_const      ! set drag coefficient to a constant
+         cd_q = cd_q * 0 + drag_const
+      end where
+  end if
 
-     ! density
-     rho = p_atm / (rdgas * tv_atm)
+  if (w_atm_const > 0.0) then
+      where (avail)
+         ! JD 11/05/2025 Add option for no-WISHE, using constant wind
+         ! scale momentum drag coefficient on orographic roughness
+         cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
+         ! surface layer drag coefficients
+         drag_t = cd_t * w_atm_const
+         drag_q = cd_q * w_atm_const
+         drag_m = cd_m * w_atm_const
 
-     ! sensible heat flux
-     rho_drag = cp_air * drag_t * rho
-     flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
-     dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
-     dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+         ! density
+         rho = p_atm / (rdgas * tv_atm)
 
-     ! evaporation
-     rho_drag  =  drag_q * rho
-  end where
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho
+      end where
+  else
+      where (avail)
+         ! scale momentum drag coefficient on orographic roughness
+         cd_m = cd_m*(log(z_atm/rough_mom+1)/log(z_atm/rough_scale+1))**2
+         ! surface layer drag coefficients
+         drag_t = cd_t * w_atm
+         drag_q = cd_q * w_atm
+         drag_m = cd_m * w_atm
+
+         ! density
+         rho = p_atm / (rdgas * tv_atm)
+
+         ! sensible heat flux
+         rho_drag = cp_air * drag_t * rho
+         flux_t = rho_drag * (t_surf0 - th_atm)  ! flux of sensible heat (W/m**2)
+         dhdt_surf =  rho_drag                   ! d(sensible heat flux)/d(surface temperature)
+         dhdt_atm  = -rho_drag*p_ratio           ! d(sensible heat flux)/d(atmos temperature)
+
+         ! evaporation
+         rho_drag  =  drag_q * rho
+      end where
+  end if
+
+  ! JD 26/5/2026 - need for fixed relative humidity for latent heat calc (start)
+  if (rh_flux_q > 0.0) then
+      call escomp (t_atm, e_sat_atm)  ! saturation vapor pressure at lowest atmospheric level
+
+      ! set atmospheric humidity used for latent heat calc to rh_flux_q multiplied by saturated specific humidity
+      ! at the lowest atmospheric level
+      if(use_mixing_ratio) then
+          ! surface mixing ratio at saturation
+          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-e_sat_atm)
+      elseif(do_simple) then
+          q_atm   = rh_flux_q*d622*e_sat_atm / p_atm
+      else
+          ! surface specific humidity at saturation
+          q_atm   = rh_flux_q*d622*e_sat_atm /(p_atm-d378*e_sat_atm)
+      endif
+  end if
+ ! JD 26/5/2026 - need for fixed relative humidity for latent heat calc (end)
+
 
 ! Add bucket - if bucket is on evaluate fluxes based on moisture availability.
 ! Note changes to avail statements to allow bucket to be switched on or off
@@ -627,6 +710,7 @@ endif
 			elsewhere
             flux_q    =  bucket_depth/(max_bucket_depth_land*0.75) * rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 			end where
+         flux_q = land_evap_prefactor * flux_q   ! JD 04/02/2025 - Add option for reduced evaporation with bucket
 		elsewhere
 	        flux_q    =  rho_drag * (q_surf0 - q_atm) ! flux of water vapor  (Kg/(m**2 s))
 		end where
@@ -682,11 +766,25 @@ endif
 
 ! end of Add bucket changes
 
+
+  ! JD 11/05/2025 - noWISHE, use constant wind to compute surface specific humidity
+  if (w_atm_const > 0.0) then
+      ! JD Add option to fix w_atm in the evaporation and sensible heat equations.
+      where (avail)
+          q_surf = q_atm + flux_q / (rho*cd_q*w_atm_const)   ! surface specific humidity
+      end where
+      w_atm = w_atm * 0 + w_atm_const      ! JD 06/10/2026 set w_atm to the constant for output as a sanity check
+  else
+      where (avail)
+          q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
+      end where
+  end if
+
   where (avail)
 
      q_star = flux_q / (u_star * rho)             ! moisture scale
      ! ask Chris and Steve K if we still want to keep this for diagnostics
-     q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! surface specific humidity
+     ! q_surf = q_atm + flux_q / (rho*cd_q*w_atm)   ! JD 11/05/2025 - done in previous if statement now
 
      ! upward long wave radiation
      flux_r    =   stefan*t_surf**4               ! (W/m**2)
