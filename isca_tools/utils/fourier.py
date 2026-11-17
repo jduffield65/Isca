@@ -7,10 +7,10 @@ import xarray as xr
 
 def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
                    coefs_phase: Union[List[float], np.ndarray], pad_coefs_phase: bool = False) -> np.ndarray:
-    """
+    r"""
     For $N$ harmonics, the fourier series with frequency $f$ is:
 
-    $$F(t) \\approx \\frac{F_0}{2} + \\sum_{n=1}^{N} F_n\\cos(2n\\pi ft - \\Phi_n)$$
+    $$F(t) \approx \frac{F_0}{2} + \sum_{n=1}^{N} F_n\cos(2n\\pi ft - \Phi_n)$$
 
     Args:
         time: `float [n_time]`</br>
@@ -37,10 +37,10 @@ def fourier_series(time: np.ndarray, coefs_amp: Union[List[float], np.ndarray],
 
 def fourier_series_deriv(time: np.ndarray, coefs_amp: Union[np.ndarray, List[float]],
                          coefs_phase: Union[np.ndarray, List[float]], day_seconds: float = 86400) -> np.ndarray:
-    """
+    r"""
     For $N$ harmonics, the derivative of a fourier series with frequency $f$ is:
 
-    $$\\frac{dF}{dt} \\approx -\\sum_{n=1}^{N} 2n\\pi fF_n\\sin(2n\\pi ft - \\Phi_n)$$
+    $$\frac{dF}{dt} \approx -\sum_{n=1}^{N} 2n\pi fF_n\sin(2n\pi ft - \Phi_n)$$
 
     Args:
         time: `float [n_time]`</br>
@@ -66,7 +66,7 @@ def fourier_series_deriv(time: np.ndarray, coefs_amp: Union[np.ndarray, List[flo
 
 def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
                      integ_method: str = 'spline', pos_amp: bool = False) -> [Union[float, Tuple[float, float]]]:
-    """
+    r"""
     This calculates the analytic solution for the amplitude and phase coefficients for the `n`th harmonic
     [🔗](https://www.bragitoff.com/2021/05/fourier-series-coefficients-and-visualization-python-program/)
 
@@ -85,7 +85,7 @@ def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
             i.e., keep `phase_coef` in range between $[-\pi/2, \pi/2]$.
     Returns:
         `amp_coef`: The amplitude fourier coefficient $F_n$.
-        `phase_coef`: The phase fourier coefficient $\\Phi_n$. Will not return if $n=0$.
+        `phase_coef`: The phase fourier coefficient $\Phi_n$. Will not return if $n=0$.
     """
     # Computes the analytical fourier coefficients for the n harmonic of a given function
     # With integrate method = spline works very well i.e. fit spline then use spline.integrate functionality
@@ -122,10 +122,10 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
                     integ_method: str = 'spline',
                     pad_coefs_phase: bool = False,
                     pos_amp: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+    r"""
     Obtains the Fourier series solution for $F=$`var`, using $N=$`n_harmonics`:
 
-    $$F(t) \\approx \\frac{F_0}{2} + \\sum_{n=1}^{N} F_n\\cos(2n\\pi ft - \\Phi_n)$$
+    $$F(t) \approx \frac{F_0}{2} + \sum_{n=1}^{N} F_n\cos(2n\pi ft - \Phi_n)$$
 
     Args:
         time: `float [n_time]`</br>
@@ -148,7 +148,7 @@ def get_fourier_fit(time: np.ndarray, var: np.ndarray, n_harmonics: int,
         `coefs_amp`: `float [n_harmonics+1]`</br>
             The amplitude Fourier coefficients $F_n$.
         `coefs_phase`: `float [n_harmonics]`</br>
-            The phase Fourier coefficients $\\Phi_n$.
+            The phase Fourier coefficients $\Phi_n$.
             If `pad_coefs_phase`, will pad at start with a zero so of length `n_harmonics+1`.
     """
     # Returns the fourier fit of a function using a given number of harmonics
@@ -170,14 +170,14 @@ def coef_conversion(amp_coef: Optional[Union[float, np.ndarray, xr.DataArray]] =
                     neg_amp: bool = False,
                     take_cos_sign: bool = False
                     ) -> Tuple[Union[float, np.ndarray, xr.DataArray], Union[float, np.ndarray, xr.DataArray]]:
-    """
+    r"""
     The term for the $n^{th}$ harmonic of a Fourier expansion can be written in two ways:
 
-    1. $F_n\\cos(2n\\pi ft - \\Phi_n)$
-    2. $F_{n, cos}\\cos(2n\\pi ft) + F_{n, sin}\\sin(2n\\pi ft)$
+    1. $F_n\cos(2n\pi ft - \Phi_n)$
+    2. $F_{n, cos}\cos(2n\pi ft) + F_{n, sin}\sin(2n\pi ft)$
 
     Given the coefficients of one form, this returns the coefficients in the other form.
-    Note $\\sin(x) = \\cos(x - \\pi /2)$.
+    Note $\sin(x) = \cos(x - \pi /2)$.
 
     Args:
         amp_coef: `float [n_coefs]`</br>
