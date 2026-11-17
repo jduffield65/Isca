@@ -25,7 +25,6 @@
     omega = 7.2921150e-05         ! Default Earth value
     pstd = 1e6                    ! Ref pressure in units of "dynes/cm^2". Make same as ref_sea_level_pressure
     pstd_mks = 1e5                ! Ref pressure in units of "Newtons/m^2". Make same as ref_sea_level_pressure
-    solar_const = 1340.86         ! Default is 1368.22 so this is a 2% reduction.
 /   
 
 &main_nml
@@ -117,7 +116,8 @@
     do_seasonal = .true.            ! SEASONS
     equinox_day =  0.75             ! SEASONS
     atm_abs = 0.2                   ! default is 0.0
-    odp = 1.5                         ! FRIERSON kappa optical depth parameter
+    odp = 1.5                       ! FRIERSON kappa optical depth parameter
+    solar_constant = 1224.0            ! Default is 1360 so this is a 10% reduction.
 /
 
 &diag_manager_nml

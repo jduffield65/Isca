@@ -29,7 +29,7 @@ jobs_dir = os.path.join(os.environ['HOME'], 'Isca', 'jobs')  # all jobs saved he
 # exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
 # exp_dir = os.path.join(jobs_dir, 'thesis_season/depth=5/k=1_const_drag_evap=0_1/')
 # exp_dir = os.path.join(jobs_dir, 'nerc_srm/simulations/meridional_band/base/')
-exp_dir = os.path.join(jobs_dir, 'nerc_srm/simulations/column/play/k=1_5_sw_reduced')
+exp_dir = os.path.join(jobs_dir, 'nerc_srm/simulations/column/play/sw_reduced')
 
 
 namelist_file = os.path.join(exp_dir, 'namelist.nml')
