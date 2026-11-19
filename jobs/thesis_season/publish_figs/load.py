@@ -1,7 +1,7 @@
 import xarray as xr
 import numpy as np
 import os
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 from tqdm import tqdm
 import warnings
 
@@ -299,75 +299,99 @@ def process_ds(ds: xr.Dataset, smooth_n_days: int = smooth_n_days,
     return ds
 
 
-def get_annual_zonal_mean(ds: xr.Dataset, combine_abs_lat: bool = False, lat_name: str = 'lat',
-                          smooth_n_days: int = smooth_n_days,
-                          smooth_center: bool = True, keep_attrs: bool = True,
-                          smooth_time: Literal['start', 'end'] = 'end') -> xr.Dataset:
-    r"""Compute annual-mean zonal mean, optionally combining ±latitudes.
-
-    This function:
-    1) Computes the annual mean via `annual_mean(ds)`,
-    2) Takes the zonal mean over longitude,
-    3) Optionally averages fields at latitudes with the same absolute value
-       (e.g., $(+30^\circ)$ and $(-30^\circ)$) using a groupby on $(|\mathrm{lat}|)$,
-    4) Resets the time coordinate to start at 0 (integer years since the first).
+def get_annual_zonal_mean(
+    ds: Union[xr.Dataset, xr.DataArray],
+    combine_abs_lat: bool = False,
+    lat_name: str = "lat",
+    smooth_n_days: int | None = smooth_n_days,
+    smooth_center: bool = True,
+    keep_attrs: bool = True,
+    smooth_time: Literal["start", "end"] = "end",
+) -> Union[xr.Dataset, xr.DataArray]:
+    """Apply annual averaging and take a zonal mean where longitude exists.
 
     Args:
-        ds: An xarray Dataset or DataArray with dimensions including `lon` and
-            typically `time` and `lat`.
-        combine_abs_lat: If True, combine values at +lat and -lat by averaging
-            them together into a single latitude coordinate \(|\mathrm{lat}|\).
-            The equator (0) remains unchanged. Defaults to False.
-        lat_name: Name of the latitude dimension/coordinate. Defaults to 'lat'.
-        smooth_n_days: Optional integer window length for time smoothing (in
-            number of time steps, e.g. days). If None or <= 1, no smoothing.
-        smooth_center: If True, use a centered window for smoothing.
-        keep_attrs: Optional boolean flag for keeping attributes. Defaults to True.
-        smooth_time: If 'start', will do smoothing before taking annual mean, otherwise will do it after.
-            Get more smoothed result if do at the end.
+        ds: Dataset or DataArray with a time dimension.
+        combine_abs_lat: Whether to average latitudes with the same
+            absolute value.
+        lat_name: Name of the latitude dimension and coordinate.
+        smooth_n_days: Smoothing window in time steps. None or a value
+            of 1 or less disables smoothing.
+        smooth_center: Whether to center the rolling window when smoothing
+            before annual averaging.
+        keep_attrs: Whether to restore the input object's attributes.
+        smooth_time: Whether to smooth before annual averaging ("start")
+            or apply periodic smoothing afterward ("end").
 
     Returns:
-        An xarray Dataset or DataArray containing the annual-mean zonal mean.
-        If `combine_abs_lat` is True, the latitude coordinate will be nonnegative
-        and sorted (e.g., 0, 30, 60, ...).
+        Processed data of the same type as the input. DataArray inputs
+        retain their original name, including None.
 
     Raises:
-        ValueError: If `combine_abs_lat` is True but `lat_name` is not a
-            dimension of the input after zonal averaging.
+        ValueError: If combining absolute latitudes is requested but the
+            latitude dimension is missing.
     """
+    is_dataarray = isinstance(ds, xr.DataArray)
     attrs = ds.attrs.copy()
-    if 'lon' in ds.dims:
-        ds = ds.mean(dim='lon')
+    original_name = ds.name if is_dataarray else None
+
+    if is_dataarray:
+        array_key = "__input_array__"
+        while array_key in ds.coords or array_key in ds.dims:
+            array_key += "_"
+        work = ds.to_dataset(name=array_key)
     else:
-        print('no lon dimension')
-    if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'start'):
-        ds = ds.rolling(time=int(smooth_n_days), center=smooth_center).mean()
-    ds_av = annual_mean(ds)
-    # ds_av = annual_mean(ds.mean(dim='lon'))           # order does not matter, I checked gives same result
+        work = ds
+
+    static_vars = [
+        key for key, var in work.data_vars.items() if "time" not in var.dims
+    ]
+
+    if "lon" in work.dims:
+        work = work.mean(dim="lon", keep_attrs=keep_attrs)
+
+    do_smooth = smooth_n_days is not None and smooth_n_days > 1
+    if do_smooth and smooth_time == "start":
+        work = work.rolling(
+            time=int(smooth_n_days), center=smooth_center
+        ).mean(keep_attrs=keep_attrs)
+
+    ds_av = annual_mean(work)
 
     if combine_abs_lat:
         if lat_name not in ds_av.dims:
-            raise ValueError(f"Expected latitude dim '{lat_name}' in {ds_av.dims}")
+            raise ValueError(
+                f"Expected latitude dim {lat_name!r} in {ds_av.dims}"
+            )
 
-        abs_lat = ds_av[lat_name].astype(float).copy()
+        abs_lat_key = "__abs_lat__"
+        while abs_lat_key in ds_av.variables or abs_lat_key in ds_av.dims:
+            abs_lat_key += "_"
+
         ds_av = (
-            ds_av.assign_coords(abs_lat=abs_lat.abs())
-            .groupby('abs_lat')
-            .mean(dim=lat_name)
-            .rename({'abs_lat': lat_name})
+            ds_av.assign_coords({abs_lat_key: abs(ds_av[lat_name].astype(float))})
+            .groupby(abs_lat_key)
+            .mean(dim=lat_name, keep_attrs=keep_attrs)
+            .rename({abs_lat_key: lat_name})
             .sortby(lat_name)
         )
 
-    ds_av = ds_av.assign_coords(time=(ds_av.time - ds_av.time.min()).astype(int))
-    if (smooth_n_days is not None) and (smooth_n_days > 1) and (smooth_time == 'end'):
-        ds_av = periodic_rolling_mean(ds_av, int(smooth_n_days), 'time')
-    for key in ds:
-        # Get rid of time dimension of variables that don't have time dimension initially
-        if 'time' not in ds[key].dims:
-            ds_av[key] = ds_av[key].isel(time=0)
+    ds_av = ds_av.assign_coords(
+        time=(ds_av.time - ds_av.time.min()).astype(int)
+    )
+
+    if do_smooth and smooth_time == "end":
+        ds_av = periodic_rolling_mean(ds_av, int(smooth_n_days), "time")
+
+    for key in static_vars:
+        if key in ds_av.data_vars and "time" in ds_av[key].dims:
+            ds_av[key] = ds_av[key].isel(time=0, drop=True)
+
+    result = ds_av[array_key].rename(original_name) if is_dataarray else ds_av
     if keep_attrs:
-        ds_av.attrs = attrs
-    return ds_av
+        result.attrs = attrs
+
+    return result
 
 
 def load_ds_all(exp_name: str, exp_dir: str = 'thesis_season/publish_exp',

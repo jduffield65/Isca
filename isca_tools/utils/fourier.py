@@ -65,7 +65,7 @@ def fourier_series_deriv(time: np.ndarray, coefs_amp: Union[np.ndarray, List[flo
 
 
 def get_fourier_coef(time: np.ndarray, var: np.ndarray, n: int,
-                     integ_method: str = 'spline', pos_amp: bool = False) -> [Union[float, Tuple[float, float]]]:
+                     integ_method: str = 'spline', pos_amp: bool = False) -> Tuple[Union[float, Tuple[float, float]]]:
     r"""
     This calculates the analytic solution for the amplitude and phase coefficients for the `n`th harmonic
     [🔗](https://www.bragitoff.com/2021/05/fourier-series-coefficients-and-visualization-python-program/)
